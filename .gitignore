@@ -1,0 +1,9 @@
+cache/
+out/
+.DS_Store
+broadcast/
+*.log
+docs/internal/
+AGENTS.md
+.codex/
+.agents/
