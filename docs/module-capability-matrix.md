@@ -7,6 +7,10 @@ production token/payment integration, publication-queue execution, sanction
 execution, identity reveal, evidence reveal, decrypt, production ZK, or ACL
 work.
 
+The capability model is written for the current Base-compatible EVM/Solidity
+demo. It documents local Foundry contracts and tests, not deployed Base
+addresses or production chain operations.
+
 For per-interface input/output and semantic preconditions, see
 `docs/interface-contract-spec.md`.
 

@@ -7,6 +7,11 @@ approval to start a production release, model, simulation, publication logic,
 production token/payment, publication-queue execution, sanction execution,
 identity reveal, real reveal/decrypt, production ZK, or ACL.
 
+The interfaces are specified for a Base-compatible EVM/Solidity substrate.
+They describe the current local Foundry implementation and its module
+compatibility rules; they do not describe a live Base deployment or production
+deployment policy.
+
 For the package-author workflow, `RulePackageModules` field map,
 historical-package binding rules, and package test checklist, see
 `docs/rule-package-integration-guide.md`.

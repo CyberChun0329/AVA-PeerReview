@@ -5,6 +5,11 @@ protocol. It demonstrates how AVA-style governance can be represented on chain
 through records, authorised transitions, rule packages, proof receipts, and
 bounded downstream effects.
 
+The contracts are implemented in Solidity for EVM-compatible chains. Base is
+the intended L2 target for future deployment work, but the current repository
+is a local Foundry demo and does not publish deployed Base addresses or a
+production rollout configuration.
+
 It is not a production peer-review platform. It does not decide whether a
 manuscript should be accepted, rejected, prioritised, or judged meritorious.
 It does not reveal identity or evidence. It does not execute sanctions or run a

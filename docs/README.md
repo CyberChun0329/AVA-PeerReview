@@ -6,6 +6,11 @@ early sample of the AVA protocol, not a production peer-review platform,
 manuscript decision engine, disclosure-reveal system, payment system, or
 sanction engine.
 
+The current implementation is a Base-compatible EVM/Solidity demo. Base is the
+intended L2 target for future deployment work, but this repository does not
+claim a live Base deployment, deployed addresses, or production deployment
+hardening.
+
 Internal development logs are not part of this public documentation map. They
 may remain on the local machine for traceability, but they should not be
 published as reader-facing protocol documentation.

@@ -8,6 +8,8 @@ The repository is an early sample of the AVA protocol applied to peer-review
 governance. It demonstrates how AVA-style governance can be expressed through
 role-scoped subjects, evidence references, recognised states, authorised
 transitions, rule packages, proof receipts, and bounded downstream records.
+It is designed as a Base-compatible EVM/Solidity demo, while remaining a local
+Foundry implementation rather than a live Base deployment.
 
 The implementation is organised so future workflow development usually means
 choosing or writing modules behind existing interfaces, then binding those

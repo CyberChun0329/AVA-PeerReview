@@ -10,6 +10,12 @@ The demo shows how peer-review governance can be represented as role-scoped
 subjects, evidence-backed records, authorised transitions, rule packages,
 privacy-preserving proof receipts, and bounded downstream records.
 
+The implementation is written as a Base-compatible EVM/Solidity contract demo.
+Base is the intended L2 target for future deployment work. The current
+repository remains a local Foundry demo: it does not include deployed Base
+addresses, production deployment hardening, chain-specific governance rollout,
+or live network configuration.
+
 ## 1. Architecture Boundary
 
 AVA is represented through three macro stages:
