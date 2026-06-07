@@ -1,8 +1,8 @@
 # AVA Peer Review Documentation Map
 
 This directory contains the public technical documentation for the AVA Peer
-Review Solidity demo. The repository is a peer review technical demo and an
-early sample of the AVA protocol, not a production peer-review platform,
+Review Solidity demo. The repository is an early technical demo of the AVA
+protocol for peer review. It is not a production peer-review platform,
 manuscript decision engine, disclosure-reveal system, payment system, or
 sanction engine.
 
@@ -37,9 +37,9 @@ AVA recognised-state grammar -> Solidity substrate -> functional interface -> sc
 ```
 
 This project is therefore not token-first blockchain infrastructure. It is a
-recognised-state governance substrate that uses smart contracts to preserve
-authorised records and transitions after the governed object, evidence,
-authority, disclosure state, and bounded consequence have been specified.
+recognised-state governance substrate. Smart contracts preserve authorised
+records and transitions after the governed object, evidence, authority,
+disclosure state, and bounded consequence have been specified.
 
 ## Read First
 

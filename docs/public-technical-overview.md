@@ -1,7 +1,7 @@
 # Public Technical Overview
 
-This repository is a peer review technical demo and early sample of the AVA
-protocol. It demonstrates how AVA-style governance can be represented on chain
+This repository is an early technical demo of the AVA protocol for peer
+review. It demonstrates how AVA-style governance can be represented on chain
 through records, authorised transitions, rule packages, proof receipts, and
 bounded downstream effects.
 
@@ -23,7 +23,7 @@ does not become valid because a contract judges scientific truth. It becomes
 governable because it is recorded through an authorised path, tied to evidence
 references, scoped subjects, rule packages, and explicit status transitions.
 
-The design separates three things:
+The design has three layers:
 
 1. the AVA substrate, which stores records and enforces hard gates;
 2. functional interfaces, which define what a package may validate;
@@ -34,13 +34,13 @@ That is why future workflows should usually add or swap modules inside a rule
 package rather than rewrite the recognised-state substrate.
 
 The project is not token-first blockchain infrastructure. Blockchain is used
-here only after AVA has named a governable object: the attributed object, the
-responsible role-scoped subject, the evidence receipt, the authority condition,
-the disclosure state, the challenge path, and the bounded consequence. The
-contract layer preserves that grammar as records and authorised transitions; it
-does not create the underlying judgement.
+only after an AVA workflow has named the governable object: the attributed
+object, the responsible role-scoped subject, the evidence receipt, the
+authority condition, the disclosure state, the challenge path, and the bounded
+consequence. The contract layer preserves that grammar as records and
+authorised transitions. It does not create the underlying judgement.
 
-Put more concretely, an institutional peer-review rule enters this demo only
+In practical terms, an institutional peer-review rule enters this demo only
 when it can be translated into:
 
 - a role-bound object or subject;
@@ -112,8 +112,9 @@ publication, payment, queue, or sanction engine.
 
 The on-chain records are meant to be legible inputs for later modelling work.
 Recognised states, challenge transitions, standing records, proof receipts,
-settlement receipts, and bounded consequences can be read as future
-state/action/transition/information/payoff-proxy material.
+settlement receipts, and bounded consequences can be read as future modelling
+material: states, actions, transitions, information conditions, and payoff
+proxies.
 
 The contracts do not perform that modelling. They do not estimate
 probabilities, run simulations, score scientific quality, calculate social

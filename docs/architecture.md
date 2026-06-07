@@ -12,7 +12,7 @@ privacy-preserving proof receipts, and bounded downstream records.
 
 The implementation is written as a Base-compatible EVM/Solidity contract demo.
 Base is the intended L2 target for future deployment work. The current
-repository remains a local Foundry demo: it does not include deployed Base
+repository remains a local Foundry demo. It does not include deployed Base
 addresses, production deployment hardening, chain-specific governance rollout,
 or live network configuration.
 
@@ -56,10 +56,10 @@ translated into an object, subject, evidence receipt, authority condition,
 disclosure condition, recognised state, transition condition, and bounded
 consequence before it can become a module check or substrate record.
 
-The bridge also defines the model boundary. These records can later be read as
-state/action/transition/information/payoff-proxy material for modelling. The
-Solidity demo itself does not run a model, simulation, probability estimate,
-truth engine, or manuscript-merit calculation.
+The bridge also defines the model boundary. These records can later support
+modelling as states, actions, transitions, information conditions, and payoff
+proxies. The Solidity demo itself does not run a model, simulation,
+probability estimate, truth engine, or manuscript-merit calculation.
 
 ## 3. System Layers
 
@@ -86,7 +86,7 @@ Core substrate contracts:
 - `AttestationAuditModule`
 
 The substrate is the part future work should not casually rewrite. It provides
-the stable grammar: subjects, authority, evidence, package identity,
+the stable grammar for subjects, authority, evidence, package identity,
 recognised states, transitions, challenges, downstream record ids, proof
 receipts, settlement receipts, and audit receipts.
 
@@ -131,8 +131,8 @@ The same pattern applies across the rest of the rule package:
 
 Modules validate or veto. They do not grant authority, mutate substrate storage
 directly, reinterpret ids, reveal identity, execute sanctions, decide
-publication, or judge scientific truth. The substrate writes the records only
-after the relevant substrate gates and module checks all pass.
+publication, or judge scientific truth. The substrate writes records only after
+the relevant substrate gates and module checks all pass.
 
 ### Privacy And Proof Layer
 

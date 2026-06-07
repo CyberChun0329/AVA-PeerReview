@@ -8,24 +8,25 @@ The repository is an early sample of the AVA protocol applied to peer-review
 governance. It demonstrates how AVA-style governance can be expressed through
 role-scoped subjects, evidence references, recognised states, authorised
 transitions, rule packages, proof receipts, and bounded downstream records.
-It is designed as a Base-compatible EVM/Solidity demo, while remaining a local
-Foundry implementation rather than a live Base deployment.
+
+It is designed as a Base-compatible EVM/Solidity demo. The current
+implementation remains a local Foundry project, not a live Base deployment.
 
 The implementation is organised so future workflow development usually means
 choosing or writing modules behind existing interfaces, then binding those
 modules into a rule package. The recognised-state substrate remains the common
 execution grammar.
 
-For paper-facing readers, the important point is that the Solidity code is not
-the source of peer-review truth or editorial legitimacy. It is an executable
-representation of a narrower AVA grammar: role-bound objects, evidence
-receipts, authority conditions, disclosure states, challengeable recognised
-states, authorised transitions, and bounded downstream records.
+For readers using this repository alongside the paper, the important point is
+that the Solidity code is not the source of peer-review truth or editorial
+legitimacy. It is an executable representation of a narrower AVA grammar:
+role-bound objects, evidence receipts, authority conditions, disclosure states,
+challengeable recognised states, authorised transitions, and bounded
+downstream records.
 
 The current records can later support model extraction because they identify
-who may act, what object is being moved, which evidence receipt is referenced,
-which package governed the action, which status transition occurred, and which
-bounded consequence followed. The demo itself does not run a model or
+the actor, target object, evidence receipt, governing package, status
+transition, and bounded consequence. The demo itself does not run a model or
 simulation.
 
 ## Current Boundary

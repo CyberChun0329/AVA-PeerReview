@@ -1,10 +1,10 @@
 # AVA Peer Review Solidity Demo
 
-This repository is a peer review technical demo and early sample of the AVA
-protocol. It demonstrates an executable governance kernel for AVA-style peer
+This repository is an early technical demo of the AVA protocol for peer
+review. It demonstrates an executable governance kernel for AVA-style peer
 review using Solidity and Foundry. The contracts are written for
-EVM-compatible chains, with Base as the intended L2 deployment target for
-future deployment work.
+EVM-compatible chains. Base is the intended L2 target for future deployment
+work.
 
 The project is not a production peer-review platform, journal system,
 manuscript decision engine, payment system, disclosure-reveal system, or
@@ -12,9 +12,10 @@ scientific-truth engine. It is a research demo that shows how peer-review
 governance objects can be represented as authorised records, transitions,
 proof receipts, and bounded downstream consequences.
 
-The repository does not contain a live Base deployment configuration, deployed
-addresses, production hardening, or network-specific rollout plan. Its current
-chain scope is Base-compatible Solidity, not production Base deployment.
+The repository does not include live Base deployment configuration, deployed
+addresses, production hardening, or a network-specific rollout plan. Its
+current chain scope is Base-compatible Solidity, not production Base
+deployment.
 
 ## What This Demo Shows
 
@@ -104,6 +105,6 @@ This repository is released under the MIT License. See `LICENSE`.
 
 ## Security
 
-This is unaudited research code. Do not deploy it as a production peer-review,
-payment, sanction, identity, disclosure, or publication system. See
-`SECURITY.md`.
+This is unaudited research code. Do not deploy it for production peer review,
+payments, sanctions, identity management, disclosure, or publication workflows.
+See `SECURITY.md`.
