@@ -49,7 +49,7 @@ that grammar into a small set of chain-readable objects:
 | What disclosure condition applies? | Disclosure policy id, disclosure module validation, proof-use receipt, access/lifecycle receipt, subject commitment, and nullifier where relevant. |
 | What governance state exists? | `RecognisedStateRecord` plus generic recognised-state transition ledger. |
 | How can it be challenged or repaired? | Challenge record, challenge transition record, outcome, correction/restoration path, and preserved history. |
-| What bounded consequence can follow? | Standing input, standing computation, credential, allocation, consequence, penalty, restoration, settlement, external-operation, or audit record, all tied to an eligible source. |
+| What bounded downstream record can follow? | Standing input, standing computation, credential, allocation, consequence, penalty, restoration, settlement, external-operation, or audit record, all tied to an eligible source. |
 
 This is the rule-to-executable bridge. A prose institutional rule must be
 translated into an object, subject, evidence receipt, authority condition,

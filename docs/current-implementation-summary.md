@@ -12,7 +12,7 @@ transitions, rule packages, proof receipts, and bounded downstream records.
 It is designed as a Base-compatible EVM/Solidity demo. The current
 implementation remains a local Foundry project, not a live Base deployment.
 
-The implementation is organised so future workflow development usually means
+The implementation is organised so future workflow development usually requires
 choosing or writing modules behind existing interfaces, then binding those
 modules into a rule package. The recognised-state substrate remains the common
 execution grammar.

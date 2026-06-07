@@ -23,7 +23,7 @@ does not become valid because a contract judges scientific truth. It becomes
 governable because it is recorded through an authorised path, tied to evidence
 references, scoped subjects, rule packages, and explicit status transitions.
 
-The design has three layers:
+For extension work, the design has three practical layers:
 
 1. the AVA substrate, which stores records and enforces hard gates;
 2. functional interfaces, which define what a package may validate;
