@@ -251,13 +251,16 @@ Gates:
 
 ### `IChallengeWindowRuleModule`
 
-Function: `validateChallengeWindowDuration(...)`
+Functions: `supportsChallengeWindowRule()`,
+`validateChallengeWindowDuration(...)`
 
 Inputs: `workflowKey`, `recognisedStateId`, challenge-window `openedAt`,
 current chain time, and actor.
 
 Success semantics: optional transition-rule extension for packages that want a
-minimum challenge-window duration before review recognition can vest.
+minimum challenge-window duration before review recognition can vest. The
+substrate calls the duration validator only when `supportsChallengeWindowRule()`
+returns true; a declared validator revert, including a bare revert, is a veto.
 
 Must not do: schedule execution, close challenges automatically, decide truth,
 mutate state, or bypass the open-challenge count.
@@ -507,7 +510,7 @@ records, reveal identity, or write counters in the current demo interface.
 
 ### `IChallengeRateLimitModule`
 
-Function: `validateChallengeFiling(...)`
+Functions: `supportsChallengeRateLimit()`, `validateChallengeFiling(...)`
 
 Inputs: `workflowKey`, challenged recognised-state id, challenger subject,
 prior filing count for the same package / challenged state / challenger subject
@@ -515,7 +518,11 @@ path, and actor.
 
 Success semantics: optional anti-abuse extension for packages that want to veto
 repeated challenge filing by the same role-scoped subject against the same
-recognised state.
+recognised state. The substrate calls the filing validator only when
+`supportsChallengeRateLimit()` returns true; a declared validator revert,
+including a bare revert, is a veto. The bundled example treats any prior filing
+on the same package / recognised state / challenger subject path as enough to
+reject the next one; other packages may bind a different module.
 
 Must not do: execute sanctions, update standing, block good-faith challenge
 resolution, or create public consequences.
@@ -744,6 +751,9 @@ reward, affect publication, or write records.
 Gates:
 - Before: allowed recognised-state status, responsible recognised-state
   subject, evidence, authority, anti-abuse, and value-readiness checks run.
+- Subject boundary: the named consequence subject must match the responsible
+  subject recorded on the source recognised state in this demo. A future
+  cross-subject consequence needs a separate explicit record design.
 - After: substrate writes only the bounded consequence record.
 
 ### `IPenaltyAdapter`
@@ -769,6 +779,9 @@ next standing computation.
 
 Gates:
 - Before: consequence substrate and value-readiness gates run.
+- Subject boundary: penalty and eligibility records inherit the source
+  consequence's recognised-state subject binding; they are not a generic
+  cross-subject sanction path.
 - After: substrate writes a `ConsequenceKind.PenaltyRecord` only.
 
 ### Consequence penalty input / eligibility records

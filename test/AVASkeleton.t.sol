@@ -105,6 +105,7 @@ import {IZKProofVerifier} from "../src/interfaces/IZKProofVerifier.sol";
 import {IAttributionModule} from "../src/interfaces/IAttributionModule.sol";
 import {IVerificationModule} from "../src/interfaces/IVerificationModule.sol";
 import {ITransitionRuleModule} from "../src/interfaces/ITransitionRuleModule.sol";
+import {IChallengeWindowRuleModule} from "../src/interfaces/IChallengeWindowRuleModule.sol";
 import {IAVAAllocationModule} from "../src/interfaces/IAVAAllocationModule.sol";
 import {IAllocationAdapter} from "../src/interfaces/IAllocationAdapter.sol";
 import {IConsequenceAdapter} from "../src/interfaces/IConsequenceAdapter.sol";
@@ -120,6 +121,7 @@ import {IEditorialSystemAdapter} from "../src/interfaces/IEditorialSystemAdapter
 import {IResidualEditorialAuthorityModule} from "../src/interfaces/IResidualEditorialAuthorityModule.sol";
 import {IFieldPolicyModule} from "../src/interfaces/IFieldPolicyModule.sol";
 import {IAntiAbuseModule} from "../src/interfaces/IAntiAbuseModule.sol";
+import {IChallengeRateLimitModule} from "../src/interfaces/IChallengeRateLimitModule.sol";
 import {IValueExecutionAdapter} from "../src/interfaces/IValueExecutionAdapter.sol";
 import {IStandingComputationModule} from "../src/interfaces/IStandingComputationModule.sol";
 import {IRulePackageLifecycleModule} from "../src/interfaces/IRulePackageLifecycleModule.sol";
@@ -562,6 +564,31 @@ contract RejectingTransitionRuleModule is ITransitionRuleModule {
     }
 }
 
+contract BareRevertingChallengeWindowTransitionModule is ITransitionRuleModule, IChallengeWindowRuleModule {
+    function validateTransition(
+        bytes32 workflowKey,
+        AVADataTypes.Action,
+        AVADataTypes.RecognisedStateStatus fromStatus,
+        AVADataTypes.RecognisedStateStatus toStatus,
+        AVADataTypes.ChallengeOutcome
+    ) external pure {
+        if (
+            workflowKey == bytes32(0) || fromStatus == AVADataTypes.RecognisedStateStatus.None
+                || toStatus == AVADataTypes.RecognisedStateStatus.None
+        ) {
+            revert AVADataTypes.EmptyValue();
+        }
+    }
+
+    function supportsChallengeWindowRule() external pure returns (bool) {
+        return true;
+    }
+
+    function validateChallengeWindowDuration(bytes32, uint256, uint64, uint64, address) external pure {
+        revert();
+    }
+}
+
 contract RejectingChallengeLifecycleModule is IChallengeLifecycleModule {
     AVADataTypes.Action public blockedAction;
 
@@ -618,6 +645,29 @@ contract RejectingAntiAbuseModule is IAntiAbuseModule {
         view
     {
         if (action == blockedAction) revert AVADataTypes.InvalidState(uint256(action));
+    }
+}
+
+contract BareRevertingChallengeRateLimitModule is IAntiAbuseModule, IChallengeRateLimitModule {
+    function validateUse(
+        bytes32 workflowKey,
+        AVADataTypes.Role,
+        AVADataTypes.Action,
+        bytes32 subjectId,
+        bytes32 objectId,
+        address actor
+    ) external pure {
+        if (workflowKey == bytes32(0) || subjectId == bytes32(0) || objectId == bytes32(0) || actor == address(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
+    }
+
+    function supportsChallengeRateLimit() external pure returns (bool) {
+        return true;
+    }
+
+    function validateChallengeFiling(bytes32, uint256, bytes32, uint256, address) external pure {
+        revert();
     }
 }
 
@@ -4133,6 +4183,52 @@ contract AVASkeletonTest {
         );
     }
 
+    function testSupportedBareRevertingChallengeWindowHookRejectsVesting() public {
+        bytes32 workflowKey = keccak256("bare-revert-challenge-window-workflow");
+        _registerRulePackageWithModules(
+            workflowKey,
+            attributionModule,
+            verificationModule,
+            new BareRevertingChallengeWindowTransitionModule(),
+            disclosurePolicyModule,
+            allocationAdapter,
+            consequenceAdapter,
+            "ipfs://bare-revert-challenge-window"
+        );
+
+        uint256 manuscriptId = _registerAuthorManuscript();
+        uint256 evidenceId = reviewerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Reviewer,
+            workflowKey,
+            keccak256("bare-revert-window-review-evidence"),
+            "ipfs://bare-revert-window-review",
+            "review-service-occurrence",
+            0
+        );
+        uint256 reviewContributionId = reviewerActor.registerReviewContributionWithWorkflow(
+            stateMachine, AVADataTypes.Role.Reviewer, workflowKey, manuscriptId, REVIEWER_SUBJECT, evidenceId, 0
+        );
+        uint256 recognisedStateId =
+            stateMachine.provisionallyRecogniseReview(AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY);
+        stateMachine.openReviewChallengeWindow(AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY);
+
+        uint256 nextTransitionId = stateMachine.nextRecognisedStateTransitionId();
+        try stateMachine.vestReviewRecognition(
+            AVADataTypes.Role.Panel,
+            reviewContributionId,
+            keccak256("panel-authority"),
+            "ipfs://bare-revert-window-vest"
+        ) {
+            revert("bare-reverting supported challenge-window hook was swallowed");
+        } catch {}
+        require(stateMachine.nextRecognisedStateTransitionId() == nextTransitionId, "bare-revert veto wrote transition");
+        require(
+            stateMachine.getRecognisedState(recognisedStateId).status == AVADataTypes.RecognisedStateStatus.Challengeable,
+            "bare-revert veto mutated recognised state"
+        );
+    }
+
     function testM481PanelVisibleModuleAllowsEditorPanelAndRejectsOrdinaryRoles() public {
         uint256 panelPolicyId = _registerDisclosurePolicy("m481-panel-visible-review-policy");
         PanelVisibleDisclosureModule panelVisibleModule =
@@ -6067,6 +6163,44 @@ contract AVASkeletonTest {
         require(stateMachine.nextChallengeId() == nextChallengeId, "blocked repeated challenge wrote state");
     }
 
+    function testSupportedBareRevertingChallengeRateLimitHookRejectsChallengeFiling() public {
+        bytes32 workflowKey = keccak256("bare-revert-rate-limit-workflow");
+        _registerRulePackageWithInfrastructure(
+            workflowKey,
+            evidencePolicyModule,
+            auditAdapter,
+            editorialSystemAdapter,
+            fieldPolicyModule,
+            new BareRevertingChallengeRateLimitModule(),
+            "ipfs://bare-revert-rate-limit-workflow"
+        );
+        uint256 recognisedStateId =
+            _createChallengeableReviewStateThroughPackage(rulePackageRegistry.getRulePackage(workflowKey), workflowKey);
+        uint256 challengeEvidenceId = challengerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Challenger,
+            workflowKey,
+            keccak256("bare-revert-rate-limit-challenge"),
+            "ipfs://bare-revert-rate-limit-challenge",
+            "review-quality-challenge",
+            0
+        );
+
+        uint256 nextChallengeId = stateMachine.nextChallengeId();
+        try challengerActor.fileChallenge(
+            stateMachine,
+            AVADataTypes.Role.Challenger,
+            workflowKey,
+            recognisedStateId,
+            CHALLENGER_SUBJECT,
+            challengeEvidenceId,
+            0
+        ) {
+            revert("bare-reverting supported challenge-rate hook was swallowed");
+        } catch {}
+        require(stateMachine.nextChallengeId() == nextChallengeId, "bare-revert rate-limit veto wrote challenge");
+    }
+
     function testM491AuditAdapterBlocksWorkflowAttestationPath() public {
         bytes32 workflowKey = keccak256("m491-audit");
         _registerRulePackageWithInfrastructure(
@@ -6680,6 +6814,106 @@ contract AVASkeletonTest {
         ) {
             revert("expired approval satisfied approval module");
         } catch {}
+    }
+
+    function testM416ExpiredAuthorityApprovalCanBeRenewedWithoutDuplicateCount() public {
+        Actor panelA = new Actor();
+        bytes32 panelAId = keccak256("approval-renew-panel-a");
+        roleRegistry.assignRole(address(panelA), AVADataTypes.Role.Panel, panelAId, "ipfs://approval-renew-a");
+        ApprovalAuthorityContext memory context = _createApprovalAuthorityContext("m416-approval-renew", 1, bytes32(0));
+
+        uint256 expiredApprovalId = panelA.recordAuthorityApproval(
+            authorityApprovalRegistry,
+            AVADataTypes.Role.Panel,
+            AuthorityApprovalRegistry.ApprovalInput({
+                workflowKey: context.workflowKey,
+                packageId: context.packageId,
+                action: AVADataTypes.Action.ResolveChallenge,
+                recognisedStateId: context.recognisedStateId,
+                objectId: context.objectId,
+                authorityId: panelAId,
+                evidenceReceiptId: context.challengeEvidenceId,
+                expiresAt: uint64(block.timestamp + 1),
+                reasonURI: "ipfs://approval-renew-expiring"
+            })
+        );
+        vm.warp(block.timestamp + 2);
+        require(
+            !authorityApprovalRegistry.hasActiveApproval(
+                context.workflowKey,
+                context.packageId,
+                AVADataTypes.Action.ResolveChallenge,
+                context.recognisedStateId,
+                context.objectId,
+                panelAId
+            ),
+            "expired approval remained active"
+        );
+        require(
+            authorityApprovalRegistry.approvalCount(
+                context.workflowKey,
+                context.packageId,
+                AVADataTypes.Action.ResolveChallenge,
+                context.recognisedStateId,
+                context.objectId
+            ) == 0,
+            "expired approval counted before renewal"
+        );
+
+        uint256 renewedApprovalId = panelA.recordAuthorityApproval(
+            authorityApprovalRegistry,
+            AVADataTypes.Role.Panel,
+            AuthorityApprovalRegistry.ApprovalInput({
+                workflowKey: context.workflowKey,
+                packageId: context.packageId,
+                action: AVADataTypes.Action.ResolveChallenge,
+                recognisedStateId: context.recognisedStateId,
+                objectId: context.objectId,
+                authorityId: panelAId,
+                evidenceReceiptId: context.challengeEvidenceId,
+                expiresAt: uint64(block.timestamp + 7 days),
+                reasonURI: "ipfs://approval-renew-active"
+            })
+        );
+        require(renewedApprovalId != expiredApprovalId, "renewal reused receipt id");
+        require(
+            authorityApprovalRegistry.approvalCount(
+                context.workflowKey,
+                context.packageId,
+                AVADataTypes.Action.ResolveChallenge,
+                context.recognisedStateId,
+                context.objectId
+            ) == 1,
+            "renewed approval double-counted or missing"
+        );
+
+        try panelA.recordAuthorityApproval(
+            authorityApprovalRegistry,
+            AVADataTypes.Role.Panel,
+            AuthorityApprovalRegistry.ApprovalInput({
+                workflowKey: context.workflowKey,
+                packageId: context.packageId,
+                action: AVADataTypes.Action.ResolveChallenge,
+                recognisedStateId: context.recognisedStateId,
+                objectId: context.objectId,
+                authorityId: panelAId,
+                evidenceReceiptId: context.challengeEvidenceId,
+                expiresAt: uint64(block.timestamp + 8 days),
+                reasonURI: "ipfs://approval-renew-duplicate-active"
+            })
+        ) {
+            revert("active renewed approval accepted duplicate");
+        } catch {}
+
+        panelA.resolveChallenge(
+            stateMachine,
+            AVADataTypes.Role.Panel,
+            context.challengeId,
+            AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            panelAId,
+            "ipfs://approval-renew-resolved"
+        );
     }
 
     function testM416ApprovalReceiptAuthorityRejectsConflictExcludedSubject() public {

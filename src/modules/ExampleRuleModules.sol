@@ -89,6 +89,10 @@ contract MinimumChallengeWindowTransitionModule is ITransitionRuleModule, IChall
         }
     }
 
+    function supportsChallengeWindowRule() external pure returns (bool) {
+        return true;
+    }
+
     function validateChallengeWindowDuration(
         bytes32 workflowKey,
         uint256 recognisedStateId,
@@ -333,6 +337,10 @@ contract SubjectRateLimitModule is IAntiAbuseModule, IChallengeRateLimitModule {
             revert AVADataTypes.EmptyValue();
         }
         if (subjectId == objectId) revert AVADataTypes.InvalidState(uint256(subjectId));
+    }
+
+    function supportsChallengeRateLimit() external pure returns (bool) {
+        return true;
     }
 
     function validateChallengeFiling(

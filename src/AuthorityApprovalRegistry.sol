@@ -89,7 +89,8 @@ contract AuthorityApprovalRegistry {
 
         bytes32 approvalKey =
             computeApprovalKey(input.workflowKey, input.packageId, input.action, input.recognisedStateId, input.objectId);
-        if (approvalReceiptByContextAndAuthority[approvalKey][input.authorityId] != 0) {
+        uint256 existingApprovalId = approvalReceiptByContextAndAuthority[approvalKey][input.authorityId];
+        if (existingApprovalId != 0 && approvalReceipts[existingApprovalId].expiresAt > block.timestamp) {
             revert AVADataTypes.InvalidState(uint256(input.authorityId));
         }
 
@@ -109,7 +110,9 @@ contract AuthorityApprovalRegistry {
             approvedBy: msg.sender
         });
         approvalReceiptByContextAndAuthority[approvalKey][input.authorityId] = id;
-        approvalAuthoritiesByContext[approvalKey].push(input.authorityId);
+        if (existingApprovalId == 0) {
+            approvalAuthoritiesByContext[approvalKey].push(input.authorityId);
+        }
 
         emit AuthorityApprovalRecorded(
             id,

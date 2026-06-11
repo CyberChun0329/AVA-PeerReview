@@ -49,7 +49,7 @@ Rules currently enforced:
   transition, and sets the linked recognised state to `Vested`.
 - default packages remain a permissive baseline, while packages that select
   `SubjectRateLimitModule` can reject repeated challenge filings by the same
-  subject against the same recognised state.
+  subject against the same recognised state for that package.
 - none of these steps creates standing, consequence, reward, sanction,
   allocation, service entitlement, or manuscript advantage.
 
@@ -232,7 +232,7 @@ Current module coverage:
 | --- | --- | --- | --- | --- | --- |
 | Attribution | `IAttributionModule` | `DefaultAttributionModule` | `SubjectSaltAttributionModule` | Rule package | Validates attributed object only |
 | Verification | `IVerificationModule` | `DefaultVerificationModule` | `EvidenceThresholdVerificationModule` | Rule package | Validates references, not truth |
-| Transition rule | `ITransitionRuleModule` | `DefaultTransitionRuleModule` | `NoFrozenTransitionRuleModule`, `MinimumChallengeWindowTransitionModule` | Rule package | Cannot own state storage; optional challenge-window timing veto before vesting |
+| Transition rule | `ITransitionRuleModule` | `DefaultTransitionRuleModule` | `NoFrozenTransitionRuleModule`, `MinimumChallengeWindowTransitionModule` | Rule package | Cannot own state storage; optional challenge-window timing veto before vesting when the module declares support |
 | Disclosure/privacy | `IDisclosurePolicyModule` | `DefaultDisclosurePolicyModule` | disclosure scenario modules, `ZKBackedDisclosureModule` | Rule package and evidence registry | No reveal or decryption |
 | Challenge lifecycle | `IChallengeLifecycleModule` | `DefaultChallengeLifecycleModule` | `PanelOnlyChallengeLifecycleModule` | Rule package | Admissibility only |
 | Evidence policy | `IEvidencePolicyModule` | `DefaultEvidencePolicyModule` | `TypedEvidencePolicyModule` | Rule package | Active on workflow-scoped evidence registration and recognised-state validation; reference/type/workflow validation only |
@@ -240,7 +240,7 @@ Current module coverage:
 | Editorial adapter | `IEditorialSystemAdapter` | `DefaultEditorialSystemAdapter` | `EditorialReferenceAdapter` | Rule package | Workflow-aware manuscript overload requires a known package; adapter is active only when optional external reference metadata is supplied |
 | Residual editorial authority | `IResidualEditorialAuthorityModule` plus `AuthorityApprovalRegistry` for receipt-backed examples | `DefaultResidualEditorialAuthorityModule` | `ProceduralEditorialAuthorityModule`, `StructuredResidualEditorialAuthorityModule`, `ApprovalReceiptAuthorityModule` | Rule package | Procedural authority validation only; supports single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, emergency-pause, and approval-receipt validator formats without publication decision or merit logic |
 | Field policy | `IFieldPolicyModule` | `DefaultFieldPolicyModule` | `DisciplineFieldPolicyModule` | Rule package | Active on recognised-state validation; discipline rule validation only |
-| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | `DefaultAntiAbuseModule` | `SubjectRateLimitModule` | Rule package | Active on review, challenge, and downstream record paths; default package is a permissive baseline; example module can veto selected subject/object/action paths and repeated challenge filings; no sanction execution |
+| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | `DefaultAntiAbuseModule` | `SubjectRateLimitModule` | Rule package | Active on review, challenge, and downstream record paths; default package is a permissive baseline; example module can veto selected subject/object/action paths and repeated challenge filings after declaring support; its challenge-filing example is one filing per package / recognised state / challenger subject; no sanction execution |
 | Standing | `IStandingAdapter` | `DefaultStandingAdapter` | `VectorStandingAdapter` | Recognised-state `packageId` | Procedural weight record only |
 | Reward/value | `IRewardAdapter` | `DefaultRewardAdapter` | `StablecoinRecordRewardAdapter`, `GenericTokenRecordRewardAdapter` | Recognised-state `packageId` | Record only, no transfer |
 | Priority | `IPriorityAdapter` | `DefaultPriorityAdapter` | `PriorityTokenRecordAdapter`, `RentedPriorityRecordAdapter` | Recognised-state `packageId` | Administrative queue record only |
@@ -445,7 +445,7 @@ Rules currently enforced:
   token paths remain bounded administrative queue/service-right artifacts only.
 - none of these paths exposes publication priority, manuscript merit,
   acceptance, or rejection functions.
-- current verification is 239 tests passing.
+- current verification is 242 tests passing.
 - The current state-machine surface includes authorised standing computation,
   credential use-surface hardening, disclosure proof-use, and lifecycle-record
   closure hardening.

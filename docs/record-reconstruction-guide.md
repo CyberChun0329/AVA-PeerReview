@@ -113,6 +113,10 @@ Reader path:
 | Standing penalty input | `ConsequenceExecutor` | `StandingPenaltyInputRecorded` | `getStandingPenaltyInput(id)` | penalty consequence, challenge id, outcome, subject, dimension, delta, evidence, authority |
 | Eligibility restriction | `ConsequenceExecutor` | `EligibilityRestrictionRecorded` | `getEligibilityRestriction(id)` | penalty consequence, challenge id, outcome, subject, expiry, evidence, authority |
 
+The consequence and penalty subject should be reconstructed as the responsible
+subject of the source recognised state. The current demo does not encode
+implicit cross-subject consequence records.
+
 Downstream records should be interpreted through their source recognised state
 and stored `packageId`. Raw review ids, raw challenge ids, raw evidence ids,
 unknown ids, and unsupported recognised-state statuses are not downstream

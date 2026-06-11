@@ -133,7 +133,9 @@ families. Good-faith failed challenges are not treated as misconduct.
 Challenge-window timing and repeated challenge filing are package-selectable
 veto surfaces. The default package remains a permissive baseline; timed or
 rate-limited packages can reject early vesting or repeated challenge filing
-without adding production scheduling or sanction execution.
+without adding production scheduling or sanction execution. The example
+`SubjectRateLimitModule` is intentionally conservative: for a selected package,
+it means one filing per challenger subject against the same recognised state.
 
 Residual authority can also be receipt-backed. `AuthorityApprovalRegistry`
 stores package/action/object-bound approval receipts, and
@@ -145,7 +147,7 @@ conflict exclusion without taking over state storage.
 Current verification:
 
 - `forge build` passes.
-- `forge test` passes with 239 tests.
+- `forge test` passes with 242 tests.
 - The baseline demo script runs locally with:
 
 ```bash

@@ -74,7 +74,7 @@ AVA stages.
 | Support function | Interface | Called by | Current limit |
 | --- | --- | --- | --- |
 | Transition rule | `ITransitionRuleModule` | `AVAStateMachine` transition, challenge, restoration, close paths | Cannot own state storage or allow substrate-forbidden high-impact paths |
-| Challenge-window timing | `IChallengeWindowRuleModule` | `AVAStateMachine.vestReviewRecognition` when the selected transition module supports it | Optional minimum-duration veto only; no scheduler, oracle, expiry executor, or automatic challenge closure |
+| Challenge-window timing | `IChallengeWindowRuleModule` | `AVAStateMachine.vestReviewRecognition` when the selected transition module declares `supportsChallengeWindowRule()` | Optional minimum-duration veto only; declared validator reverts are vetoes; no scheduler, oracle, expiry executor, or automatic challenge closure |
 | Challenge lifecycle | `IChallengeLifecycleModule` | `AVAStateMachine` file/screen/resolve/restore/close | Lifecycle admissibility only; no sanction, standing update, allocation, or direct status mutation |
 | Disclosure policy | `IDisclosurePolicyModule` | Evidence registry and state/challenge paths | Policy/reference compatibility only; no reveal/decrypt/ACL |
 | Disclosure lifecycle | `IDisclosureLifecycleModule` | `recordDisclosureLifecycleReadiness` | Readiness record only; no reveal/decrypt/ACL/identity disclosure |
@@ -84,7 +84,7 @@ AVA stages.
 | Evidence lifecycle | `IEvidenceLifecycleModule` | Evidence registration, evidence use, evidence lifecycle hook | Status-bound lifecycle validation only; no delete/reveal/truth adjudication |
 | Audit adapter | `IAuditAdapter` | `AttestationAuditModule` workflow-aware and target-bound attestation paths | Attestation reference/hash validation only; audit storage remains substrate-owned |
 | Field policy | `IFieldPolicyModule` | `AVAStateMachine` recognised-state validation | Field/venue admissibility only; cannot replace authority/evidence/status gates |
-| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | Review, challenge, standing, allocation, consequence paths | Veto only; default package remains permissive; selected packages can reject repeated challenge filing; no sanction execution, standing update, or state write |
+| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | Review, challenge, standing, allocation, consequence paths | Veto only; default package remains permissive; selected packages that declare `supportsChallengeRateLimit()` can reject repeated challenge filing; the example counter is one filing per package / recognised state / challenger subject; declared validator reverts are vetoes; no sanction execution, standing update, or state write |
 
 `IEditorialSystemAdapter` remains an optional manuscript metadata-reference
 bridge outside the AVA core-stage / recognised-state support / downstream
@@ -165,8 +165,9 @@ accept; any veto fails closed before storage mutation.**
   challenge paths only for `Downgraded`, `Voided`, or `Restored` as the
   substrate allows.
 - Optional extension: `IChallengeWindowRuleModule` can veto vesting before a
-  package-configured challenge-window duration has elapsed. It cannot close
-  challenges, schedule execution, or replace open-challenge-count blocking.
+  package-configured challenge-window duration has elapsed after the module
+  declares `supportsChallengeWindowRule()`. It cannot close challenges,
+  schedule execution, or replace open-challenge-count blocking.
 
 **Disclosure policy, `IDisclosurePolicyModule`**
 
@@ -252,7 +253,10 @@ accept; any veto fails closed before storage mutation.**
   permissive baseline; package-selected modules can veto configured
   subject/object/action paths. The optional challenge-rate-limit hook receives
   the prior filing count for the same package / challenged recognised state /
-  challenger subject path and can reject repeated challenge filing.
+  challenger subject path after the module declares
+  `supportsChallengeRateLimit()` and can reject repeated challenge filing. The
+  bundled `SubjectRateLimitModule` uses that count as a permanent per-path
+  cap; it is an example policy, not a universal challenge-right rule.
 - May veto: yes.
 - Must not do: sanction, apply punitive asset deduction, update standing, or
   block by writing state.
@@ -387,7 +391,8 @@ accept; any veto fails closed before storage mutation.**
 - May veto: yes.
 - Must not do: execute sanction, standing update, allocation, or reward.
 - Nondelegable gates: consequence storage only; allowed recognised state,
-  responsible recognised-state subject, and evidence gates.
+  responsible recognised-state subject, and evidence gates. The current demo
+  does not use this path for implicit cross-subject consequences.
 
 **Penalty adapter, `IPenaltyAdapter`**
 
@@ -398,6 +403,7 @@ accept; any veto fails closed before storage mutation.**
 - Must not do: execute sanction, punitive asset deduction, token transfer,
   direct standing update, or deletion of reward history.
 - Nondelegable gates: consequence storage only; no sanction execution selector;
+  subject binding follows the source recognised state's responsible subject;
   standing penalty input is consumed only by later standing computation.
 
 **Restoration adapter, `IRestorationAdapter`**

@@ -187,7 +187,7 @@ Key contracts:
 | `ZKStandingComputationRegistry` | Records package-bound standing proof receipts from registered formula/source-set/computation statement inputs. |
 | `ZKStandingCredentialRegistry` | Records commitment-bound standing credential proof carriers and target-bound proof-use receipts. |
 | `AllocationExecutor` | Records bounded allocation, reward-value, and administrative-priority records for eligible recognised states. |
-| `ConsequenceExecutor` | Records bounded consequence, penalty, restoration, recovery, and eligibility records. |
+| `ConsequenceExecutor` | Records bounded consequence, penalty, restoration, recovery, and eligibility records for the responsible subject of the source recognised state. |
 | `ValueSettlementExecutor` | Consumes authorised allocation/consequence source records and writes mock settlement receipts. |
 | `DisclosureAccessExecutor` | Records disclosure access, closure, lifecycle, voluntary-intent, and anonymous proof-use receipts. |
 | `ExternalOperationRegistry` | Records external-operation intents and terminal receipts without executing external platform actions. |
@@ -218,6 +218,9 @@ Raw review ids, raw challenge ids, raw evidence ids, unknown ids, inactive
 subjects, unsupported statuses, and cross-package or cross-workflow references
 cannot directly create downstream standing, allocation, consequence,
 credential, settlement, or publication effects.
+In the current demo, consequence, penalty, and restoration records are bound to
+the responsible subject stored on the source recognised state; cross-subject
+consequence design is intentionally not implicit.
 
 ## 6. Module Taxonomy
 
@@ -381,7 +384,7 @@ Use:
 The current verified state is:
 
 - `forge build` passes.
-- `forge test` passes with 239 tests.
+- `forge test` passes with 242 tests.
 - The baseline demo script runs locally with:
 
 ```bash

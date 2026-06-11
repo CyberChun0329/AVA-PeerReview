@@ -127,7 +127,7 @@ settlement, recovery, external-operation, and package-reconfiguration surfaces.
 Current verification expectation:
 
 - `forge build` passes;
-- `forge test` passes with 239 tests;
+- `forge test` passes with 242 tests;
 - the baseline demo script runs with `--offline` in this environment.
 
 ## Hard Boundaries

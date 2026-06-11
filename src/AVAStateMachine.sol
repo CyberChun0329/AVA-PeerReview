@@ -1282,6 +1282,7 @@ contract AVAStateMachine {
     ) internal view {
         AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
         if (rulePackage.workflowKey != workflowKey) revert AVADataTypes.InvalidState(packageId);
+        if (!_supportsChallengeWindowRule(address(rulePackage.transitionRuleModule))) return;
         (bool success, bytes memory result) = address(rulePackage.transitionRuleModule).staticcall(
             abi.encodeWithSelector(
                 IChallengeWindowRuleModule.validateChallengeWindowDuration.selector,
@@ -1292,7 +1293,7 @@ contract AVAStateMachine {
                 msg.sender
             )
         );
-        _handleOptionalModuleResult(success, result);
+        _handleRequiredModuleResult(success, result);
     }
 
     function _validateChallengeFilingIfConfigured(
@@ -1304,6 +1305,7 @@ contract AVAStateMachine {
     ) internal view {
         AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
         if (rulePackage.workflowKey != workflowKey) revert AVADataTypes.InvalidState(packageId);
+        if (!_supportsChallengeRateLimit(address(rulePackage.antiAbuseModule))) return;
         (bool success, bytes memory result) = address(rulePackage.antiAbuseModule).staticcall(
             abi.encodeWithSelector(
                 IChallengeRateLimitModule.validateChallengeFiling.selector,
@@ -1314,11 +1316,26 @@ contract AVAStateMachine {
                 msg.sender
             )
         );
-        _handleOptionalModuleResult(success, result);
+        _handleRequiredModuleResult(success, result);
     }
 
-    function _handleOptionalModuleResult(bool success, bytes memory result) internal pure {
-        if (success || result.length == 0) return;
+    function _supportsChallengeWindowRule(address module) internal view returns (bool) {
+        (bool success, bytes memory result) =
+            module.staticcall(abi.encodeWithSelector(IChallengeWindowRuleModule.supportsChallengeWindowRule.selector));
+        if (!success || result.length != 32) return false;
+        return abi.decode(result, (bool));
+    }
+
+    function _supportsChallengeRateLimit(address module) internal view returns (bool) {
+        (bool success, bytes memory result) =
+            module.staticcall(abi.encodeWithSelector(IChallengeRateLimitModule.supportsChallengeRateLimit.selector));
+        if (!success || result.length != 32) return false;
+        return abi.decode(result, (bool));
+    }
+
+    function _handleRequiredModuleResult(bool success, bytes memory result) internal pure {
+        if (success) return;
+        if (result.length == 0) revert AVADataTypes.InvalidState(0);
         assembly {
             revert(add(result, 32), mload(result))
         }
