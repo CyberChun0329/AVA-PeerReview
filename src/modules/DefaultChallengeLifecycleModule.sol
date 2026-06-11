@@ -54,7 +54,7 @@ contract DefaultChallengeLifecycleModule is IChallengeLifecycleModule {
                 );
             _requireAction(
                 context.fromLifecycleStatus == AVADataTypes.ChallengeLifecycleStatus.Resolved
-                    && context.toLifecycleStatus == AVADataTypes.ChallengeLifecycleStatus.RestorationAvailable
+                    && context.toLifecycleStatus == AVADataTypes.ChallengeLifecycleStatus.RestorationApplied
                     && (restoresRejectedChallenge || restoresAdverseCorrection)
                     && context.proposedStateStatus == AVADataTypes.RecognisedStateStatus.Restored
             );
@@ -64,7 +64,7 @@ contract DefaultChallengeLifecycleModule is IChallengeLifecycleModule {
         if (context.action == AVADataTypes.Action.CloseChallenge) {
             _requireAction(
                 (context.fromLifecycleStatus == AVADataTypes.ChallengeLifecycleStatus.Resolved
-                    || context.fromLifecycleStatus == AVADataTypes.ChallengeLifecycleStatus.RestorationAvailable)
+                    || context.fromLifecycleStatus == AVADataTypes.ChallengeLifecycleStatus.RestorationApplied)
                     && context.toLifecycleStatus == AVADataTypes.ChallengeLifecycleStatus.Closed
                     && context.outcome != AVADataTypes.ChallengeOutcome.None
                     && context.proposedStateStatus == context.challengedStateStatus

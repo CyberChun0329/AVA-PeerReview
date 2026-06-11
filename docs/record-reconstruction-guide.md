@@ -70,6 +70,7 @@ variable is outside the current Solidity demo.
 | Evidence lifecycle | `EvidenceCommitmentRegistry` | `EvidenceLifecycleRecorded` | `getEvidenceLifecycleRecord(id)` | evidence id, lifecycle kind, from/to status, replacement reference, authority |
 | Rule package | `AVARulePackageRegistry` | `RulePackageRegistered`, `RulePackageVersionRegistered`, `RulePackageChallengeLifecycleBound`, `RulePackageAuthorityBound` | `getRulePackageById(packageId)`, `getActivePackageId(workflowKey)` | `packageId`, `workflowKey`, module addresses, `modulesHash`, `modulesCodeHash`, version, compatibility key |
 | Rule package lifecycle | `AVARulePackageRegistry` | `RulePackageLifecycleRecorded`, `RulePackageLifecyclePackageBinding` | `getRulePackageLifecycleRecord(id)` | source package, target package, modules hashes, version/compatibility, lifecycle kind |
+| Object migration readiness | `AVARulePackageRegistry` | `ObjectMigrationReadinessRecorded` | `getObjectMigrationReadinessRecord(id)` | lifecycle record, source package, target package, object id, source-package recognised state, source-package evidence, boundary hash, authority, `createdAt`, recorder |
 | Disclosure lifecycle | `AVARulePackageRegistry` | `DisclosureLifecycleRecorded` | `getDisclosureLifecycleRecord(id)` | workflow, `packageId`, policy id, lifecycle kind, authority |
 
 The legacy `RulePackageRegistered` event remains intentionally compact.
@@ -83,11 +84,11 @@ with `RulePackageVersionRegistered`, `RulePackageChallengeLifecycleBound`, and
 | Record family | Contract | Event anchor | Getter | Reconstruction fields |
 | --- | --- | --- | --- | --- |
 | Manuscript reference | `AVAStateMachine` | `ManuscriptRegistered` | `getManuscript(id)` | off-chain reference, role subject, registeredBy |
-| Recognised state | `AVAStateMachine` | `RecognisedStateRegistered` | `getRecognisedState(id)` | `workflowKey`, `packageId`, AVA stage, object id, evidence id, disclosure policy, authority, status |
+| Recognised state | `AVAStateMachine` | `RecognisedStateRegistered` | `getRecognisedState(id)` | `workflowKey`, `packageId`, AVA stage, object id, responsible `subjectId`, evidence id, disclosure policy, authority, status |
 | Review contribution | `AVAStateMachine` | `ReviewContributionRegistered`, `ReviewProvisionallyRecognised`, `ReviewChallengeWindowOpened`, `ReviewRecognitionVested` | `getReviewContribution(id)` | manuscript id, reviewer subject, evidence id, disclosure policy, linked recognised state, status |
 | Challenge | `AVAStateMachine` | `ChallengeFiled`, `ChallengeScreened`, `ChallengeResolved`, `ChallengeClosed`, `RestorationApplied` | `getChallenge(id)` | challenged recognised state, challenger subject, evidence id, lifecycle status, outcome, last transition |
-| Challenge transition | `AVAStateMachine` | `ChallengeTransitionRecorded` | `getChallengeTransition(id)` | challenge id, target recognised state, from/to status, transition kind, outcome, evidence, authority |
-| Recognised-state transition | `AVAStateMachine` | `RecognisedStateTransitionRecorded` | `getRecognisedStateTransition(id)` | recognised state id, package, from/to status, action, challenge id if any, evidence, authority |
+| Challenge transition | `AVAStateMachine` | `ChallengeTransitionRecorded` | `getChallengeTransition(id)` | challenge id, target recognised state, from/to status, transition kind, outcome, evidence, authority, `createdAt`, `createdBy` |
+| Recognised-state transition | `AVAStateMachine` | `RecognisedStateTransitionRecorded` | `getRecognisedStateTransition(id)` | recognised state id, package, from/to status, action, challenge id if any, evidence, authority, `createdAt`, `createdBy` |
 
 Reader path:
 

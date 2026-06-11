@@ -29,6 +29,14 @@ import {IEvidenceLifecycleModule} from "./interfaces/IEvidenceLifecycleModule.so
 import {IDisclosureLifecycleModule} from "./interfaces/IDisclosureLifecycleModule.sol";
 import {IDisclosureExecutionModule} from "./interfaces/IDisclosureExecutionModule.sol";
 
+interface IRecognisedStateReader {
+    function getRecognisedState(uint256 id) external view returns (AVADataTypes.RecognisedStateRecord memory);
+}
+
+interface IEvidenceReceiptReader {
+    function getEvidenceReceipt(uint256 id) external view returns (AVADataTypes.EvidenceReceipt memory);
+}
+
 contract AVARulePackageRegistry {
     struct RulePackage {
         uint256 packageId;
@@ -100,15 +108,29 @@ contract AVARulePackageRegistry {
         bool deprecated;
     }
 
+    struct ObjectMigrationReadinessInput {
+        uint256 lifecycleRecordId;
+        bytes32 objectId;
+        uint256 recognisedStateId;
+        uint256 evidenceReceiptId;
+        bytes32 boundaryHash;
+        bytes32 authorityId;
+        string uri;
+    }
+
     AuthorityMatrix public immutable authorityMatrix;
     DisclosurePolicyRegistry public immutable disclosureRegistry;
+    IRecognisedStateReader public migrationStateReader;
+    IEvidenceReceiptReader public migrationEvidenceReader;
 
     mapping(uint256 => RulePackage) private rulePackagesById;
     mapping(bytes32 => uint256) private activePackageIdByWorkflowKey;
     mapping(uint256 => AVADataTypes.RulePackageLifecycleRecord) private lifecycleRecords;
+    mapping(uint256 => AVADataTypes.ObjectMigrationReadinessRecord) private objectMigrationReadinessRecords;
     mapping(uint256 => AVADataTypes.DisclosureLifecycleRecord) private disclosureLifecycleRecords;
     uint256 public nextRulePackageId = 1;
     uint256 public nextRulePackageLifecycleRecordId = 1;
+    uint256 public nextObjectMigrationReadinessRecordId = 1;
     uint256 public nextDisclosureLifecycleRecordId = 1;
 
     event RulePackageRegistered(bytes32 indexed workflowKey, bytes32 modulesHash, string uri, address registeredBy);
@@ -146,16 +168,50 @@ contract AVARulePackageRegistry {
         bytes32 targetModulesHash,
         bytes32 targetModulesCodeHash
     );
+    event ObjectMigrationReadinessRecorded(
+        uint256 indexed id,
+        uint256 indexed lifecycleRecordId,
+        bytes32 indexed objectId,
+        uint256 packageId,
+        uint256 targetPackageId
+    );
     event DisclosureLifecycleRecorded(
         uint256 indexed id,
         bytes32 indexed workflowKey,
         uint256 indexed disclosurePolicyId,
         AVADataTypes.DisclosureLifecycleKind kind
     );
+    event MigrationReferenceReadersConfigured(
+        address indexed stateReader, address indexed evidenceReader, bytes32 indexed authorityId, address configuredBy
+    );
 
     constructor(AuthorityMatrix authorityMatrix_, DisclosurePolicyRegistry disclosureRegistry_) {
         authorityMatrix = authorityMatrix_;
         disclosureRegistry = disclosureRegistry_;
+    }
+
+    function configureMigrationReferenceReaders(
+        AVADataTypes.Role actingRole,
+        IRecognisedStateReader stateReader,
+        IEvidenceReceiptReader evidenceReader,
+        bytes32 authorityId
+    ) external {
+        authorityMatrix.requireAuthorisedSubject(
+            msg.sender, actingRole, AVADataTypes.Action.RegisterRulePackage, authorityId
+        );
+        if (address(migrationStateReader) != address(0) || address(migrationEvidenceReader) != address(0)) {
+            revert AVADataTypes.InvalidState(0);
+        }
+        if (
+            address(stateReader) == address(0) || address(evidenceReader) == address(0)
+                || address(stateReader).code.length == 0 || address(evidenceReader).code.length == 0
+                || authorityId == bytes32(0)
+        ) {
+            revert AVADataTypes.EmptyValue();
+        }
+        migrationStateReader = stateReader;
+        migrationEvidenceReader = evidenceReader;
+        emit MigrationReferenceReadersConfigured(address(stateReader), address(evidenceReader), authorityId, msg.sender);
     }
 
     function registerRulePackage(
@@ -380,6 +436,75 @@ contract AVARulePackageRegistry {
         );
     }
 
+    function recordObjectMigrationReadiness(
+        AVADataTypes.Role actingRole,
+        ObjectMigrationReadinessInput calldata input
+    ) external returns (uint256 id) {
+        authorityMatrix.requireAuthorisedSubject(
+            msg.sender, actingRole, AVADataTypes.Action.RegisterRulePackage, input.authorityId
+        );
+        if (
+            input.lifecycleRecordId == 0 || input.objectId == bytes32(0) || input.evidenceReceiptId == 0
+                || input.boundaryHash == bytes32(0) || input.authorityId == bytes32(0) || bytes(input.uri).length == 0
+        ) {
+            revert AVADataTypes.EmptyValue();
+        }
+        AVADataTypes.RulePackageLifecycleRecord memory lifecycleRecord = lifecycleRecords[input.lifecycleRecordId];
+        if (lifecycleRecord.id == 0) revert AVADataTypes.UnknownReference(input.lifecycleRecordId);
+        if (lifecycleRecord.kind != AVADataTypes.RulePackageLifecycleKind.MigrationReady) {
+            revert AVADataTypes.InvalidState(input.lifecycleRecordId);
+        }
+        getRulePackageById(lifecycleRecord.packageId);
+        getRulePackageById(lifecycleRecord.targetPackageId);
+        _requireMigrationReferences(lifecycleRecord, input);
+
+        id = nextObjectMigrationReadinessRecordId++;
+        objectMigrationReadinessRecords[id] = AVADataTypes.ObjectMigrationReadinessRecord({
+            id: id,
+            lifecycleRecordId: input.lifecycleRecordId,
+            workflowKey: lifecycleRecord.workflowKey,
+            packageId: lifecycleRecord.packageId,
+            targetWorkflowKey: lifecycleRecord.targetWorkflowKey,
+            targetPackageId: lifecycleRecord.targetPackageId,
+            objectId: input.objectId,
+            recognisedStateId: input.recognisedStateId,
+            evidenceReceiptId: input.evidenceReceiptId,
+            boundaryHash: input.boundaryHash,
+            authorityRole: actingRole,
+            authorityId: input.authorityId,
+            uri: input.uri,
+            createdAt: block.timestamp,
+            recordedBy: msg.sender
+        });
+
+        emit ObjectMigrationReadinessRecorded(
+            id, input.lifecycleRecordId, input.objectId, lifecycleRecord.packageId, lifecycleRecord.targetPackageId
+        );
+    }
+
+    function _requireMigrationReferences(
+        AVADataTypes.RulePackageLifecycleRecord memory lifecycleRecord,
+        ObjectMigrationReadinessInput calldata input
+    ) internal view {
+        if (address(migrationStateReader) == address(0) || address(migrationEvidenceReader) == address(0)) {
+            revert AVADataTypes.InvalidState(input.lifecycleRecordId);
+        }
+        AVADataTypes.RecognisedStateRecord memory state =
+            migrationStateReader.getRecognisedState(input.recognisedStateId);
+        if (
+            state.packageId != lifecycleRecord.packageId || state.workflowKey != lifecycleRecord.workflowKey
+        ) {
+            revert AVADataTypes.InvalidState(input.recognisedStateId);
+        }
+        AVADataTypes.EvidenceReceipt memory evidence = migrationEvidenceReader.getEvidenceReceipt(input.evidenceReceiptId);
+        if (
+            evidence.packageId != lifecycleRecord.packageId || evidence.workflowKey != lifecycleRecord.workflowKey
+                || evidence.status != AVADataTypes.EvidenceReceiptStatus.Active
+        ) {
+            revert AVADataTypes.InvalidState(input.evidenceReceiptId);
+        }
+    }
+
     function recordDisclosureLifecycleReadiness(
         AVADataTypes.Role actingRole,
         bytes32 workflowKey,
@@ -451,6 +576,16 @@ contract AVARulePackageRegistry {
         returns (AVADataTypes.RulePackageLifecycleRecord memory)
     {
         AVADataTypes.RulePackageLifecycleRecord memory record = lifecycleRecords[id];
+        if (record.id == 0) revert AVADataTypes.UnknownReference(id);
+        return record;
+    }
+
+    function getObjectMigrationReadinessRecord(uint256 id)
+        external
+        view
+        returns (AVADataTypes.ObjectMigrationReadinessRecord memory)
+    {
+        AVADataTypes.ObjectMigrationReadinessRecord memory record = objectMigrationReadinessRecords[id];
         if (record.id == 0) revert AVADataTypes.UnknownReference(id);
         return record;
     }

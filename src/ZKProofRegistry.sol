@@ -22,6 +22,17 @@ contract ZKProofRegistry {
         address registeredBy;
     }
 
+    struct ProofRegistrationInput {
+        uint256 packageId;
+        bytes32 workflowKey;
+        AVADataTypes.AVAStage stage;
+        AVADataTypes.Action action;
+        bytes32 objectId;
+        AVADataTypes.Role actingRole;
+        uint256 disclosurePolicyId;
+        bytes32 subjectCommitment;
+    }
+
     IZKProofVerifier public immutable verifier;
     AVARulePackageRegistry public immutable rulePackageRegistry;
     DisclosurePolicyRegistry public immutable disclosureRegistry;
@@ -70,19 +81,79 @@ contract ZKProofRegistry {
         IZKProofVerifier.SchnorrProof calldata proof
     ) external returns (uint256 id) {
         uint256 packageId = _activePackageIdOrZero(workflowKey);
+        return _registerProof(
+            ProofRegistrationInput({
+                packageId: packageId,
+                workflowKey: workflowKey,
+                stage: stage,
+                action: action,
+                objectId: objectId,
+                actingRole: actingRole,
+                disclosurePolicyId: disclosurePolicyId,
+                subjectCommitment: subjectCommitment
+            }),
+            proof
+        );
+    }
+
+    /// @notice Registers a proof receipt against an explicit immutable rule package.
+    /// @dev This supports historical targets after workflow re-registration.
+    /// The package must already exist and must belong to `workflowKey`; the
+    /// receipt remains a proof-use record only and does not reveal identity,
+    /// grant authority, or validate evidence truth.
+    function registerProofForPackage(
+        uint256 packageId,
+        bytes32 workflowKey,
+        AVADataTypes.AVAStage stage,
+        AVADataTypes.Action action,
+        bytes32 objectId,
+        AVADataTypes.Role actingRole,
+        uint256 disclosurePolicyId,
+        bytes32 subjectCommitment,
+        IZKProofVerifier.SchnorrProof calldata proof
+    ) external returns (uint256 id) {
+        _requirePackageForWorkflow(packageId, workflowKey);
+        return _registerProof(
+            ProofRegistrationInput({
+                packageId: packageId,
+                workflowKey: workflowKey,
+                stage: stage,
+                action: action,
+                objectId: objectId,
+                actingRole: actingRole,
+                disclosurePolicyId: disclosurePolicyId,
+                subjectCommitment: subjectCommitment
+            }),
+            proof
+        );
+    }
+
+    function _registerProof(
+        ProofRegistrationInput memory input,
+        IZKProofVerifier.SchnorrProof calldata proof
+    ) internal returns (uint256 id) {
         bytes32 proofDomainHash = verifier.proofDomain();
-        bytes32 contextHash =
-            computeDisclosureContextHash(workflowKey, stage, action, objectId, actingRole, disclosurePolicyId, subjectCommitment);
-        bytes32 nullifierHash = computeNullifierHash(contextHash, subjectCommitment);
+        bytes32 contextHash = computeDisclosureContextHashForPackageAndProofDomain(
+            input.packageId,
+            proofDomainHash,
+            input.workflowKey,
+            input.stage,
+            input.action,
+            input.objectId,
+            input.actingRole,
+            input.disclosurePolicyId,
+            input.subjectCommitment
+        );
+        bytes32 nullifierHash = computeNullifierHash(contextHash, input.subjectCommitment);
         if (
             proofDomainHash == bytes32(0) || contextHash == bytes32(0) || nullifierHash == bytes32(0) || receiptIdByContextHash[contextHash] != 0
                 || receiptIdByNullifierHash[nullifierHash] != 0
         ) {
             revert AVADataTypes.InvalidState(uint256(contextHash));
         }
-        disclosureRegistry.getDisclosurePolicy(disclosurePolicyId);
-        if (subjectCommitment != computeSubjectCommitment(proof.publicKey)) {
-            revert AVADataTypes.InvalidState(uint256(subjectCommitment));
+        disclosureRegistry.getDisclosurePolicy(input.disclosurePolicyId);
+        if (input.subjectCommitment != computeSubjectCommitment(proof.publicKey)) {
+            revert AVADataTypes.InvalidState(uint256(input.subjectCommitment));
         }
         if (!verifier.verify(contextHash, proof)) revert AVADataTypes.InvalidState(uint256(contextHash));
 
@@ -90,11 +161,11 @@ contract ZKProofRegistry {
         bytes32 proofHash = keccak256(abi.encode(proof));
         proofReceipts[id] = ProofReceipt({
             id: id,
-            packageId: packageId,
+            packageId: input.packageId,
             verifier: address(verifier),
             proofDomainHash: proofDomainHash,
             contextHash: contextHash,
-            subjectCommitment: subjectCommitment,
+            subjectCommitment: input.subjectCommitment,
             nullifierHash: nullifierHash,
             proofHash: proofHash,
             registeredBy: msg.sender
@@ -103,7 +174,7 @@ contract ZKProofRegistry {
         receiptIdByNullifierHash[nullifierHash] = id;
 
         emit ZKProofVerified(
-            id, contextHash, nullifierHash, packageId, address(verifier), proofDomainHash, subjectCommitment, proofHash, msg.sender
+            id, contextHash, nullifierHash, input.packageId, address(verifier), proofDomainHash, input.subjectCommitment, proofHash, msg.sender
         );
     }
 
@@ -202,6 +273,12 @@ contract ZKProofRegistry {
         } catch {
             return 0;
         }
+    }
+
+    function _requirePackageForWorkflow(uint256 packageId, bytes32 workflowKey) internal view {
+        if (packageId == 0 || workflowKey == bytes32(0)) revert AVADataTypes.EmptyValue();
+        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
+        if (rulePackage.workflowKey != workflowKey) revert AVADataTypes.InvalidState(packageId);
     }
 
     function hasVerifiedProof(bytes32 contextHash) external view returns (bool) {

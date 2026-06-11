@@ -20,6 +20,10 @@ deployment.
 - `workflowKey` selects the current package for new workflow actions.
 - `registerRulePackage` always creates a fresh `packageId`.
 - Re-registering the same `workflowKey` updates the active package pointer.
+- Active pointer replacement is currently a trusted governance action by the
+  authorised package registrar. The current registry validates the new package
+  and lifecycle metadata, but it does not ask the incumbent package to approve
+  the pointer flip before registration.
 - Old recognised states, challenges, evidence receipts, downstream records,
   proof receipts, credentials, settlement receipts, and audit records must be
   interpreted through their stored `packageId` or through the package-bound
@@ -44,6 +48,14 @@ identity. `modulesCodeHash` is the aggregate code-identity hash. The registry
 rechecks stored module-code identity when `getRulePackageById(packageId)` is
 called.
 
+If a stored package's module code identity no longer matches, package reads
+fail closed. This is intentional tamper evidence for the demo: old records are
+not silently reinterpreted through changed module code. The operational cost is
+that affected package reads may become unavailable until a separately designed
+governance path records how readers should treat the tampered package. The
+current contracts do not include a tamper-acknowledged read path or a migration
+executor.
+
 `compatibilityKey` is a policy label. It does not execute migration, grant
 authority, or override substrate gates.
 
@@ -58,7 +70,7 @@ approved change, not silent mutation of old records.
 
 ## 3. Lifecycle Readiness Records
 
-`AVARulePackageRegistry` supports two lifecycle entrypoints:
+`AVARulePackageRegistry` supports two package-lifecycle entrypoints:
 
 - `recordRulePackageLifecycle`
 - `recordRulePackageLifecycleForPackage`
@@ -85,6 +97,12 @@ Lifecycle module validation is a veto-only compatibility check. It does not
 change active package pointers, move records, mutate recognised states, or
 rewrite downstream history.
 
+`recordObjectMigrationReadiness` can then bind a specific object to an existing
+`MigrationReady` lifecycle record. It stores source package, target package,
+object id, optional recognised-state id, evidence receipt, boundary hash,
+authority, and reason URI. It is a readiness receipt only: it does not migrate
+the object, create a replacement object, or mutate any recognised state.
+
 ## 4. Package Replacement Policy
 
 When a workflow package is replaced:
@@ -93,7 +111,9 @@ When a workflow package is replaced:
 2. New records use the new active `packageId`.
 3. Old records keep their original `packageId`.
 4. If compatibility or migration readiness needs to be recorded, write an
-   explicit lifecycle readiness record.
+   explicit lifecycle readiness record. If an individual object is ready for a
+   future migration path, write an object migration readiness record against
+   that lifecycle record.
 5. External readers must inspect the record's stored `packageId`, not the
    current active package pointer, when interpreting old records.
 
@@ -102,11 +122,11 @@ This policy intentionally keeps replacement and migration separate.
 ## 5. What A Future Migration Would Need
 
 The current demo does not implement migration execution. A future approved
-migration path would need separate design and tests for:
+migration execution path would need separate design and tests for:
 
 - source package id;
 - target package id;
-- target record id and kind;
+- target record id and kind, or an explicitly stored object readiness record;
 - authority subject;
 - evidence receipt;
 - reason URI;
@@ -116,7 +136,8 @@ migration path would need separate design and tests for:
   boundaries.
 
 It must not be implemented as a side effect of package registration or
-lifecycle readiness.
+lifecycle readiness. The current object migration readiness record closes the
+auditability gap for object/source/target binding, but remains record-only.
 
 ## 6. Current Test Evidence
 
@@ -126,6 +147,9 @@ Current tests already cover the policy shape:
 - double-blind review, anonymous challenge, and restoration scenarios use the
   historical package bound to their source records;
 - package lifecycle readiness records bind explicit source and target packages;
+- object migration readiness records bind an object, source package, target
+  package, evidence receipt, authority subject, and boundary hash without
+  executing migration;
 - lifecycle readiness rejects invalid targets and does not execute migration;
 - lifecycle validation sees module hashes and blocks incompatible packages;
 - disclosure execution uses the target object's historical package after

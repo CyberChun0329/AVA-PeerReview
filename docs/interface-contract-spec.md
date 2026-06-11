@@ -249,6 +249,19 @@ Gates:
 - After: substrate hard gates still control generic transition limits,
   challenge mutation rules, restoration rules, and transition-ledger writes.
 
+### `IChallengeWindowRuleModule`
+
+Function: `validateChallengeWindowDuration(...)`
+
+Inputs: `workflowKey`, `recognisedStateId`, challenge-window `openedAt`,
+current chain time, and actor.
+
+Success semantics: optional transition-rule extension for packages that want a
+minimum challenge-window duration before review recognition can vest.
+
+Must not do: schedule execution, close challenges automatically, decide truth,
+mutate state, or bypass the open-challenge count.
+
 ### `IDisclosurePolicyModule`
 
 Functions:
@@ -438,9 +451,12 @@ Current example modules include `ProceduralEditorialAuthorityModule` for a
 single allowed action and `StructuredResidualEditorialAuthorityModule` for
 validator-only single-role, threshold-panel, multisig,
 institutional-co-signature, conflict-excluded-panel, and emergency-pause
-formats. These examples express authority predicates only; they do not mutate
-substrate state or execute publication, reveal, sanction, reward, or payment
-effects.
+formats. The receipt-backed example pairs `AuthorityApprovalRegistry` with
+`ApprovalReceiptAuthorityModule`: panel subjects record package/action/object
+approval receipts, and the residual authority module checks m-of-n active
+receipts plus optional conflict exclusion. These examples express authority
+predicates only; they do not mutate substrate state or execute publication,
+reveal, sanction, reward, or payment effects.
 
 Allowed failure: revert for incompatible procedural authority context.
 
@@ -489,6 +505,21 @@ unsupported context.
 Must not do: sanction, apply punitive asset deduction, update standing, mutate
 records, reveal identity, or write counters in the current demo interface.
 
+### `IChallengeRateLimitModule`
+
+Function: `validateChallengeFiling(...)`
+
+Inputs: `workflowKey`, challenged recognised-state id, challenger subject,
+prior filing count for the same package / challenged state / challenger subject
+path, and actor.
+
+Success semantics: optional anti-abuse extension for packages that want to veto
+repeated challenge filing by the same role-scoped subject against the same
+recognised state.
+
+Must not do: execute sanctions, update standing, block good-faith challenge
+resolution, or create public consequences.
+
 Gates:
 - Before: subject and evidence/package checks are substrate-owned.
 - After: substrate writes or aborts the requested record/transition.
@@ -505,6 +536,8 @@ Inputs: `actingRole`, `recognisedStateId`, target `subjectId`, `dimension`,
 Output: none.
 
 Success semantics: no standing-update veto only; not reputation application.
+The substrate requires the target subject to match the source recognised
+state's responsible subject.
 
 Allowed failure: revert for invalid dimension, target, evidence, authority, or
 workflow policy.
@@ -709,8 +742,8 @@ Must not do: execute sanction, update standing, execute allocation, create
 reward, affect publication, or write records.
 
 Gates:
-- Before: allowed recognised-state status, subject, evidence, authority,
-  anti-abuse, and value-readiness checks run.
+- Before: allowed recognised-state status, responsible recognised-state
+  subject, evidence, authority, anti-abuse, and value-readiness checks run.
 - After: substrate writes only the bounded consequence record.
 
 ### `IPenaltyAdapter`
@@ -771,10 +804,13 @@ getEligibilityRestriction(uint256 id)
 Success semantics: append a record tied to an existing
 `ConsequenceKind.PenaltyRecord`. Standing penalty input records are negative
 inputs for later standing computation only. Eligibility restrictions are
-separate bounded procedural records. If a challenge id is supplied, the
-challenge outcome must match the penalty semantics; `RejectedGoodFaith`
-challenges cannot become misconduct standing-penalty or eligibility-restriction
-records.
+separate bounded procedural records. Standing penalty input requires a nonzero
+challenge id with a compatible outcome. `AcademicFraud` and
+`IrresponsibleReview` require an upheld challenge linked to the target
+recognised state. `NegligentChallenge` and `MaliciousOrFabricatedChallenge`
+require the corresponding challenge-abuse outcome and challenger subject.
+`RejectedGoodFaith` challenges cannot become misconduct standing-penalty or
+eligibility-restriction records.
 
 Must not do: update standing directly, transfer value, execute sanction, erase
 reward history, create public reputation score, create token balance, or affect
@@ -959,8 +995,15 @@ separate `modulesCodeHash` exposes the code-identity aggregate directly.
 
 Output: none.
 
-Success semantics: no package-lifecycle veto only; not authority grant and not
-migration execution.
+Success semantics: package-lifecycle veto only; not authority grant and not
+migration execution. Object-level migration readiness, when recorded through
+`AVARulePackageRegistry.recordObjectMigrationReadiness`, is a separate
+record-only receipt bound to an existing `MigrationReady` lifecycle record.
+The registry uses configured state/evidence readers to require that the named
+recognised state and evidence receipt belong to the lifecycle record's source
+workflow/package before the readiness receipt is stored.
+Those readers are configured once through `configureMigrationReferenceReaders`
+by an authority subject with rule-package registration permission.
 
 Allowed failure: revert for incompatible module composition, unsupported
 version, wrong compatibility key, deprecated package, missing target package
@@ -979,7 +1022,8 @@ Gates:
 - After: registry assigns a new immutable `packageId`, stores package metadata,
   stores source and target module hash / code-hash / version / compatibility
   metadata on readiness records, rechecks stored module code identity on package
-  reads, and points `workflowKey` to the new active package.
+  reads, points `workflowKey` to the new active package, and may store
+  object-level migration readiness receipts without moving the object.
 
 ### `IZKProofVerifier`
 
@@ -1011,6 +1055,11 @@ Gates:
   Target-package validation uses `computeDisclosureContextHashForPackage` so a
   proof for a new active package cannot satisfy an old target, and an old proof
   cannot satisfy a new target.
+- Historical target note: `registerProofForPackage` may be used when a proof
+  receipt must be created for an immutable package id after the workflow's
+  active package pointer has moved. The package id must exist and must belong
+  to the supplied workflow key. This does not change storage semantics or allow
+  a new package proof to satisfy an old package target.
 
 ### `IStandingFormulaRegistry`
 
@@ -1040,6 +1089,17 @@ invalidateStandingComputationStatement(
     string uri
 )
 proofInputMatchesRegisteredCommitment(
+    bytes32 workflowKey,
+    bytes32 subjectCommitment,
+    bytes32 vectorKey,
+    bytes32 categoryHash,
+    uint256 epoch,
+    bytes32 sourceRecordSetRoot,
+    bytes32 computationRuleHash,
+    address verifier
+)
+getSourceSetCommitmentIdForPackageProofInput(
+    uint256 packageId,
     bytes32 workflowKey,
     bytes32 subjectCommitment,
     bytes32 vectorKey,
@@ -1210,6 +1270,12 @@ Inputs bind a ZK standing proof receipt to package id, subject commitment,
 credential commitment, credential nullifier, vector/category, threshold/range,
 epoch, source-record-set root, computation-rule hash, source computation
 statement id, expiry, and authority.
+
+Namespace note: when a ZK standing credential is suspended by a source-bound
+value settlement or challenge-transition record, the credential's
+`subjectCommitment` is treated as the same pseudonymous role-scoped subject
+identifier used by the source record. It is not a real-name identity and it is
+not an account owner field.
 
 Success semantics: records a commitment-bound standing credential proof carrier
 only when the caller has `IssueStandingCredential` authority and the supplied

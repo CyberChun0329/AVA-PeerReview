@@ -89,6 +89,7 @@ contract StandingRegistry {
             revert AVADataTypes.EmptyValue();
         }
         authorityMatrix.requireKnownActiveSubject(subjectId);
+        _requireRecognisedStateSubject(recognisedState, subjectId);
         AVADataTypes.StandingComputationContext memory context = AVADataTypes.StandingComputationContext({
             recognisedStateId: recognisedStateId,
             subjectId: subjectId,
@@ -159,6 +160,7 @@ contract StandingRegistry {
             revert AVADataTypes.EmptyValue();
         }
         authorityMatrix.requireKnownActiveSubject(context.subjectId);
+        _requireRecognisedStateSubject(recognisedState, context.subjectId);
         _requireUsableEvidenceForRecognisedState(context.evidenceReceiptId, recognisedState);
         AVARulePackageRegistry.RulePackage memory rulePackage =
             rulePackageRegistry.getRulePackageById(recognisedState.packageId);
@@ -292,6 +294,13 @@ contract StandingRegistry {
         rulePackage.antiAbuseModule.validateUse(
             workflowKey, actingRole, AVADataTypes.Action.RecordStandingUpdate, subjectId, bytes32(recognisedStateId), msg.sender
         );
+    }
+
+    function _requireRecognisedStateSubject(
+        AVADataTypes.RecognisedStateRecord memory recognisedState,
+        bytes32 subjectId
+    ) internal pure {
+        if (recognisedState.subjectId != subjectId) revert AVADataTypes.InvalidState(recognisedState.id);
     }
 
     function _validateStandingUpdateModules(

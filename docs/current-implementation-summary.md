@@ -65,7 +65,7 @@ The current demo includes:
 - disclosure policy records;
 - manuscript references as off-chain pointers;
 - review contribution records;
-- recognised-state records;
+- recognised-state records with a responsible role-scoped subject;
 - generic recognised-state transition ledger;
 - challenge records and challenge transition ledger;
 - explicit correction and restoration paths;
@@ -130,12 +130,22 @@ Penalty and recovery records are split by function: value recovery, standing
 penalty input, eligibility restriction, and restoration are separate record
 families. Good-faith failed challenges are not treated as misconduct.
 
+Challenge-window timing and repeated challenge filing are package-selectable
+veto surfaces. The default package remains a permissive baseline; timed or
+rate-limited packages can reject early vesting or repeated challenge filing
+without adding production scheduling or sanction execution.
+
+Residual authority can also be receipt-backed. `AuthorityApprovalRegistry`
+stores package/action/object-bound approval receipts, and
+`ApprovalReceiptAuthorityModule` checks m-of-n active receipts plus optional
+conflict exclusion without taking over state storage.
+
 ## Verification
 
 Current verification:
 
 - `forge build` passes.
-- `forge test` passes with 221 tests.
+- `forge test` passes with 239 tests.
 - The baseline demo script runs locally with:
 
 ```bash

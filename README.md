@@ -1,5 +1,7 @@
 # AVA Peer Review Solidity Demo
 
+[![CI](https://github.com/CyberChun0329/AVA-PeerReview/actions/workflows/ci.yml/badge.svg)](https://github.com/CyberChun0329/AVA-PeerReview/actions/workflows/ci.yml)
+
 This repository is an early technical demo of the AVA protocol for peer
 review. It demonstrates an executable governance kernel for AVA-style peer
 review using Solidity and Foundry. The contracts are written for
@@ -91,7 +93,10 @@ forge build
 forge test
 ```
 
-The current verification state records `221` passing tests.
+The current verification state records `239` passing tests.
+
+The public repository includes a GitHub Actions workflow that runs `forge
+build` and `forge test` on pushes to `main` and on pull requests.
 
 The baseline demo script is:
 

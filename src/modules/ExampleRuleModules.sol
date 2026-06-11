@@ -12,6 +12,8 @@ import {IEditorialSystemAdapter} from "../interfaces/IEditorialSystemAdapter.sol
 import {IResidualEditorialAuthorityModule} from "../interfaces/IResidualEditorialAuthorityModule.sol";
 import {IFieldPolicyModule} from "../interfaces/IFieldPolicyModule.sol";
 import {IAntiAbuseModule} from "../interfaces/IAntiAbuseModule.sol";
+import {IChallengeWindowRuleModule} from "../interfaces/IChallengeWindowRuleModule.sol";
+import {IChallengeRateLimitModule} from "../interfaces/IChallengeRateLimitModule.sol";
 
 contract SubjectSaltAttributionModule is IAttributionModule {
     function validateAttribution(
@@ -61,6 +63,45 @@ contract NoFrozenTransitionRuleModule is ITransitionRuleModule {
             revert AVADataTypes.EmptyValue();
         }
         if (toStatus == AVADataTypes.RecognisedStateStatus.Frozen) revert AVADataTypes.InvalidState(uint256(toStatus));
+    }
+}
+
+contract MinimumChallengeWindowTransitionModule is ITransitionRuleModule, IChallengeWindowRuleModule {
+    uint64 public immutable MINIMUM_DURATION;
+
+    constructor(uint64 minimumDuration_) {
+        if (minimumDuration_ == 0) revert AVADataTypes.EmptyValue();
+        MINIMUM_DURATION = minimumDuration_;
+    }
+
+    function validateTransition(
+        bytes32 workflowKey,
+        AVADataTypes.Action,
+        AVADataTypes.RecognisedStateStatus fromStatus,
+        AVADataTypes.RecognisedStateStatus toStatus,
+        AVADataTypes.ChallengeOutcome
+    ) external pure {
+        if (
+            workflowKey == bytes32(0) || fromStatus == AVADataTypes.RecognisedStateStatus.None
+                || toStatus == AVADataTypes.RecognisedStateStatus.None
+        ) {
+            revert AVADataTypes.EmptyValue();
+        }
+    }
+
+    function validateChallengeWindowDuration(
+        bytes32 workflowKey,
+        uint256 recognisedStateId,
+        uint64 openedAt,
+        uint64 currentTime,
+        address actor
+    ) external view {
+        if (workflowKey == bytes32(0) || recognisedStateId == 0 || currentTime == 0 || actor == address(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
+        if (uint256(currentTime) < uint256(openedAt) + uint256(MINIMUM_DURATION)) {
+            revert AVADataTypes.InvalidState(recognisedStateId);
+        }
     }
 }
 
@@ -279,7 +320,7 @@ contract DisciplineFieldPolicyModule is IFieldPolicyModule {
     }
 }
 
-contract SubjectRateLimitModule is IAntiAbuseModule {
+contract SubjectRateLimitModule is IAntiAbuseModule, IChallengeRateLimitModule {
     function validateUse(
         bytes32 workflowKey,
         AVADataTypes.Role,
@@ -292,5 +333,21 @@ contract SubjectRateLimitModule is IAntiAbuseModule {
             revert AVADataTypes.EmptyValue();
         }
         if (subjectId == objectId) revert AVADataTypes.InvalidState(uint256(subjectId));
+    }
+
+    function validateChallengeFiling(
+        bytes32 workflowKey,
+        uint256 challengedRecognisedStateId,
+        bytes32 challengerSubjectId,
+        uint256 priorFilingCount,
+        address actor
+    ) external pure {
+        if (
+            workflowKey == bytes32(0) || challengedRecognisedStateId == 0 || challengerSubjectId == bytes32(0)
+                || actor == address(0)
+        ) {
+            revert AVADataTypes.EmptyValue();
+        }
+        if (priorFilingCount != 0) revert AVADataTypes.InvalidState(challengedRecognisedStateId);
     }
 }

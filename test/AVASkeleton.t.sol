@@ -7,7 +7,11 @@ import {AuthorityMatrix} from "../src/AuthorityMatrix.sol";
 import {EvidenceCommitmentRegistry} from "../src/EvidenceCommitmentRegistry.sol";
 import {DisclosurePolicyRegistry} from "../src/DisclosurePolicyRegistry.sol";
 import {AVAStateMachine} from "../src/AVAStateMachine.sol";
-import {AVARulePackageRegistry} from "../src/AVARulePackageRegistry.sol";
+import {
+    AVARulePackageRegistry,
+    IEvidenceReceiptReader,
+    IRecognisedStateReader
+} from "../src/AVARulePackageRegistry.sol";
 import {ConsequenceExecutor} from "../src/ConsequenceExecutor.sol";
 import {StandingRegistry} from "../src/StandingRegistry.sol";
 import {StandingCredentialRegistry} from "../src/StandingCredentialRegistry.sol";
@@ -16,6 +20,7 @@ import {AllocationExecutor} from "../src/AllocationExecutor.sol";
 import {ValueSettlementExecutor} from "../src/ValueSettlementExecutor.sol";
 import {DisclosureAccessExecutor} from "../src/DisclosureAccessExecutor.sol";
 import {ExternalOperationRegistry} from "../src/ExternalOperationRegistry.sol";
+import {AuthorityApprovalRegistry} from "../src/AuthorityApprovalRegistry.sol";
 import {MockERC20} from "../src/MockERC20.sol";
 import {MockPriorityToken} from "../src/MockPriorityToken.sol";
 import {AttestationAuditModule} from "../src/AttestationAuditModule.sol";
@@ -69,7 +74,8 @@ import {
     ProceduralEditorialAuthorityModule,
     StructuredResidualEditorialAuthorityModule,
     DisciplineFieldPolicyModule,
-    SubjectRateLimitModule
+    SubjectRateLimitModule,
+    MinimumChallengeWindowTransitionModule
 } from "../src/modules/ExampleRuleModules.sol";
 import {
     VectorStandingAdapter,
@@ -89,6 +95,7 @@ import {AnonymousChallengeDisclosureModule} from "../src/modules/AnonymousChalle
 import {VoluntaryRealNameChallengeModule} from "../src/modules/VoluntaryRealNameChallengeModule.sol";
 import {PostRecognitionAuthorRevealModule} from "../src/modules/PostRecognitionAuthorRevealModule.sol";
 import {ZKBackedDisclosureModule} from "../src/modules/ZKBackedDisclosureModule.sol";
+import {ApprovalReceiptAuthorityModule} from "../src/modules/ApprovalReceiptAuthorityModule.sol";
 import {SchnorrDisclosureProofVerifier} from "../src/SchnorrDisclosureProofVerifier.sol";
 import {ZKProofRegistry} from "../src/ZKProofRegistry.sol";
 import {ZKStandingComputationRegistry} from "../src/ZKStandingComputationRegistry.sol";
@@ -845,6 +852,14 @@ contract Actor {
         );
     }
 
+    function recordAuthorityApproval(
+        AuthorityApprovalRegistry registry,
+        AVADataTypes.Role actingRole,
+        AuthorityApprovalRegistry.ApprovalInput calldata input
+    ) external returns (uint256) {
+        return registry.recordApproval(actingRole, input);
+    }
+
     function executeAllocation(
         AllocationExecutor executor,
         AVADataTypes.Role actingRole,
@@ -1044,6 +1059,7 @@ contract AVASkeletonTest {
     ValueSettlementExecutor valueSettlementExecutor;
     DisclosureAccessExecutor disclosureAccessExecutor;
     ExternalOperationRegistry externalOperationRegistry;
+    AuthorityApprovalRegistry authorityApprovalRegistry;
 
     Actor reviewerActor;
     Actor challengerActor;
@@ -1084,6 +1100,15 @@ contract AVASkeletonTest {
         uint256 challengeEvidenceId;
     }
 
+    struct ApprovalAuthorityContext {
+        bytes32 workflowKey;
+        uint256 packageId;
+        uint256 recognisedStateId;
+        uint256 challengeId;
+        uint256 challengeEvidenceId;
+        bytes32 objectId;
+    }
+
     function setUp() public {
         roleRegistry = new RoleIdentityRegistry();
         authorityMatrix = new AuthorityMatrix(roleRegistry);
@@ -1091,6 +1116,8 @@ contract AVASkeletonTest {
         disclosurePolicyModule = new DefaultDisclosurePolicyModule(disclosureRegistry);
         rulePackageRegistry = new AVARulePackageRegistry(authorityMatrix, disclosureRegistry);
         evidenceRegistry = new EvidenceCommitmentRegistry(authorityMatrix, disclosurePolicyModule, rulePackageRegistry);
+        authorityApprovalRegistry =
+            new AuthorityApprovalRegistry(authorityMatrix, rulePackageRegistry, evidenceRegistry);
         attributionModule = new DefaultAttributionModule();
         verificationModule = new DefaultVerificationModule();
         transitionRuleModule = new DefaultTransitionRuleModule();
@@ -1210,6 +1237,12 @@ contract AVASkeletonTest {
         );
         authorityMatrix.setPermission(
             AVADataTypes.Role.Panel, AVADataTypes.Action.InvalidateStandingComputationStatement, true
+        );
+        rulePackageRegistry.configureMigrationReferenceReaders(
+            AVADataTypes.Role.Panel,
+            IRecognisedStateReader(address(stateMachine)),
+            IEvidenceReceiptReader(address(evidenceRegistry)),
+            keccak256("panel-authority")
         );
         _registerDefaultRulePackage(DEFAULT_WORKFLOW, "ipfs://default-workflow");
     }
@@ -1367,8 +1400,10 @@ contract AVASkeletonTest {
 
         uint256 stateId = stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Attribution,
             bytes32(manuscriptId),
+            manuscript.registeredSubjectId,
             evidenceId,
             policyId,
             EDITOR_AUTHORITY,
@@ -1377,6 +1412,7 @@ contract AVASkeletonTest {
 
         AVADataTypes.RecognisedStateRecord memory state = stateMachine.getRecognisedState(stateId);
         require(state.stage == AVADataTypes.AVAStage.Attribution, "wrong AVA stage");
+        require(state.subjectId == manuscript.registeredSubjectId, "wrong recognised-state subject");
         require(state.status == AVADataTypes.RecognisedStateStatus.Registered, "wrong state status");
     }
 
@@ -1395,8 +1431,10 @@ contract AVASkeletonTest {
         );
         uint256 recognisedStateId = stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Verification,
             keccak256("zero-policy-state"),
+            REVIEWER_SUBJECT,
             evidenceId,
             0,
             EDITOR_AUTHORITY,
@@ -1409,6 +1447,7 @@ contract AVASkeletonTest {
         require(receipt.disclosurePolicyId == 0, "zero evidence policy changed");
         require(review.disclosurePolicyId == 0, "zero review policy changed");
         require(state.disclosurePolicyId == 0, "zero state policy changed");
+        require(state.subjectId == REVIEWER_SUBJECT, "zero policy state lost subject");
     }
 
     function testReviewContributionRejectsUnknownManuscriptId() public {
@@ -1487,8 +1526,10 @@ contract AVASkeletonTest {
 
         try stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Verification,
             keccak256("unknown-policy-state"),
+            REVIEWER_SUBJECT,
             evidenceId,
             unknownPolicyId,
             EDITOR_AUTHORITY,
@@ -1684,6 +1725,7 @@ contract AVASkeletonTest {
         require(
             provisionalState.status == AVADataTypes.RecognisedStateStatus.Provisional, "review state not provisional"
         );
+        require(provisionalState.subjectId == REVIEWER_SUBJECT, "review state lost reviewer subject");
 
         stateMachine.openReviewChallengeWindow(AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY);
         AVADataTypes.ReviewContributionRecord memory challengeableReview =
@@ -1698,6 +1740,7 @@ contract AVASkeletonTest {
             challengeableState.status == AVADataTypes.RecognisedStateStatus.Challengeable,
             "recognised state not challengeable"
         );
+        require(challengeableState.subjectId == REVIEWER_SUBJECT, "challenge window rewrote reviewer subject");
         require(standingRegistry.nextStandingInputId() == 1, "challengeable state created standing");
         require(consequenceExecutor.nextConsequenceId() == 1, "challengeable state created consequence");
     }
@@ -1759,6 +1802,7 @@ contract AVASkeletonTest {
             screenTransition.transitionKind == AVADataTypes.ChallengeTransitionKind.AdmissibilityScreened,
             "screen transition missing"
         );
+        require(screenTransition.createdAt == block.timestamp, "screen transition timestamp missing");
         require(
             screenTransition.fromStatus == AVADataTypes.RecognisedStateStatus.Challengeable, "screen from state wrong"
         );
@@ -1786,6 +1830,7 @@ contract AVASkeletonTest {
         require(resolveTransition.outcome == AVADataTypes.ChallengeOutcome.Upheld, "transition outcome wrong");
         require(resolveTransition.fromStatus == AVADataTypes.RecognisedStateStatus.Challengeable, "resolve from wrong");
         require(resolveTransition.toStatus == AVADataTypes.RecognisedStateStatus.Downgraded, "resolve to wrong");
+        require(resolveTransition.createdAt == block.timestamp, "resolve transition timestamp missing");
         require(correctedState.status == AVADataTypes.RecognisedStateStatus.Downgraded, "state not corrected");
         require(consequenceExecutor.nextConsequenceId() == 1, "upheld challenge auto-executed consequence");
         require(standingRegistry.nextStandingInputId() == 1, "upheld challenge auto-created standing");
@@ -1826,7 +1871,7 @@ contract AVASkeletonTest {
         AVADataTypes.ChallengeTransitionRecord memory restorationTransition =
             stateMachine.getChallengeTransition(challenge.lastTransitionId);
         require(
-            challenge.status == AVADataTypes.ChallengeLifecycleStatus.RestorationAvailable, "restoration not available"
+            challenge.status == AVADataTypes.ChallengeLifecycleStatus.RestorationApplied, "restoration not applied"
         );
         require(
             restorationTransition.transitionKind == AVADataTypes.ChallengeTransitionKind.RestorationRecorded,
@@ -1905,6 +1950,68 @@ contract AVASkeletonTest {
             revert("challenger resolved own challenge");
         } catch {}
         require(consequenceExecutor.nextConsequenceId() == 1, "unauthorised resolve created sanction");
+    }
+
+    function testResolverCannotResolveChallengeAgainstOwnRecognisedStateSubject() public {
+        uint256 evidenceId = reviewerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Reviewer,
+            keccak256("resolver-subject-conflict-state"),
+            "ipfs://resolver-subject-conflict-state",
+            "subject-conflict-state",
+            0
+        );
+        uint256 recognisedStateId = stateMachine.registerRecognisedState(
+            AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
+            AVADataTypes.AVAStage.Verification,
+            keccak256("resolver-subject-conflict-object"),
+            keccak256("panel-authority"),
+            evidenceId,
+            0,
+            EDITOR_AUTHORITY,
+            AVADataTypes.RecognisedStateStatus.Challengeable
+        );
+        uint256 challengeEvidenceId = challengerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Challenger,
+            keccak256("resolver-subject-conflict-challenge"),
+            "ipfs://resolver-subject-conflict-challenge",
+            "review-quality-challenge",
+            0
+        );
+        uint256 challengeId = challengerActor.fileChallenge(
+            stateMachine, AVADataTypes.Role.Challenger, recognisedStateId, CHALLENGER_SUBJECT, challengeEvidenceId, 0
+        );
+        stateMachine.screenChallenge(AVADataTypes.Role.Editor, challengeId, EDITOR_AUTHORITY);
+
+        try stateMachine.resolveChallenge(
+            AVADataTypes.Role.Panel,
+            challengeId,
+            AVADataTypes.ChallengeOutcome.Upheld,
+            AVADataTypes.RecognisedStateStatus.Downgraded,
+            keccak256("panel-authority"),
+            "ipfs://resolver-subject-conflict-rejected"
+        ) {
+            revert("resolver resolved challenge against own state subject");
+        } catch {}
+
+        Actor distinctPanel = new Actor();
+        bytes32 distinctPanelAuthority = keccak256("distinct-panel-authority");
+        roleRegistry.assignRole(address(distinctPanel), AVADataTypes.Role.Panel, distinctPanelAuthority, "ipfs://distinct-panel");
+        distinctPanel.resolveChallenge(
+            stateMachine,
+            AVADataTypes.Role.Panel,
+            challengeId,
+            AVADataTypes.ChallengeOutcome.Upheld,
+            AVADataTypes.RecognisedStateStatus.Downgraded,
+            distinctPanelAuthority,
+            "ipfs://resolver-subject-conflict-resolved"
+        );
+        require(
+            stateMachine.getRecognisedState(recognisedStateId).status == AVADataTypes.RecognisedStateStatus.Downgraded,
+            "distinct panel resolver failed"
+        );
     }
 
     function testRawChallengeCannotTargetRawReviewSubmission() public {
@@ -2414,6 +2521,12 @@ contract AVASkeletonTest {
         require(stateMachine.nextRecognisedStateId() == 1, "direct high-status registration created state");
     }
 
+    function testUnsafeRecognisedStateOverloadSelectorIsAbsent() public view {
+        _assertNoSelector(
+            address(stateMachine), "registerRecognisedState(uint8,uint8,bytes32,uint256,uint256,bytes32,uint8)"
+        );
+    }
+
     function testTransitionGeneratedRecognisedStatesStillSupportDownstreamRecords() public {
 
 
@@ -2574,8 +2687,10 @@ contract AVASkeletonTest {
         );
         uint256 registeredStateId = stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Verification,
             keccak256("generic-transition-boundary-state"),
+            REVIEWER_SUBJECT,
             evidenceId,
             0,
             EDITOR_AUTHORITY,
@@ -2636,8 +2751,10 @@ contract AVASkeletonTest {
 
         try stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Verification,
             keccak256("m415-unscoped-state"),
+            REVIEWER_SUBJECT,
             legacyEvidenceId,
             0,
             EDITOR_AUTHORITY,
@@ -2781,6 +2898,55 @@ contract AVASkeletonTest {
         require(consequenceExecutor.nextConsequenceId() == 1, "consequence accepted invalid subject");
     }
 
+    function testStandingAndConsequenceRejectActiveSubjectUnrelatedToRecognisedState() public {
+        (uint256 downgradedStateId, uint256 evidenceId) = _createDowngradedRecognisedState();
+        bytes32 otherReviewerSubject = keccak256("other-active-reviewer-subject");
+        roleRegistry.assignRole(address(outsiderActor), AVADataTypes.Role.Reviewer, otherReviewerSubject, "ipfs://other-reviewer");
+        require(
+            stateMachine.getRecognisedState(downgradedStateId).subjectId == REVIEWER_SUBJECT,
+            "test fixture state subject changed"
+        );
+
+        try standingRegistry.recordStandingUpdate(
+            AVADataTypes.Role.Panel,
+            downgradedStateId,
+            otherReviewerSubject,
+            "review-procedure-weight",
+            -1,
+            evidenceId,
+            keccak256("panel-authority"),
+            "ipfs://wrong-state-subject-standing"
+        ) {
+            revert("standing update accepted unrelated active subject");
+        } catch {}
+
+        try consequenceExecutor.registerConsequence(
+            AVADataTypes.Role.Panel,
+            downgradedStateId,
+            AVADataTypes.ConsequenceKind.ProcedureCorrection,
+            otherReviewerSubject,
+            evidenceId,
+            keccak256("panel-authority"),
+            "ipfs://wrong-state-subject-consequence"
+        ) {
+            revert("consequence accepted unrelated active subject");
+        } catch {}
+
+        try consequenceExecutor.recordPenalty(
+            AVADataTypes.Role.Panel,
+            downgradedStateId,
+            otherReviewerSubject,
+            evidenceId,
+            keccak256("panel-authority"),
+            "ipfs://wrong-state-subject-penalty"
+        ) {
+            revert("penalty consequence accepted unrelated active subject");
+        } catch {}
+
+        require(standingRegistry.nextStandingUpdateId() == 1, "standing update recorded unrelated subject");
+        require(consequenceExecutor.nextConsequenceId() == 1, "consequence recorded unrelated subject");
+    }
+
     function testAuthoritySubjectMismatchIsRejectedForAuthorityBoundActions() public {
         uint256 evidenceId = reviewerActor.registerEvidenceReceipt(
             evidenceRegistry,
@@ -2792,8 +2958,10 @@ contract AVASkeletonTest {
         );
         uint256 registeredStateId = stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Verification,
             keccak256("authority-mismatch-state"),
+            REVIEWER_SUBJECT,
             evidenceId,
             0,
             EDITOR_AUTHORITY,
@@ -2865,8 +3033,10 @@ contract AVASkeletonTest {
 
         try stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Verification,
             keccak256("unknown-evidence-state"),
+            REVIEWER_SUBJECT,
             missingEvidenceId,
             0,
             EDITOR_AUTHORITY,
@@ -2908,8 +3078,10 @@ contract AVASkeletonTest {
 
         try stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Verification,
             keccak256("foreign-evidence-state"),
+            REVIEWER_SUBJECT,
             foreignEvidenceId,
             0,
             EDITOR_AUTHORITY,
@@ -3306,8 +3478,10 @@ contract AVASkeletonTest {
         );
         uint256 recognisedStateId = stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Allocation,
             keccak256("allocation-object"),
+            REVIEWER_SUBJECT,
             evidenceId,
             0,
             EDITOR_AUTHORITY,
@@ -3899,6 +4073,66 @@ contract AVASkeletonTest {
         _assertNoSelector(address(context.module), "acceptManuscript(uint256)");
     }
 
+    function testTimedChallengeWindowPackageRejectsEarlyVestingAndAllowsAfterDuration() public {
+        bytes32 workflowKey = keccak256("timed-challenge-window-workflow");
+        uint64 minimumDuration = 2 days;
+        _registerRulePackageWithModules(
+            workflowKey,
+            attributionModule,
+            verificationModule,
+            new MinimumChallengeWindowTransitionModule(minimumDuration),
+            disclosurePolicyModule,
+            allocationAdapter,
+            consequenceAdapter,
+            "ipfs://timed-challenge-window"
+        );
+
+        uint256 manuscriptId = _registerAuthorManuscript();
+        uint256 evidenceId = reviewerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Reviewer,
+            workflowKey,
+            keccak256("timed-window-review-evidence"),
+            "ipfs://timed-window-review",
+            "review-service-occurrence",
+            0
+        );
+        uint256 reviewContributionId = reviewerActor.registerReviewContributionWithWorkflow(
+            stateMachine, AVADataTypes.Role.Reviewer, workflowKey, manuscriptId, REVIEWER_SUBJECT, evidenceId, 0
+        );
+        uint256 recognisedStateId =
+            stateMachine.provisionallyRecogniseReview(AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY);
+
+        vm.warp(1_000);
+        stateMachine.openReviewChallengeWindow(AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY);
+        require(
+            stateMachine.getChallengeWindowOpenedAt(recognisedStateId) == uint64(block.timestamp),
+            "challenge window timestamp missing"
+        );
+
+        try stateMachine.vestReviewRecognition(
+            AVADataTypes.Role.Panel,
+            reviewContributionId,
+            keccak256("panel-authority"),
+            "ipfs://timed-window-too-early"
+        ) {
+            revert("timed challenge-window package allowed early vesting");
+        } catch {}
+
+        vm.warp(block.timestamp + minimumDuration);
+        uint256 transitionId = stateMachine.vestReviewRecognition(
+            AVADataTypes.Role.Panel,
+            reviewContributionId,
+            keccak256("panel-authority"),
+            "ipfs://timed-window-vested"
+        );
+        require(transitionId != 0, "timed vesting transition missing");
+        require(
+            stateMachine.getRecognisedState(recognisedStateId).status == AVADataTypes.RecognisedStateStatus.Vested,
+            "timed review did not vest after duration"
+        );
+    }
+
     function testM481PanelVisibleModuleAllowsEditorPanelAndRejectsOrdinaryRoles() public {
         uint256 panelPolicyId = _registerDisclosurePolicy("m481-panel-visible-review-policy");
         PanelVisibleDisclosureModule panelVisibleModule =
@@ -4091,7 +4325,7 @@ contract AVASkeletonTest {
         AVADataTypes.RecognisedStateTransitionRecord memory restorationStateTransition =
             stateMachine.getRecognisedStateTransition(restorationStateTransitionId);
 
-        require(restoredChallenge.status == AVADataTypes.ChallengeLifecycleStatus.RestorationAvailable, "not restored");
+        require(restoredChallenge.status == AVADataTypes.ChallengeLifecycleStatus.RestorationApplied, "not restored");
         require(correctionTransition.outcome == AVADataTypes.ChallengeOutcome.Upheld, "correction history erased");
         require(correctionTransition.toStatus == AVADataTypes.RecognisedStateStatus.Downgraded, "correction target erased");
         require(
@@ -5707,6 +5941,132 @@ contract AVASkeletonTest {
         } catch {}
     }
 
+    function testPackageSelectedSubjectRateLimitCanRejectChallengePathWithoutChangingDefaultPackage() public {
+        Actor defaultChallenger = new Actor();
+        bytes32 defaultChallengerSubject = bytes32(stateMachine.nextRecognisedStateId());
+        roleRegistry.assignRole(
+            address(defaultChallenger), AVADataTypes.Role.Challenger, defaultChallengerSubject, "ipfs://default-subject-limit"
+        );
+        uint256 defaultStateId = _createChallengeableReviewState();
+        uint256 defaultChallengeEvidenceId = defaultChallenger.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Challenger,
+            DEFAULT_WORKFLOW,
+            keccak256("default-permissive-subject-path"),
+            "ipfs://default-permissive-subject-path",
+            "review-quality-challenge",
+            0
+        );
+        uint256 defaultChallengeId = defaultChallenger.fileChallenge(
+            stateMachine,
+            AVADataTypes.Role.Challenger,
+            DEFAULT_WORKFLOW,
+            defaultStateId,
+            defaultChallengerSubject,
+            defaultChallengeEvidenceId,
+            0
+        );
+        require(defaultChallengeId != 0, "default package stopped being permissive");
+
+        bytes32 limitedWorkflow = keccak256("subject-rate-limit-workflow");
+        _registerRulePackageWithInfrastructure(
+            limitedWorkflow,
+            evidencePolicyModule,
+            auditAdapter,
+            editorialSystemAdapter,
+            fieldPolicyModule,
+            new SubjectRateLimitModule(),
+            "ipfs://subject-rate-limit-workflow"
+        );
+        Actor limitedChallenger = new Actor();
+        bytes32 limitedChallengerSubject = bytes32(stateMachine.nextRecognisedStateId());
+        roleRegistry.assignRole(
+            address(limitedChallenger), AVADataTypes.Role.Challenger, limitedChallengerSubject, "ipfs://limited-subject"
+        );
+        uint256 limitedStateId =
+            _createChallengeableReviewStateThroughPackage(rulePackageRegistry.getRulePackage(limitedWorkflow), limitedWorkflow);
+        require(bytes32(limitedStateId) == limitedChallengerSubject, "rate-limit fixture subject/object mismatch");
+        uint256 limitedChallengeEvidenceId = limitedChallenger.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Challenger,
+            limitedWorkflow,
+            keccak256("limited-subject-path"),
+            "ipfs://limited-subject-path",
+            "review-quality-challenge",
+            0
+        );
+        uint256 nextChallengeId = stateMachine.nextChallengeId();
+        try limitedChallenger.fileChallenge(
+            stateMachine,
+            AVADataTypes.Role.Challenger,
+            limitedWorkflow,
+            limitedStateId,
+            limitedChallengerSubject,
+            limitedChallengeEvidenceId,
+            0
+        ) {
+            revert("subject-rate-limit workflow accepted blocked challenge path");
+        } catch {}
+        require(stateMachine.nextChallengeId() == nextChallengeId, "blocked anti-abuse path wrote challenge");
+    }
+
+    function testRateLimitedPackageRejectsRepeatedChallengeBySameSubject() public {
+        bytes32 limitedWorkflow = keccak256("subject-repeat-rate-limit-workflow");
+        _registerRulePackageWithInfrastructure(
+            limitedWorkflow,
+            evidencePolicyModule,
+            auditAdapter,
+            editorialSystemAdapter,
+            fieldPolicyModule,
+            new SubjectRateLimitModule(),
+            "ipfs://subject-repeat-rate-limit-workflow"
+        );
+        uint256 recognisedStateId =
+            _createChallengeableReviewStateThroughPackage(rulePackageRegistry.getRulePackage(limitedWorkflow), limitedWorkflow);
+        uint256 firstEvidenceId = challengerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Challenger,
+            limitedWorkflow,
+            keccak256("limited-repeat-first-challenge"),
+            "ipfs://limited-repeat-first-challenge",
+            "review-quality-challenge",
+            0
+        );
+        uint256 firstChallengeId = challengerActor.fileChallenge(
+            stateMachine,
+            AVADataTypes.Role.Challenger,
+            limitedWorkflow,
+            recognisedStateId,
+            CHALLENGER_SUBJECT,
+            firstEvidenceId,
+            0
+        );
+        require(firstChallengeId != 0, "first challenge rejected by rate-limit package");
+
+        uint256 secondEvidenceId = challengerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Challenger,
+            limitedWorkflow,
+            keccak256("limited-repeat-second-challenge"),
+            "ipfs://limited-repeat-second-challenge",
+            "review-quality-challenge",
+            0
+        );
+        uint256 nextChallengeId = stateMachine.nextChallengeId();
+        try challengerActor.fileChallenge(
+            stateMachine,
+            AVADataTypes.Role.Challenger,
+            limitedWorkflow,
+            recognisedStateId,
+            CHALLENGER_SUBJECT,
+            secondEvidenceId,
+            0
+        ) {
+            revert("rate-limited package accepted repeated challenge by same subject");
+        } catch {}
+        require(stateMachine.nextChallengeId() == nextChallengeId, "blocked repeated challenge wrote state");
+    }
+
     function testM491AuditAdapterBlocksWorkflowAttestationPath() public {
         bytes32 workflowKey = keccak256("m491-audit");
         _registerRulePackageWithInfrastructure(
@@ -6176,6 +6536,355 @@ contract AVASkeletonTest {
         _assertNoSelector(address(multisig), "setManuscriptMerit(uint256,uint256)");
         _assertNoSelector(address(institutionCosign), "revealIdentity(uint256)");
         _assertNoSelector(address(emergencyPause), "executeSanction(uint256)");
+    }
+
+    function testM416ApprovalReceiptAuthorityRequiresThresholdAndContextBoundApprovals() public {
+        Actor panelA = new Actor();
+        Actor panelB = new Actor();
+        bytes32 panelAId = keccak256("approval-panel-a");
+        bytes32 panelBId = keccak256("approval-panel-b");
+        roleRegistry.assignRole(address(panelA), AVADataTypes.Role.Panel, panelAId, "ipfs://approval-panel-a");
+        roleRegistry.assignRole(address(panelB), AVADataTypes.Role.Panel, panelBId, "ipfs://approval-panel-b");
+        ApprovalAuthorityContext memory context = _createApprovalAuthorityContext("m416-approval-threshold", 2, bytes32(0));
+
+        try panelA.resolveChallenge(
+            stateMachine,
+            AVADataTypes.Role.Panel,
+            context.challengeId,
+            AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            panelAId,
+            "ipfs://approval-resolve-without-receipts"
+        ) {
+            revert("approval-backed authority accepted zero receipts");
+        } catch {}
+
+        _recordAuthorityApproval(panelA, context, AVADataTypes.Action.ResolveChallenge, context.objectId, panelAId);
+        try panelA.recordAuthorityApproval(
+            authorityApprovalRegistry,
+            AVADataTypes.Role.Panel,
+            AuthorityApprovalRegistry.ApprovalInput({
+                workflowKey: context.workflowKey,
+                packageId: context.packageId,
+                action: AVADataTypes.Action.ResolveChallenge,
+                recognisedStateId: context.recognisedStateId,
+                objectId: context.objectId,
+                authorityId: panelAId,
+                evidenceReceiptId: context.challengeEvidenceId,
+                expiresAt: uint64(block.timestamp + 7 days),
+                reasonURI: "ipfs://duplicate-authority-approval"
+            })
+        ) {
+            revert("duplicate approval by same subject counted twice");
+        } catch {}
+        require(
+            authorityApprovalRegistry.approvalCount(
+                context.workflowKey,
+                context.packageId,
+                AVADataTypes.Action.ResolveChallenge,
+                context.recognisedStateId,
+                context.objectId
+            ) == 1,
+            "duplicate approval changed count"
+        );
+
+        _recordAuthorityApproval(panelB, context, AVADataTypes.Action.CloseChallenge, context.objectId, panelBId);
+        try panelA.resolveChallenge(
+            stateMachine,
+            AVADataTypes.Role.Panel,
+            context.challengeId,
+            AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            panelAId,
+            "ipfs://approval-wrong-action"
+        ) {
+            revert("approval-backed authority replayed wrong action");
+        } catch {}
+
+        _recordAuthorityApproval(
+            panelB,
+            context,
+            AVADataTypes.Action.ResolveChallenge,
+            bytes32(uint256(context.objectId) + 1),
+            panelBId
+        );
+        try panelA.resolveChallenge(
+            stateMachine,
+            AVADataTypes.Role.Panel,
+            context.challengeId,
+            AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            panelAId,
+            "ipfs://approval-wrong-object"
+        ) {
+            revert("approval-backed authority replayed wrong object");
+        } catch {}
+
+        _recordAuthorityApproval(panelB, context, AVADataTypes.Action.ResolveChallenge, context.objectId, panelBId);
+        panelA.resolveChallenge(
+            stateMachine,
+            AVADataTypes.Role.Panel,
+            context.challengeId,
+            AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            panelAId,
+            "ipfs://approval-threshold-met"
+        );
+        require(
+            stateMachine.getChallenge(context.challengeId).outcome == AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            "approval-backed challenge did not resolve"
+        );
+    }
+
+    function testM416ApprovalReceiptAuthorityRejectsExpiredApprovalThreshold() public {
+        Actor panelA = new Actor();
+        bytes32 panelAId = keccak256("approval-expired-panel-a");
+        roleRegistry.assignRole(address(panelA), AVADataTypes.Role.Panel, panelAId, "ipfs://approval-expired-a");
+        ApprovalAuthorityContext memory context = _createApprovalAuthorityContext("m416-approval-expired", 1, bytes32(0));
+
+        panelA.recordAuthorityApproval(
+            authorityApprovalRegistry,
+            AVADataTypes.Role.Panel,
+            AuthorityApprovalRegistry.ApprovalInput({
+                workflowKey: context.workflowKey,
+                packageId: context.packageId,
+                action: AVADataTypes.Action.ResolveChallenge,
+                recognisedStateId: context.recognisedStateId,
+                objectId: context.objectId,
+                authorityId: panelAId,
+                evidenceReceiptId: context.challengeEvidenceId,
+                expiresAt: uint64(block.timestamp + 1),
+                reasonURI: "ipfs://expired-authority-approval"
+            })
+        );
+        vm.warp(block.timestamp + 2);
+        require(
+            authorityApprovalRegistry.approvalCount(
+                context.workflowKey,
+                context.packageId,
+                AVADataTypes.Action.ResolveChallenge,
+                context.recognisedStateId,
+                context.objectId
+            ) == 0,
+            "expired approval still counted"
+        );
+
+        try panelA.resolveChallenge(
+            stateMachine,
+            AVADataTypes.Role.Panel,
+            context.challengeId,
+            AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            panelAId,
+            "ipfs://approval-expired-rejected"
+        ) {
+            revert("expired approval satisfied approval module");
+        } catch {}
+    }
+
+    function testM416ApprovalReceiptAuthorityRejectsConflictExcludedSubject() public {
+        Actor panelA = new Actor();
+        Actor panelB = new Actor();
+        bytes32 panelAId = keccak256("approval-conflict-panel-a");
+        bytes32 panelBId = keccak256("approval-conflict-panel-b");
+        roleRegistry.assignRole(address(panelA), AVADataTypes.Role.Panel, panelAId, "ipfs://approval-conflict-a");
+        roleRegistry.assignRole(address(panelB), AVADataTypes.Role.Panel, panelBId, "ipfs://approval-conflict-b");
+        ApprovalAuthorityContext memory context = _createApprovalAuthorityContext("m416-approval-conflict", 1, panelAId);
+
+        _recordAuthorityApproval(panelA, context, AVADataTypes.Action.ResolveChallenge, context.objectId, panelAId);
+        try panelA.resolveChallenge(
+            stateMachine,
+            AVADataTypes.Role.Panel,
+            context.challengeId,
+            AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            panelAId,
+            "ipfs://approval-conflict-rejected"
+        ) {
+            revert("conflict-excluded authority satisfied approval module");
+        } catch {}
+
+        _recordAuthorityApproval(panelB, context, AVADataTypes.Action.ResolveChallenge, context.objectId, panelBId);
+        panelB.resolveChallenge(
+            stateMachine,
+            AVADataTypes.Role.Panel,
+            context.challengeId,
+            AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            panelBId,
+            "ipfs://approval-conflict-distinct-panel"
+        );
+    }
+
+    function testFuzzNoConsequenceWithoutEligibleRecognisedState(uint8 statusSeed) public {
+        AVADataTypes.RecognisedStateStatus status = _nonEligibleRecognisedStateStatus(statusSeed);
+        uint256 evidenceId = reviewerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Reviewer,
+            DEFAULT_WORKFLOW,
+            keccak256(abi.encode("fuzz-no-consequence", statusSeed)),
+            "ipfs://fuzz-no-consequence",
+            "fuzz-invariant-evidence",
+            0
+        );
+        uint256 recognisedStateId;
+        if (status != AVADataTypes.RecognisedStateStatus.None) {
+            recognisedStateId = _registerRecognisedStateForStatus(status, evidenceId, "fuzz-no-consequence");
+        }
+
+        uint256 nextConsequenceId = consequenceExecutor.nextConsequenceId();
+        _assertConsequenceRejectsTarget(recognisedStateId, evidenceId);
+        require(consequenceExecutor.nextConsequenceId() == nextConsequenceId, "ineligible state wrote consequence");
+    }
+
+    function testFuzzVestingImpossibleWhileChallengeIsOpen(bytes32 seed) public {
+        uint256 manuscriptId = _registerAuthorManuscript();
+        uint256 evidenceId = reviewerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Reviewer,
+            DEFAULT_WORKFLOW,
+            keccak256(abi.encode("fuzz-open-challenge-review", seed)),
+            "ipfs://fuzz-open-challenge-review",
+            "review-service-occurrence",
+            0
+        );
+        uint256 reviewContributionId = reviewerActor.registerReviewContribution(
+            stateMachine, AVADataTypes.Role.Reviewer, manuscriptId, REVIEWER_SUBJECT, evidenceId, 0
+        );
+        uint256 recognisedStateId =
+            stateMachine.provisionallyRecogniseReview(AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY);
+        stateMachine.openReviewChallengeWindow(AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY);
+        uint256 challengeEvidenceId = challengerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Challenger,
+            DEFAULT_WORKFLOW,
+            keccak256(abi.encode("fuzz-open-challenge", seed)),
+            "ipfs://fuzz-open-challenge",
+            "review-quality-challenge",
+            0
+        );
+        challengerActor.fileChallenge(
+            stateMachine, AVADataTypes.Role.Challenger, recognisedStateId, CHALLENGER_SUBJECT, challengeEvidenceId, 0
+        );
+
+        uint256 nextTransitionId = stateMachine.nextRecognisedStateTransitionId();
+        try stateMachine.vestReviewRecognition(
+            AVADataTypes.Role.Panel,
+            reviewContributionId,
+            keccak256("panel-authority"),
+            "ipfs://fuzz-vesting-rejected"
+        ) {
+            revert("open challenge allowed vesting");
+        } catch {}
+        require(stateMachine.nextRecognisedStateTransitionId() == nextTransitionId, "rejected vesting wrote transition");
+        require(
+            stateMachine.getRecognisedState(recognisedStateId).status == AVADataTypes.RecognisedStateStatus.Challengeable,
+            "open challenge changed recognised state"
+        );
+    }
+
+    function testFuzzRecognisedStatePackageIdStaysPinnedAfterWorkflowReregistration(bytes32 seed) public {
+        bytes32 workflowKey = keccak256(abi.encode("fuzz-package-pin", seed));
+        _registerRulePackage(
+            workflowKey,
+            disclosurePolicyModule,
+            allocationAdapter,
+            consequenceAdapter,
+            "ipfs://fuzz-package-pin-old"
+        );
+        AVARulePackageRegistry.RulePackage memory oldPackage = rulePackageRegistry.getRulePackage(workflowKey);
+        uint256 firstTransitionId = stateMachine.nextRecognisedStateTransitionId();
+        uint256 recognisedStateId = _createChallengeableReviewStateThroughPackage(oldPackage, workflowKey);
+        uint256 storedPackageId = stateMachine.getRecognisedState(recognisedStateId).packageId;
+
+        _registerRulePackage(
+            workflowKey,
+            disclosurePolicyModule,
+            allocationAdapter,
+            consequenceAdapter,
+            "ipfs://fuzz-package-pin-new"
+        );
+        AVARulePackageRegistry.RulePackage memory activePackage = rulePackageRegistry.getRulePackage(workflowKey);
+
+        require(activePackage.packageId != storedPackageId, "workflow did not reregister package");
+        require(stateMachine.getRecognisedState(recognisedStateId).packageId == storedPackageId, "old state package changed");
+        AVADataTypes.RecognisedStateTransitionRecord memory creationTransition =
+            stateMachine.getRecognisedStateTransition(firstTransitionId);
+        require(creationTransition.recognisedStateId == recognisedStateId, "creation transition not found");
+        require(creationTransition.packageId == storedPackageId, "old transition package changed");
+    }
+
+    function testFuzzAtMostOneRecoveryTerminalSettlementPerSourceKey(uint8 terminalSeed) public {
+        bytes32 workflowKey = keccak256(abi.encode("fuzz-terminal-settlement", terminalSeed));
+        _registerM421ExecutionWorkflow(workflowKey, "ipfs://fuzz-terminal-settlement-workflow");
+        MockERC20 token = _m421FundedToken(100);
+        uint256 sourceId =
+            _createM421RewardSource(workflowKey, "fuzz-terminal-source", token, 8, AVADataTypes.ValueExecutionMode.Claim);
+
+        valueSettlementExecutor.settleTokenTransfer(
+            AVADataTypes.Role.ProtocolExecutor,
+            AVADataTypes.ExecutionSourceType.AllocationRecord,
+            sourceId,
+            keccak256("executor-authority"),
+            "ipfs://fuzz-terminal-execution"
+        );
+        valueSettlementExecutor.recordRepaymentObligation(
+            AVADataTypes.Role.ProtocolExecutor,
+            AVADataTypes.ExecutionSourceType.AllocationRecord,
+            sourceId,
+            keccak256("executor-authority"),
+            "ipfs://fuzz-terminal-obligation"
+        );
+
+        AVADataTypes.ValueSettlementStatus firstTerminal =
+            _recordRecoveryTerminalSettlement(sourceId, terminalSeed % 3);
+        bytes32 sourceKey = keccak256(abi.encode(AVADataTypes.ExecutionSourceType.AllocationRecord, sourceId));
+        uint256 terminalSettlementId = valueSettlementExecutor.recoveryTerminalSettlementIdBySourceKey(sourceKey);
+        require(terminalSettlementId != 0, "terminal settlement missing");
+        require(
+            valueSettlementExecutor.recoveryTerminalStatusBySourceKey(sourceKey) == firstTerminal,
+            "terminal status not stored"
+        );
+
+        uint256 nextSettlementId = valueSettlementExecutor.nextValueSettlementId();
+        for (uint8 i = 0; i < 3; i++) {
+            try this.recordRecoveryTerminalForFuzz(sourceId, i) {
+                revert("second terminal settlement accepted");
+            } catch {}
+        }
+        require(valueSettlementExecutor.nextValueSettlementId() == nextSettlementId, "second terminal settlement stored");
+        require(
+            valueSettlementExecutor.recoveryTerminalSettlementIdBySourceKey(sourceKey) == terminalSettlementId,
+            "terminal settlement id changed"
+        );
+    }
+
+    function recordRecoveryTerminalForFuzz(uint256 sourceId, uint8 terminalKind) external returns (uint256) {
+        if (terminalKind % 3 == 0) {
+            return valueSettlementExecutor.recordFuturePayoutSetoff(
+                AVADataTypes.Role.ProtocolExecutor,
+                AVADataTypes.ExecutionSourceType.AllocationRecord,
+                sourceId,
+                keccak256("executor-authority"),
+                "ipfs://fuzz-terminal-setoff"
+            );
+        }
+        if (terminalKind % 3 == 1) {
+            return valueSettlementExecutor.recordWaiver(
+                AVADataTypes.Role.ProtocolExecutor,
+                AVADataTypes.ExecutionSourceType.AllocationRecord,
+                sourceId,
+                keccak256("executor-authority"),
+                "ipfs://fuzz-terminal-waiver"
+            );
+        }
+        return valueSettlementExecutor.recordSatisfaction(
+            AVADataTypes.Role.ProtocolExecutor,
+            AVADataTypes.ExecutionSourceType.AllocationRecord,
+            sourceId,
+            keccak256("executor-authority"),
+            "ipfs://fuzz-terminal-satisfaction"
+        );
     }
 
     function testM416DisclosureLifecycleReadinessIsPackageReplaceableAndRevealFree() public {
@@ -7396,6 +8105,190 @@ contract AVASkeletonTest {
             recordAfterTargetRotation.targetModulesCodeHash == targetPackage.modulesCodeHash,
             "target modules code hash drifted"
         );
+    }
+
+    function testM52ObjectMigrationReadinessBindsObjectSourceTargetAuthorityAndEvidence() public {
+        bytes32 workflowKey = keccak256("m52-object-migration-source");
+        bytes32 targetWorkflowKey = keccak256("m52-object-migration-target");
+        _registerRulePackageWithFutureProofModules(
+            workflowKey,
+            valueExecutionAdapter,
+            standingComputationModule,
+            rulePackageLifecycleModule,
+            evidenceLifecycleModule,
+            disclosureExecutionModule,
+            1,
+            keccak256("ava-m5-2-compatible"),
+            false,
+            "ipfs://m52-object-source"
+        );
+        _registerRulePackageWithFutureProofModules(
+            targetWorkflowKey,
+            valueExecutionAdapter,
+            standingComputationModule,
+            rulePackageLifecycleModule,
+            evidenceLifecycleModule,
+            disclosureExecutionModule,
+            1,
+            keccak256("ava-m5-2-compatible"),
+            false,
+            "ipfs://m52-object-target"
+        );
+        AVARulePackageRegistry.RulePackage memory sourcePackage = rulePackageRegistry.getRulePackage(workflowKey);
+        AVARulePackageRegistry.RulePackage memory targetPackage = rulePackageRegistry.getRulePackage(targetWorkflowKey);
+        (uint256 recognisedStateId, uint256 evidenceId) =
+            _registerRecognisedStateForWorkflowStatusWithCurrentEvidence(
+                workflowKey, AVADataTypes.RecognisedStateStatus.Registered, "m52-object-migration-state"
+            );
+        uint256 lifecycleRecordId = rulePackageRegistry.recordRulePackageLifecycleForPackage(
+            AVADataTypes.Role.Panel,
+            sourcePackage.packageId,
+            AVADataTypes.RulePackageLifecycleKind.MigrationReady,
+            targetPackage.packageId,
+            "ipfs://m52-object-package-migration"
+        );
+        uint256 readinessId = rulePackageRegistry.recordObjectMigrationReadiness(
+            AVADataTypes.Role.Panel,
+            AVARulePackageRegistry.ObjectMigrationReadinessInput({
+                lifecycleRecordId: lifecycleRecordId,
+                objectId: bytes32(recognisedStateId),
+                recognisedStateId: recognisedStateId,
+                evidenceReceiptId: evidenceId,
+                boundaryHash: keccak256("m52-object-boundary"),
+                authorityId: keccak256("panel-authority"),
+                uri: "ipfs://m52-object-migration-readiness"
+            })
+        );
+        AVADataTypes.ObjectMigrationReadinessRecord memory readiness =
+            rulePackageRegistry.getObjectMigrationReadinessRecord(readinessId);
+
+        require(readiness.lifecycleRecordId == lifecycleRecordId, "lifecycle record not bound");
+        require(readiness.workflowKey == workflowKey, "source workflow not bound");
+        require(readiness.packageId == sourcePackage.packageId, "source package not bound");
+        require(readiness.targetWorkflowKey == targetWorkflowKey, "target workflow not bound");
+        require(readiness.targetPackageId == targetPackage.packageId, "target package not bound");
+        require(readiness.objectId == bytes32(recognisedStateId), "object not bound");
+        require(readiness.recognisedStateId == recognisedStateId, "recognised state not bound");
+        require(readiness.evidenceReceiptId == evidenceId, "evidence not bound");
+        require(readiness.boundaryHash == keccak256("m52-object-boundary"), "boundary not bound");
+        require(readiness.authorityId == keccak256("panel-authority"), "authority not bound");
+        require(readiness.createdAt == block.timestamp, "object migration timestamp missing");
+        require(stateMachine.getRecognisedState(recognisedStateId).packageId == sourcePackage.packageId, "readiness migrated state");
+
+        _registerRulePackageWithFutureProofModules(
+            targetWorkflowKey,
+            valueExecutionAdapter,
+            standingComputationModule,
+            rulePackageLifecycleModule,
+            evidenceLifecycleModule,
+            disclosureExecutionModule,
+            2,
+            keccak256("ava-m5-2-compatible"),
+            false,
+            "ipfs://m52-object-target-v2"
+        );
+        AVADataTypes.ObjectMigrationReadinessRecord memory afterTargetRotation =
+            rulePackageRegistry.getObjectMigrationReadinessRecord(readinessId);
+        require(afterTargetRotation.targetPackageId == targetPackage.packageId, "object target package drifted");
+
+        uint256 deprecationRecordId = rulePackageRegistry.recordRulePackageLifecycleForPackage(
+            AVADataTypes.Role.Panel,
+            sourcePackage.packageId,
+            AVADataTypes.RulePackageLifecycleKind.DeprecationReady,
+            0,
+            "ipfs://m52-object-deprecation"
+        );
+        try rulePackageRegistry.recordObjectMigrationReadiness(
+            AVADataTypes.Role.Panel,
+            AVARulePackageRegistry.ObjectMigrationReadinessInput({
+                lifecycleRecordId: deprecationRecordId,
+                objectId: bytes32(recognisedStateId),
+                recognisedStateId: recognisedStateId,
+                evidenceReceiptId: evidenceId,
+                boundaryHash: keccak256("m52-invalid-boundary"),
+                authorityId: keccak256("panel-authority"),
+                uri: "ipfs://m52-invalid-object-migration"
+            })
+        ) {
+            revert("object migration accepted non-migration lifecycle");
+        } catch {}
+        _assertNoSelector(address(rulePackageRegistry), "executeObjectMigration(uint256)");
+    }
+
+    function testM52ObjectMigrationReadinessRejectsWrongPackageStateAndEvidence() public {
+        bytes32 workflowKey = keccak256("m52-object-migration-source-hardening");
+        bytes32 targetWorkflowKey = keccak256("m52-object-migration-target-hardening");
+        _registerRulePackageWithFutureProofModules(
+            workflowKey,
+            valueExecutionAdapter,
+            standingComputationModule,
+            rulePackageLifecycleModule,
+            evidenceLifecycleModule,
+            disclosureExecutionModule,
+            1,
+            keccak256("ava-m5-2-compatible"),
+            false,
+            "ipfs://m52-object-source-hardening"
+        );
+        _registerRulePackageWithFutureProofModules(
+            targetWorkflowKey,
+            valueExecutionAdapter,
+            standingComputationModule,
+            rulePackageLifecycleModule,
+            evidenceLifecycleModule,
+            disclosureExecutionModule,
+            1,
+            keccak256("ava-m5-2-compatible"),
+            false,
+            "ipfs://m52-object-target-hardening"
+        );
+        AVARulePackageRegistry.RulePackage memory sourcePackage = rulePackageRegistry.getRulePackage(workflowKey);
+        AVARulePackageRegistry.RulePackage memory targetPackage = rulePackageRegistry.getRulePackage(targetWorkflowKey);
+        (uint256 sourceStateId, uint256 sourceEvidenceId) =
+            _registerRecognisedStateForWorkflowStatusWithCurrentEvidence(
+                workflowKey, AVADataTypes.RecognisedStateStatus.Registered, "m52-object-source-hardening"
+            );
+        (uint256 targetStateId, uint256 targetEvidenceId) =
+            _registerRecognisedStateForWorkflowStatusWithCurrentEvidence(
+                targetWorkflowKey, AVADataTypes.RecognisedStateStatus.Registered, "m52-object-target-hardening"
+            );
+        uint256 lifecycleRecordId = rulePackageRegistry.recordRulePackageLifecycleForPackage(
+            AVADataTypes.Role.Panel,
+            sourcePackage.packageId,
+            AVADataTypes.RulePackageLifecycleKind.MigrationReady,
+            targetPackage.packageId,
+            "ipfs://m52-object-package-migration-hardening"
+        );
+
+        try rulePackageRegistry.recordObjectMigrationReadiness(
+            AVADataTypes.Role.Panel,
+            AVARulePackageRegistry.ObjectMigrationReadinessInput({
+                lifecycleRecordId: lifecycleRecordId,
+                objectId: bytes32(sourceStateId),
+                recognisedStateId: targetStateId,
+                evidenceReceiptId: sourceEvidenceId,
+                boundaryHash: keccak256("m52-wrong-state-boundary"),
+                authorityId: keccak256("panel-authority"),
+                uri: "ipfs://m52-wrong-state"
+            })
+        ) {
+            revert("object migration accepted wrong-package state");
+        } catch {}
+
+        try rulePackageRegistry.recordObjectMigrationReadiness(
+            AVADataTypes.Role.Panel,
+            AVARulePackageRegistry.ObjectMigrationReadinessInput({
+                lifecycleRecordId: lifecycleRecordId,
+                objectId: bytes32(sourceStateId),
+                recognisedStateId: sourceStateId,
+                evidenceReceiptId: targetEvidenceId,
+                boundaryHash: keccak256("m52-wrong-evidence-boundary"),
+                authorityId: keccak256("panel-authority"),
+                uri: "ipfs://m52-wrong-evidence"
+            })
+        ) {
+            revert("object migration accepted wrong-package evidence");
+        } catch {}
     }
 
     function testM52ExplicitLifecycleUsesHistoricalSourcePackageAfterWorkflowReregistration() public {
@@ -9291,7 +10184,8 @@ contract AVASkeletonTest {
         require(token.balanceOf(address(reviewerActor)) == 0, "mismatched consequence source paid subject");
 
         MockERC20 clawbackToken = _m421FundedToken(12);
-        (uint256 recognisedStateId, uint256 evidenceId) = _createM421EligibleState(workflowKey, "m425-valid-clawback");
+        (uint256 recognisedStateId, uint256 evidenceId) =
+            _createM421EligibleStateForSubject(workflowKey, keccak256("author-subject"), "m425-valid-clawback");
         AVADataTypes.ValueExecutionContext memory clawbackContext = _valueContext(
             recognisedStateId,
             keccak256("author-subject"),
@@ -10056,6 +10950,84 @@ contract AVASkeletonTest {
         ) {
             revert("anonymous challenge proof use accepted proof from replaced package");
         } catch {}
+    }
+
+    function testM426AnonymousChallengeProofUseCanRegisterOldPackageProofAfterWorkflowReregistration() public {
+        uint256 policyId = _registerDisclosurePolicy("m426-old-package-proof-policy");
+        bytes32 subjectCommitment = _subjectCommitmentForSecret(7);
+        roleRegistry.assignRole(
+            address(this), AVADataTypes.Role.Challenger, subjectCommitment, "ipfs://m426-old-package-challenger"
+        );
+        uint256 recognisedStateId = _createChallengeableReviewState();
+        uint256 evidenceId = evidenceRegistry.registerEvidenceReceipt(
+            AVADataTypes.Role.Challenger,
+            DEFAULT_WORKFLOW,
+            keccak256("m426-old-package-proof-evidence"),
+            "ipfs://m426-old-package-proof-evidence",
+            "anonymous-challenge-proof",
+            policyId
+        );
+        uint256 challengeId = stateMachine.fileChallenge(
+            AVADataTypes.Role.Challenger, DEFAULT_WORKFLOW, recognisedStateId, subjectCommitment, evidenceId, policyId
+        );
+        uint256 oldChallengePackageId = stateMachine.getChallenge(challengeId).packageId;
+
+        _registerM421ExecutionWorkflow(DEFAULT_WORKFLOW, "ipfs://m426-old-package-proof-v2");
+        require(
+            rulePackageRegistry.getRulePackage(DEFAULT_WORKFLOW).packageId != oldChallengePackageId,
+            "workflow package was not replaced"
+        );
+
+        bytes32 oldContextHash = zkProofRegistry.computeDisclosureContextHashForPackage(
+            oldChallengePackageId,
+            DEFAULT_WORKFLOW,
+            AVADataTypes.AVAStage.Verification,
+            AVADataTypes.Action.RecordDisclosureExecution,
+            bytes32(challengeId),
+            AVADataTypes.Role.Challenger,
+            policyId,
+            subjectCommitment
+        );
+        try zkProofRegistry.registerProofForPackage(
+            oldChallengePackageId,
+            keccak256("wrong-workflow"),
+            AVADataTypes.AVAStage.Verification,
+            AVADataTypes.Action.RecordDisclosureExecution,
+            bytes32(challengeId),
+            AVADataTypes.Role.Challenger,
+            policyId,
+            subjectCommitment,
+            _makeSchnorrProof(oldContextHash, 7, 13)
+        ) {
+            revert("package-bound proof accepted wrong workflow");
+        } catch {}
+        uint256 proofReceiptId = zkProofRegistry.registerProofForPackage(
+            oldChallengePackageId,
+            DEFAULT_WORKFLOW,
+            AVADataTypes.AVAStage.Verification,
+            AVADataTypes.Action.RecordDisclosureExecution,
+            bytes32(challengeId),
+            AVADataTypes.Role.Challenger,
+            policyId,
+            subjectCommitment,
+            _makeSchnorrProof(oldContextHash, 7, 11)
+        );
+        ZKProofRegistry.ProofReceipt memory receipt = zkProofRegistry.getProofReceipt(proofReceiptId);
+        require(receipt.packageId == oldChallengePackageId, "proof did not bind old package");
+
+        uint256 useId = disclosureAccessExecutor.recordAnonymousChallengeProofUse(
+            AVADataTypes.Role.Challenger,
+            challengeId,
+            policyId,
+            proofReceiptId,
+            subjectCommitment,
+            receipt.nullifierHash,
+            "ipfs://m426-old-package-proof-use"
+        );
+        AVADataTypes.DisclosureExecutionRecord memory useRecord =
+            disclosureAccessExecutor.getDisclosureExecution(useId);
+        require(useRecord.packageId == oldChallengePackageId, "proof use did not bind old package");
+        require(useRecord.proofContextHash == oldContextHash, "old proof context missing");
     }
 
     function testM426AnonymousChallengeProofUseRequiresTargetBoundProofContext() public {
@@ -11113,6 +12085,74 @@ contract AVASkeletonTest {
             _makeSchnorrProof(contextHash, 7, 11)
         );
         require(receiptId != 0, "registered source set proof rejected");
+    }
+
+    function testM68SourceSetCommitmentLookupCanUseHistoricalPackageAfterWorkflowReregistration() public {
+        bytes32 workflowKey = keccak256("m68-source-set-historical-package");
+        _registerRulePackageWithFutureProofModules(
+            workflowKey,
+            valueExecutionAdapter,
+            standingComputationModule,
+            rulePackageLifecycleModule,
+            evidenceLifecycleModule,
+            disclosureExecutionModule,
+            1,
+            keccak256("ava-m6-8-compatible"),
+            false,
+            "ipfs://m68-source-set-historical-v1"
+        );
+        AVARulePackageRegistry.RulePackage memory oldPackage = rulePackageRegistry.getRulePackage(workflowKey);
+        bytes32 subjectCommitment = _subjectCommitmentForSecret(7);
+        ZKStandingComputationRegistry.StandingProofInput memory input =
+            _m65StandingProofInput(workflowKey, subjectCommitment, "m68-source-set-historical");
+        uint256 formulaId = _registerM68Formula(input, "m68-source-set-historical");
+        uint256 evidenceId = _registerM68SourceSetEvidence(input.workflowKey, "m68-source-set-historical");
+        uint256 sourceSetCommitmentId =
+            _registerM68SourceSetCommitment(formulaId, input, evidenceId, "m68-source-set-historical");
+
+        _registerRulePackageWithFutureProofModules(
+            workflowKey,
+            valueExecutionAdapter,
+            standingComputationModule,
+            rulePackageLifecycleModule,
+            evidenceLifecycleModule,
+            disclosureExecutionModule,
+            2,
+            keccak256("ava-m6-8-compatible"),
+            false,
+            "ipfs://m68-source-set-historical-v2"
+        );
+        require(
+            rulePackageRegistry.getRulePackage(workflowKey).packageId != oldPackage.packageId,
+            "workflow package did not rotate"
+        );
+        require(
+            standingFormulaRegistry.getSourceSetCommitmentIdForProofInput(
+                workflowKey,
+                input.subjectCommitment,
+                input.vectorKey,
+                input.categoryHash,
+                input.epoch,
+                input.sourceRecordSetRoot,
+                input.computationRuleHash,
+                address(zkStandingComputationRegistry.verifier())
+            ) == 0,
+            "active lookup unexpectedly returned old package commitment"
+        );
+        require(
+            standingFormulaRegistry.getSourceSetCommitmentIdForPackageProofInput(
+                oldPackage.packageId,
+                workflowKey,
+                input.subjectCommitment,
+                input.vectorKey,
+                input.categoryHash,
+                input.epoch,
+                input.sourceRecordSetRoot,
+                input.computationRuleHash,
+                address(zkStandingComputationRegistry.verifier())
+            ) == sourceSetCommitmentId,
+            "package-bound source-set proof lookup missed historical commitment"
+        );
     }
 
     function testM82StandingProofReceiptBindsExactFormulaAndSourceSetCommitment() public {
@@ -12425,21 +13465,25 @@ contract AVASkeletonTest {
     }
 
     function testM423PenaltyChainSeparatesValueStandingAndEligibilityEffects() public {
-        (uint256 fraudPenaltyId, uint256 fraudEvidenceId) =
-            _createM423PenaltyConsequence(keccak256("author-subject"), "m423-fraud");
-        uint256 upheldChallengeId = _fileAndScreenChallenge("m423-fraud-upheld");
-        stateMachine.resolveChallenge(
-            AVADataTypes.Role.Panel,
-            upheldChallengeId,
+        bytes32 authorSubject = keccak256("author-subject");
+        (uint256 fraudStateId, uint256 fraudChallengeId, uint256 fraudEvidenceId) = _createResolvedChallengeForSubject(
+            authorSubject,
+            "m423-fraud-upheld",
             AVADataTypes.ChallengeOutcome.Upheld,
-            AVADataTypes.RecognisedStateStatus.Downgraded,
+            AVADataTypes.RecognisedStateStatus.Downgraded
+        );
+        uint256 fraudPenaltyId = consequenceExecutor.recordPenalty(
+            AVADataTypes.Role.Panel,
+            fraudStateId,
+            authorSubject,
+            fraudEvidenceId,
             keccak256("panel-authority"),
-            "ipfs://m423-fraud-upheld"
+            "ipfs://m423-fraud-penalty"
         );
         uint256 fraudInputId = consequenceExecutor.recordStandingPenaltyInput(
             AVADataTypes.Role.Panel,
             fraudPenaltyId,
-            upheldChallengeId,
+            fraudChallengeId,
             AVADataTypes.StandingPenaltyKind.AcademicFraud,
             "author-integrity-standing",
             -50,
@@ -12448,12 +13492,24 @@ contract AVASkeletonTest {
             "ipfs://m423-fraud-standing-input"
         );
 
-        (uint256 reviewPenaltyId, uint256 reviewEvidenceId) =
-            _createM423PenaltyConsequence(REVIEWER_SUBJECT, "m423-irresponsible-review");
+        (uint256 reviewStateId, uint256 reviewChallengeId, uint256 reviewEvidenceId) = _createResolvedChallengeForSubject(
+            REVIEWER_SUBJECT,
+            "m423-irresponsible-review-upheld",
+            AVADataTypes.ChallengeOutcome.Upheld,
+            AVADataTypes.RecognisedStateStatus.Downgraded
+        );
+        uint256 reviewPenaltyId = consequenceExecutor.recordPenalty(
+            AVADataTypes.Role.Panel,
+            reviewStateId,
+            REVIEWER_SUBJECT,
+            reviewEvidenceId,
+            keccak256("panel-authority"),
+            "ipfs://m423-irresponsible-review-penalty"
+        );
         uint256 reviewInputId = consequenceExecutor.recordStandingPenaltyInput(
             AVADataTypes.Role.Panel,
             reviewPenaltyId,
-            upheldChallengeId,
+            reviewChallengeId,
             AVADataTypes.StandingPenaltyKind.IrresponsibleReview,
             "review-procedure-weight",
             -8,
@@ -12521,6 +13577,135 @@ contract AVASkeletonTest {
         _assertM423PenaltyChainRecords(
             fraudInputId, reviewInputId, maliciousInputId, restrictionId
         );
+    }
+
+    function testStandingPenaltyInputRequiresCompatibleChallengeLinkage() public {
+        (uint256 penaltyId, uint256 evidenceId) =
+            _createM423PenaltyConsequence(REVIEWER_SUBJECT, "p1-penalty-linkage");
+
+        try consequenceExecutor.recordStandingPenaltyInput(
+            AVADataTypes.Role.Panel,
+            penaltyId,
+            0,
+            AVADataTypes.StandingPenaltyKind.AcademicFraud,
+            "review-procedure-weight",
+            -5,
+            evidenceId,
+            keccak256("panel-authority"),
+            "ipfs://p1-zero-challenge"
+        ) {
+            revert("standing penalty accepted zero challenge id");
+        } catch {}
+
+        uint256 goodFaithChallengeId = _fileAndScreenChallenge("p1-good-faith-linkage");
+        stateMachine.resolveChallenge(
+            AVADataTypes.Role.Panel,
+            goodFaithChallengeId,
+            AVADataTypes.ChallengeOutcome.RejectedGoodFaith,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            keccak256("panel-authority"),
+            "ipfs://p1-good-faith-linkage"
+        );
+        try consequenceExecutor.recordStandingPenaltyInput(
+            AVADataTypes.Role.Panel,
+            penaltyId,
+            goodFaithChallengeId,
+            AVADataTypes.StandingPenaltyKind.AcademicFraud,
+            "review-procedure-weight",
+            -5,
+            evidenceId,
+            keccak256("panel-authority"),
+            "ipfs://p1-good-faith-penalty"
+        ) {
+            revert("good-faith failed challenge created misconduct standing input");
+        } catch {}
+
+        (, uint256 unrelatedUpheldChallengeId,) = _createResolvedChallengeForSubject(
+            REVIEWER_SUBJECT,
+            "p1-unrelated-upheld-linkage",
+            AVADataTypes.ChallengeOutcome.Upheld,
+            AVADataTypes.RecognisedStateStatus.Downgraded
+        );
+        try consequenceExecutor.recordStandingPenaltyInput(
+            AVADataTypes.Role.Panel,
+            penaltyId,
+            unrelatedUpheldChallengeId,
+            AVADataTypes.StandingPenaltyKind.IrresponsibleReview,
+            "review-procedure-weight",
+            -5,
+            evidenceId,
+            keccak256("panel-authority"),
+            "ipfs://p1-unrelated-upheld-penalty"
+        ) {
+            revert("standing penalty accepted unrelated upheld challenge");
+        } catch {}
+
+        (uint256 challengerPenaltyId, uint256 challengerEvidenceId) =
+            _createM423PenaltyConsequence(CHALLENGER_SUBJECT, "p1-challenger-penalty");
+        uint256 maliciousChallengeId = _fileAndScreenChallenge("p1-malicious-linkage");
+        stateMachine.resolveChallenge(
+            AVADataTypes.Role.Panel,
+            maliciousChallengeId,
+            AVADataTypes.ChallengeOutcome.MaliciousOrFabricated,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            keccak256("panel-authority"),
+            "ipfs://p1-malicious-linkage"
+        );
+        try consequenceExecutor.recordStandingPenaltyInput(
+            AVADataTypes.Role.Panel,
+            challengerPenaltyId,
+            maliciousChallengeId,
+            AVADataTypes.StandingPenaltyKind.NegligentChallenge,
+            "challenge-integrity-standing",
+            -5,
+            challengerEvidenceId,
+            keccak256("panel-authority"),
+            "ipfs://p1-wrong-outcome-penalty"
+        ) {
+            revert("negligent penalty accepted malicious outcome");
+        } catch {}
+
+        uint256 negligentChallengeId = _fileAndScreenChallenge("p1-negligent-linkage");
+        stateMachine.resolveChallenge(
+            AVADataTypes.Role.Panel,
+            negligentChallengeId,
+            AVADataTypes.ChallengeOutcome.Negligent,
+            AVADataTypes.RecognisedStateStatus.Challengeable,
+            keccak256("panel-authority"),
+            "ipfs://p1-negligent-linkage"
+        );
+        uint256 negligentInputId = consequenceExecutor.recordStandingPenaltyInput(
+            AVADataTypes.Role.Panel,
+            challengerPenaltyId,
+            negligentChallengeId,
+            AVADataTypes.StandingPenaltyKind.NegligentChallenge,
+            "challenge-integrity-standing",
+            -5,
+            challengerEvidenceId,
+            keccak256("panel-authority"),
+            "ipfs://p1-negligent-penalty"
+        );
+        require(
+            consequenceExecutor.getStandingPenaltyInput(negligentInputId).challengeOutcome
+                == AVADataTypes.ChallengeOutcome.Negligent,
+            "negligent outcome not recorded"
+        );
+
+        (uint256 authorPenaltyId, uint256 authorEvidenceId) =
+            _createM423PenaltyConsequence(keccak256("author-subject"), "p1-wrong-challenger-subject");
+        try consequenceExecutor.recordStandingPenaltyInput(
+            AVADataTypes.Role.Panel,
+            authorPenaltyId,
+            maliciousChallengeId,
+            AVADataTypes.StandingPenaltyKind.MaliciousOrFabricatedChallenge,
+            "author-integrity-standing",
+            -5,
+            authorEvidenceId,
+            keccak256("panel-authority"),
+            "ipfs://p1-wrong-challenger-subject"
+        ) {
+            revert("malicious challenge penalty accepted wrong challenger subject");
+        } catch {}
     }
 
     function testNoPublicationDecisionOrManuscriptMeritSelectorsExist() public {
@@ -12839,6 +14024,16 @@ contract AVASkeletonTest {
         uint256 evidenceId,
         string memory seed
     ) internal returns (uint256) {
+        return _registerRecognisedStateForWorkflowStatusWithSubject(workflowKey, REVIEWER_SUBJECT, status, evidenceId, seed);
+    }
+
+    function _registerRecognisedStateForWorkflowStatusWithSubject(
+        bytes32 workflowKey,
+        bytes32 subjectId,
+        AVADataTypes.RecognisedStateStatus status,
+        uint256 evidenceId,
+        string memory seed
+    ) internal returns (uint256) {
         AVADataTypes.RecognisedStateStatus initialStatus = status == AVADataTypes.RecognisedStateStatus.Vested
             ? AVADataTypes.RecognisedStateStatus.Registered
             : status;
@@ -12854,7 +14049,7 @@ contract AVASkeletonTest {
             workflowKey,
             AVADataTypes.AVAStage.Verification,
             keccak256(bytes(seed)),
-            REVIEWER_SUBJECT,
+            subjectId,
             evidenceId,
             0,
             EDITOR_AUTHORITY,
@@ -13118,6 +14313,13 @@ contract AVASkeletonTest {
         internal
         returns (uint256 recognisedStateId, uint256 evidenceId)
     {
+        return _createM421EligibleStateForSubject(workflowKey, REVIEWER_SUBJECT, seed);
+    }
+
+    function _createM421EligibleStateForSubject(bytes32 workflowKey, bytes32 subjectId, string memory seed)
+        internal
+        returns (uint256 recognisedStateId, uint256 evidenceId)
+    {
         evidenceId = reviewerActor.registerEvidenceReceipt(
             evidenceRegistry,
             AVADataTypes.Role.Reviewer,
@@ -13127,8 +14329,57 @@ contract AVASkeletonTest {
             "m421-execution-reference",
             0
         );
-        recognisedStateId = _registerRecognisedStateForWorkflowStatus(
-            workflowKey, AVADataTypes.RecognisedStateStatus.Vested, evidenceId, seed
+        recognisedStateId = _registerRecognisedStateForWorkflowStatusWithSubject(
+            workflowKey, subjectId, AVADataTypes.RecognisedStateStatus.Vested, evidenceId, seed
+        );
+    }
+
+    function _createResolvedChallengeForSubject(
+        bytes32 subjectId,
+        string memory seed,
+        AVADataTypes.ChallengeOutcome outcome,
+        AVADataTypes.RecognisedStateStatus toStatus
+    ) internal returns (uint256 recognisedStateId, uint256 challengeId, uint256 evidenceId) {
+        evidenceId = reviewerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Reviewer,
+            DEFAULT_WORKFLOW,
+            keccak256(bytes(string.concat(seed, "-state-evidence"))),
+            string.concat("ipfs://", seed, "-state-evidence"),
+            "challenge-linked-penalty-state",
+            0
+        );
+        recognisedStateId = stateMachine.registerRecognisedState(
+            AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
+            AVADataTypes.AVAStage.Verification,
+            keccak256(bytes(string.concat(seed, "-state"))),
+            subjectId,
+            evidenceId,
+            0,
+            EDITOR_AUTHORITY,
+            AVADataTypes.RecognisedStateStatus.Challengeable
+        );
+        uint256 challengeEvidenceId = challengerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Challenger,
+            DEFAULT_WORKFLOW,
+            keccak256(bytes(string.concat(seed, "-challenge-evidence"))),
+            string.concat("ipfs://", seed, "-challenge-evidence"),
+            "challenge-linked-penalty-outcome",
+            0
+        );
+        challengeId = challengerActor.fileChallenge(
+            stateMachine, AVADataTypes.Role.Challenger, recognisedStateId, CHALLENGER_SUBJECT, challengeEvidenceId, 0
+        );
+        stateMachine.screenChallenge(AVADataTypes.Role.Editor, challengeId, EDITOR_AUTHORITY);
+        stateMachine.resolveChallenge(
+            AVADataTypes.Role.Panel,
+            challengeId,
+            outcome,
+            toStatus,
+            keccak256("panel-authority"),
+            string.concat("ipfs://", seed, "-resolution")
         );
     }
 
@@ -13188,7 +14439,8 @@ contract AVASkeletonTest {
         internal
         returns (uint256 penaltyId, uint256 evidenceId)
     {
-        (uint256 recognisedStateId, uint256 stateEvidenceId) = _createM421EligibleState(DEFAULT_WORKFLOW, seed);
+        (uint256 recognisedStateId, uint256 stateEvidenceId) =
+            _createM421EligibleStateForSubject(DEFAULT_WORKFLOW, subjectId, seed);
         evidenceId = stateEvidenceId;
         penaltyId = consequenceExecutor.recordPenalty(
             AVADataTypes.Role.Panel,
@@ -14134,6 +15386,54 @@ contract AVASkeletonTest {
         return keccak256("m422-standing-computation-rule-v1");
     }
 
+    function _nonEligibleRecognisedStateStatus(uint8 statusSeed)
+        internal
+        pure
+        returns (AVADataTypes.RecognisedStateStatus)
+    {
+        uint8 index = statusSeed % 6;
+        if (index == 0) return AVADataTypes.RecognisedStateStatus.None;
+        if (index == 1) return AVADataTypes.RecognisedStateStatus.Draft;
+        if (index == 2) return AVADataTypes.RecognisedStateStatus.Registered;
+        if (index == 3) return AVADataTypes.RecognisedStateStatus.Provisional;
+        if (index == 4) return AVADataTypes.RecognisedStateStatus.Challengeable;
+        return AVADataTypes.RecognisedStateStatus.Frozen;
+    }
+
+    function _recordRecoveryTerminalSettlement(uint256 sourceId, uint8 terminalKind)
+        internal
+        returns (AVADataTypes.ValueSettlementStatus)
+    {
+        if (terminalKind % 3 == 0) {
+            valueSettlementExecutor.recordFuturePayoutSetoff(
+                AVADataTypes.Role.ProtocolExecutor,
+                AVADataTypes.ExecutionSourceType.AllocationRecord,
+                sourceId,
+                keccak256("executor-authority"),
+                "ipfs://fuzz-terminal-setoff"
+            );
+            return AVADataTypes.ValueSettlementStatus.SetoffRecorded;
+        }
+        if (terminalKind % 3 == 1) {
+            valueSettlementExecutor.recordWaiver(
+                AVADataTypes.Role.ProtocolExecutor,
+                AVADataTypes.ExecutionSourceType.AllocationRecord,
+                sourceId,
+                keccak256("executor-authority"),
+                "ipfs://fuzz-terminal-waiver"
+            );
+            return AVADataTypes.ValueSettlementStatus.Waived;
+        }
+        valueSettlementExecutor.recordSatisfaction(
+            AVADataTypes.Role.ProtocolExecutor,
+            AVADataTypes.ExecutionSourceType.AllocationRecord,
+            sourceId,
+            keccak256("executor-authority"),
+            "ipfs://fuzz-terminal-satisfaction"
+        );
+        return AVADataTypes.ValueSettlementStatus.Satisfied;
+    }
+
     function _assertStandingAndAllocationRejectTarget(uint256 recognisedStateId, uint256 evidenceId) internal {
         try standingRegistry.recordStandingUpdate(
             AVADataTypes.Role.Panel,
@@ -14182,8 +15482,10 @@ contract AVASkeletonTest {
     ) internal {
         try stateMachine.registerRecognisedState(
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Verification,
             keccak256(abi.encodePacked("direct-high-status", status)),
+            REVIEWER_SUBJECT,
             evidenceId,
             0,
             EDITOR_AUTHORITY,
@@ -14270,6 +15572,7 @@ contract AVASkeletonTest {
         require(transition.toStatus == toStatus, "transition to wrong");
         require(transition.action == action, "transition action wrong");
         require(transition.challengeId == challengeId, "transition challenge wrong");
+        require(transition.createdAt != 0, "transition timestamp missing");
     }
 
     function _assertSeparatedDownstreamRejectsTarget(uint256 recognisedStateId, uint256 evidenceId) internal {
@@ -14387,10 +15690,11 @@ contract AVASkeletonTest {
     }
 
     function _assertM4DownstreamRecords(uint256 reviewStateId, uint256 evidenceId) internal {
+        bytes32 subjectId = stateMachine.getRecognisedState(reviewStateId).subjectId;
         uint256 standingId = standingRegistry.recordStandingUpdate(
             AVADataTypes.Role.Panel,
             reviewStateId,
-            REVIEWER_SUBJECT,
+            subjectId,
             "review-procedure-weight",
             -1,
             evidenceId,
@@ -14400,7 +15704,7 @@ contract AVASkeletonTest {
         uint256 rewardId = allocationExecutor.recordRewardValue(
             AVADataTypes.Role.ProtocolExecutor,
             reviewStateId,
-            REVIEWER_SUBJECT,
+            subjectId,
             1,
             evidenceId,
             keccak256("executor-authority"),
@@ -14409,7 +15713,7 @@ contract AVASkeletonTest {
         uint256 priorityId = allocationExecutor.recordAdministrativePriority(
             AVADataTypes.Role.ProtocolExecutor,
             reviewStateId,
-            REVIEWER_SUBJECT,
+            subjectId,
             1,
             evidenceId,
             keccak256("executor-authority"),
@@ -14418,7 +15722,7 @@ contract AVASkeletonTest {
         uint256 penaltyId = consequenceExecutor.recordPenalty(
             AVADataTypes.Role.Panel,
             reviewStateId,
-            REVIEWER_SUBJECT,
+            subjectId,
             evidenceId,
             keccak256("panel-authority"),
             "ipfs://m4-penalty"
@@ -14426,7 +15730,7 @@ contract AVASkeletonTest {
         uint256 restorationId = consequenceExecutor.recordRestoration(
             AVADataTypes.Role.Panel,
             reviewStateId,
-            REVIEWER_SUBJECT,
+            subjectId,
             evidenceId,
             keccak256("panel-authority"),
             "ipfs://m4-restoration"
@@ -15405,6 +16709,73 @@ contract AVASkeletonTest {
             keccak256("panel-authority"),
             "ipfs://m49-correction-restoration",
             address(this)
+        );
+    }
+
+    function _createApprovalAuthorityContext(string memory seed, uint8 threshold, bytes32 excludedAuthorityId)
+        internal
+        returns (ApprovalAuthorityContext memory context)
+    {
+        context.workflowKey = keccak256(bytes(seed));
+        context.packageId = rulePackageRegistry.nextRulePackageId();
+        _registerRulePackageWithResidualAuthority(
+            context.workflowKey,
+            new ApprovalReceiptAuthorityModule(
+                authorityApprovalRegistry,
+                context.packageId,
+                AVADataTypes.Role.Panel,
+                AVADataTypes.Action.ResolveChallenge,
+                threshold,
+                excludedAuthorityId
+            ),
+            string.concat("ipfs://", seed)
+        );
+        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackage(context.workflowKey);
+        require(rulePackage.packageId == context.packageId, "approval package id changed");
+        context.recognisedStateId = _createChallengeableReviewStateThroughPackage(rulePackage, context.workflowKey);
+        context.objectId = bytes32(context.recognisedStateId);
+        context.challengeEvidenceId = challengerActor.registerEvidenceReceipt(
+            evidenceRegistry,
+            AVADataTypes.Role.Challenger,
+            context.workflowKey,
+            keccak256(abi.encode(seed, "approval-challenge-evidence")),
+            string.concat("ipfs://", seed, "-challenge-evidence"),
+            "review-quality-challenge",
+            0
+        );
+        context.challengeId = challengerActor.fileChallenge(
+            stateMachine,
+            AVADataTypes.Role.Challenger,
+            context.workflowKey,
+            context.recognisedStateId,
+            CHALLENGER_SUBJECT,
+            context.challengeEvidenceId,
+            0
+        );
+        stateMachine.screenChallenge(AVADataTypes.Role.Editor, context.challengeId, EDITOR_AUTHORITY);
+    }
+
+    function _recordAuthorityApproval(
+        Actor actor,
+        ApprovalAuthorityContext memory context,
+        AVADataTypes.Action action,
+        bytes32 objectId,
+        bytes32 authorityId
+    ) internal returns (uint256) {
+        return actor.recordAuthorityApproval(
+            authorityApprovalRegistry,
+            AVADataTypes.Role.Panel,
+            AuthorityApprovalRegistry.ApprovalInput({
+                workflowKey: context.workflowKey,
+                packageId: context.packageId,
+                action: action,
+                recognisedStateId: context.recognisedStateId,
+                objectId: objectId,
+                authorityId: authorityId,
+                evidenceReceiptId: context.challengeEvidenceId,
+                expiresAt: uint64(block.timestamp + 7 days),
+                reasonURI: "ipfs://authority-approval"
+            })
         );
     }
 

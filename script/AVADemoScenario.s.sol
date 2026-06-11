@@ -7,7 +7,11 @@ import {AuthorityMatrix} from "../src/AuthorityMatrix.sol";
 import {EvidenceCommitmentRegistry} from "../src/EvidenceCommitmentRegistry.sol";
 import {DisclosurePolicyRegistry} from "../src/DisclosurePolicyRegistry.sol";
 import {AVAStateMachine} from "../src/AVAStateMachine.sol";
-import {AVARulePackageRegistry} from "../src/AVARulePackageRegistry.sol";
+import {
+    AVARulePackageRegistry,
+    IEvidenceReceiptReader,
+    IRecognisedStateReader
+} from "../src/AVARulePackageRegistry.sol";
 import {ConsequenceExecutor} from "../src/ConsequenceExecutor.sol";
 import {StandingRegistry} from "../src/StandingRegistry.sol";
 import {AllocationExecutor} from "../src/AllocationExecutor.sol";
@@ -172,15 +176,17 @@ contract DemoActor {
     function registerRecognisedState(
         AVAStateMachine stateMachine,
         AVADataTypes.Role actingRole,
+        bytes32 workflowKey,
         AVADataTypes.AVAStage stage,
         bytes32 objectId,
+        bytes32 subjectId,
         uint256 evidenceReceiptId,
         uint256 disclosurePolicyId,
         bytes32 authorityId,
         AVADataTypes.RecognisedStateStatus status
     ) external returns (uint256) {
         return stateMachine.registerRecognisedState(
-            actingRole, stage, objectId, evidenceReceiptId, disclosurePolicyId, authorityId, status
+            actingRole, workflowKey, stage, objectId, subjectId, evidenceReceiptId, disclosurePolicyId, authorityId, status
         );
     }
 
@@ -236,6 +242,16 @@ contract DemoActor {
         string calldata uri
     ) external {
         registry.registerRulePackage(actingRole, workflowKey, modules, uri);
+    }
+
+    function configureMigrationReferenceReaders(
+        AVARulePackageRegistry registry,
+        AVADataTypes.Role actingRole,
+        IRecognisedStateReader stateReader,
+        IEvidenceReceiptReader evidenceReader,
+        bytes32 authorityId
+    ) external {
+        registry.configureMigrationReferenceReaders(actingRole, stateReader, evidenceReader, authorityId);
     }
 }
 
@@ -456,6 +472,13 @@ contract AVADemoScenario {
 
         _assignRoles();
         _setPermissions();
+        panelDemoActor.configureMigrationReferenceReaders(
+            rulePackageRegistry,
+            AVADataTypes.Role.Panel,
+            IRecognisedStateReader(address(stateMachine)),
+            IEvidenceReceiptReader(address(evidenceRegistry)),
+            PANEL_AUTHORITY
+        );
         _registerRulePackage();
     }
 
@@ -548,8 +571,10 @@ contract AVADemoScenario {
         uint256 allocationStateId = demoActor.registerRecognisedState(
             stateMachine,
             AVADataTypes.Role.Editor,
+            DEFAULT_WORKFLOW,
             AVADataTypes.AVAStage.Allocation,
             keccak256("demo-allocation-object"),
+            REVIEWER_SUBJECT,
             allocationEvidenceId,
             disclosurePolicyId,
             EDITOR_AUTHORITY,

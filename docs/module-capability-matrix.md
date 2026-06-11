@@ -74,16 +74,17 @@ AVA stages.
 | Support function | Interface | Called by | Current limit |
 | --- | --- | --- | --- |
 | Transition rule | `ITransitionRuleModule` | `AVAStateMachine` transition, challenge, restoration, close paths | Cannot own state storage or allow substrate-forbidden high-impact paths |
+| Challenge-window timing | `IChallengeWindowRuleModule` | `AVAStateMachine.vestReviewRecognition` when the selected transition module supports it | Optional minimum-duration veto only; no scheduler, oracle, expiry executor, or automatic challenge closure |
 | Challenge lifecycle | `IChallengeLifecycleModule` | `AVAStateMachine` file/screen/resolve/restore/close | Lifecycle admissibility only; no sanction, standing update, allocation, or direct status mutation |
 | Disclosure policy | `IDisclosurePolicyModule` | Evidence registry and state/challenge paths | Policy/reference compatibility only; no reveal/decrypt/ACL |
 | Disclosure lifecycle | `IDisclosureLifecycleModule` | `recordDisclosureLifecycleReadiness` | Readiness record only; no reveal/decrypt/ACL/identity disclosure |
 | Disclosure execution | `IDisclosureExecutionModule` | `DisclosureAccessExecutor` using target `packageId` | Access grant/revoke/expiry/supersession, lifecycle, proof-use, and voluntary-intent receipt validation only; no reveal/decrypt/ACL engine |
-| Residual editorial authority | `IResidualEditorialAuthorityModule` | `AVAStateMachine` recognised-state and challenge-governance paths | Procedural authority validation only, including example single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, and emergency-pause validator formats; no acceptance, rejection, merit, or publication priority |
+| Residual editorial authority | `IResidualEditorialAuthorityModule` plus `AuthorityApprovalRegistry` for receipt-backed examples | `AVAStateMachine` recognised-state and challenge-governance paths | Procedural authority validation only, including example single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, emergency-pause, and approval-receipt validator formats; no acceptance, rejection, merit, or publication priority |
 | Evidence policy | `IEvidencePolicyModule` | Evidence registration and evidence-backed state/challenge paths | Workflow/type/reference compatibility only; no truth validation |
 | Evidence lifecycle | `IEvidenceLifecycleModule` | Evidence registration, evidence use, evidence lifecycle hook | Status-bound lifecycle validation only; no delete/reveal/truth adjudication |
 | Audit adapter | `IAuditAdapter` | `AttestationAuditModule` workflow-aware and target-bound attestation paths | Attestation reference/hash validation only; audit storage remains substrate-owned |
 | Field policy | `IFieldPolicyModule` | `AVAStateMachine` recognised-state validation | Field/venue admissibility only; cannot replace authority/evidence/status gates |
-| Anti-abuse | `IAntiAbuseModule` | Review, challenge, standing, allocation, consequence paths | Veto only; no sanction execution, standing update, or state write |
+| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | Review, challenge, standing, allocation, consequence paths | Veto only; default package remains permissive; selected packages can reject repeated challenge filing; no sanction execution, standing update, or state write |
 
 `IEditorialSystemAdapter` remains an optional manuscript metadata-reference
 bridge outside the AVA core-stage / recognised-state support / downstream
@@ -110,8 +111,8 @@ stages.
 | Value execution readiness | `IValueExecutionAdapter` | Allocation, reward, priority, consequence, penalty, restoration record paths | Readiness validation only; settlement executor consumes authorised sources separately |
 | Value settlement | `IValueSettlementExecutor` | `ValueSettlementExecutor` | Source-bound settlement receipts include source execution context and settlement context hash only; no standing/reputation/publication/sanction engine |
 | External operation | `IExternalOperationRegistry` | `ExternalOperationRegistry` | Intent/status receipts carry operation context hash; terminal receipts link to their source request; no external platform operation |
-| Rule-package lifecycle | `IRulePackageLifecycleModule` | Rule-package registration and lifecycle readiness | Compatibility/readiness only; no migration executor or retroactive package rewrite |
-| ZK proof verification | `IZKProofVerifier` | `ZKProofRegistry` | Package-aware, context-bound verification receipt only; no identity reveal or authority grant |
+| Rule-package lifecycle | `IRulePackageLifecycleModule` | Rule-package registration, lifecycle readiness, and object migration readiness receipts | Compatibility/readiness only; object readiness is record-only; no migration executor or retroactive package rewrite |
+| ZK proof verification | `IZKProofVerifier` | `ZKProofRegistry` | Package-aware, context-bound verification receipt only; default registration binds the active package, while explicit package-bound registration supports historical targets after workflow re-registration; no identity reveal or authority grant |
 | Standing formula/source-set/statement | `IStandingFormulaRegistry` | `StandingFormulaRegistry` | Package-bound formula metadata, source-set commitment, source-set completeness attestation, and authorised computation-statement records with source-set evidence, statement evidence, completeness hash, output commitment, authority, and status only; no standing computation, source-history traversal, production ZK circuit, reveal, standing update, or credential issuance |
 | ZK standing computation proof | `IZKProofVerifier` | `ZKStandingComputationRegistry` | Package-bound, subject-commitment-bound standing proof receipt with exact registered formula/source-set commitment id, active source-set completeness attestation, active computation statement id, output commitment, formula version, source-set policy hash, source-record-set root, computation-rule hash, verifier/proof-domain binding, and nullifier replay protection only; no production ZK circuit, reveal, standing update, or credential issuance |
 | ZK standing credential | `IZKStandingCredentialIssuer` | `ZKStandingCredentialRegistry` | Commitment-bound proof carrier from a ZK standing proof receipt; proof-use records require a verifier proof bound to the credential commitment; no owner account, balance, transfer, approval, reward, priority token, reveal, publication, or manuscript effect |
@@ -163,6 +164,9 @@ accept; any veto fails closed before storage mutation.**
 - Nondelegable gates: generic transition only `Registered -> Vested`;
   challenge paths only for `Downgraded`, `Voided`, or `Restored` as the
   substrate allows.
+- Optional extension: `IChallengeWindowRuleModule` can veto vesting before a
+  package-configured challenge-window duration has elapsed. It cannot close
+  challenges, schedule execution, or replace open-challenge-count blocking.
 
 **Disclosure policy, `IDisclosurePolicyModule`**
 
@@ -219,12 +223,17 @@ accept; any veto fails closed before storage mutation.**
   paths.
 - May validate: procedural residual authority predicates, including
   single-role, threshold-panel, multisig, institutional co-signature,
-  conflict-excluded-panel, and emergency-pause validator formats.
+  conflict-excluded-panel, emergency-pause, and approval-receipt validator
+  formats.
 - May veto: yes.
 - Must not do: create acceptance, rejection, merit, reveal, sanction, reward,
   payment, or publication priority logic.
 - Nondelegable gates: `authorityId` binding, recognised-state storage, and
   transition ledger.
+- Receipt-backed example: `AuthorityApprovalRegistry` records package/action/
+  object/authority-subject approval receipts with evidence and expiry;
+  `ApprovalReceiptAuthorityModule` checks m-of-n active receipts and optional
+  subject-aware conflict exclusion.
 
 **Field policy, `IFieldPolicyModule`**
 
@@ -236,10 +245,14 @@ accept; any veto fails closed before storage mutation.**
 - Nondelegable gates: authority, evidence, package, and transition gates remain
   substrate-owned.
 
-**Anti-abuse, `IAntiAbuseModule`**
+**Anti-abuse, `IAntiAbuseModule` / `IChallengeRateLimitModule`**
 
 - Called by: review, challenge, standing, allocation, and consequence paths.
-- May validate: abuse/rate-limit predicates.
+- May validate: abuse/rate-limit predicates. The default package remains a
+  permissive baseline; package-selected modules can veto configured
+  subject/object/action paths. The optional challenge-rate-limit hook receives
+  the prior filing count for the same package / challenged recognised state /
+  challenger subject path and can reject repeated challenge filing.
 - May veto: yes.
 - Must not do: sanction, apply punitive asset deduction, update standing, or
   block by writing state.
@@ -334,7 +347,8 @@ accept; any veto fails closed before storage mutation.**
   category/range/epoch/root/rule binding, `authorityId` binding, expiry,
   revocation, supersession, suspension, issuance nullifier, proof-use verifier
   proof, proof-use context/nullifier, source-bound value-settlement record
-  matching, and negligent/malicious challenge-transition outcome binding.
+  matching against the same pseudonymous role-scoped subject commitment, and
+  negligent/malicious challenge-transition outcome binding.
 
 ### Allocation, Consequence, And Execution-Readiness Families
 
@@ -372,8 +386,8 @@ accept; any veto fails closed before storage mutation.**
 - May validate: bounded administrative consequence fields.
 - May veto: yes.
 - Must not do: execute sanction, standing update, allocation, or reward.
-- Nondelegable gates: consequence storage only; allowed recognised state and
-  evidence gates.
+- Nondelegable gates: consequence storage only; allowed recognised state,
+  responsible recognised-state subject, and evidence gates.
 
 **Penalty adapter, `IPenaltyAdapter`**
 
@@ -413,7 +427,8 @@ accept; any veto fails closed before storage mutation.**
 
 **Rule-package lifecycle, `IRulePackageLifecycleModule`**
 
-- Called by: rule-package registration and package-bound lifecycle readiness.
+- Called by: rule-package registration, package-bound lifecycle readiness, and
+  object migration readiness receipt recording.
 - May validate: `workflowKey`, source `packageId`, address-and-code-bound
   source `modulesHash` / `modulesCodeHash`, lifecycle kind, `version`,
   `compatibilityKey`, dependency metadata, deprecation flag, and target
@@ -423,8 +438,11 @@ accept; any veto fails closed before storage mutation.**
   records outside registry.
 - Nondelegable gates: new `packageId` per registration; old states keep old
   `packageId`; no-code module addresses rejected; migration/supersession
-  readiness binds explicit source and target package metadata; source package
-  lifecycle module validates readiness.
+  readiness binds explicit source and target package metadata; object migration
+  readiness binds the object, source recognised state, evidence, authority, and
+  boundary hash to an existing `MigrationReady` record; configured
+  state/evidence readers require those references to belong to the source
+  workflow/package; source package lifecycle module validates readiness.
 
 **Evidence lifecycle, `IEvidenceLifecycleModule`**
 

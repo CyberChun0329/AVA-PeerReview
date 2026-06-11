@@ -408,14 +408,63 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         bytes32 computationRuleHash,
         address verifier
     ) public view returns (uint256) {
+        if (workflowKey == bytes32(0)) return 0;
+        uint256 packageId = rulePackageRegistry.getRulePackage(workflowKey).packageId;
+        return _sourceSetCommitmentIdForPackageProofInput(
+            packageId,
+            workflowKey,
+            subjectCommitment,
+            vectorKey,
+            categoryHash,
+            epoch,
+            sourceRecordSetRoot,
+            computationRuleHash,
+            verifier
+        );
+    }
+
+    function getSourceSetCommitmentIdForPackageProofInput(
+        uint256 packageId,
+        bytes32 workflowKey,
+        bytes32 subjectCommitment,
+        bytes32 vectorKey,
+        bytes32 categoryHash,
+        uint256 epoch,
+        bytes32 sourceRecordSetRoot,
+        bytes32 computationRuleHash,
+        address verifier
+    ) external view returns (uint256) {
+        return _sourceSetCommitmentIdForPackageProofInput(
+            packageId,
+            workflowKey,
+            subjectCommitment,
+            vectorKey,
+            categoryHash,
+            epoch,
+            sourceRecordSetRoot,
+            computationRuleHash,
+            verifier
+        );
+    }
+
+    function _sourceSetCommitmentIdForPackageProofInput(
+        uint256 packageId,
+        bytes32 workflowKey,
+        bytes32 subjectCommitment,
+        bytes32 vectorKey,
+        bytes32 categoryHash,
+        uint256 epoch,
+        bytes32 sourceRecordSetRoot,
+        bytes32 computationRuleHash,
+        address verifier
+    ) internal view returns (uint256) {
         if (
-            workflowKey == bytes32(0) || subjectCommitment == bytes32(0) || vectorKey == bytes32(0)
+            packageId == 0 || workflowKey == bytes32(0) || subjectCommitment == bytes32(0) || vectorKey == bytes32(0)
                 || categoryHash == bytes32(0) || epoch == 0 || sourceRecordSetRoot == bytes32(0)
                 || computationRuleHash == bytes32(0) || verifier == address(0)
         ) {
             return 0;
         }
-        uint256 packageId = rulePackageRegistry.getRulePackage(workflowKey).packageId;
         uint256 sourceSetCommitmentId = sourceSetCommitmentIdByProofKey[
             _proofKey(packageId, subjectCommitment, vectorKey, categoryHash, epoch, sourceRecordSetRoot, computationRuleHash)
         ];

@@ -6,4 +6,5 @@ broadcast/
 docs/internal/
 AGENTS.md
 .codex/
+.claude/
 .agents/

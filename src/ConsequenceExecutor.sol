@@ -147,6 +147,7 @@ contract ConsequenceExecutor {
         }
         AVADataTypes.ConsequenceRecord memory penalty = _requirePenaltyConsequence(penaltyConsequenceId);
         AVADataTypes.ChallengeOutcome outcome = _requireCompatiblePenaltyOutcome(challengeId, penalty, penaltyKind);
+        _requirePenaltySubjectMatchesRecognisedState(penalty);
         _requireEvidenceForPenalty(evidenceReceiptId, penalty);
 
         id = nextStandingPenaltyInputId++;
@@ -432,6 +433,7 @@ contract ConsequenceExecutor {
             _requireAllowedRecognisedState(executionContext.recognisedStateId);
         _requireValidExecutionContext(executionContext);
         authorityMatrix.requireKnownActiveSubject(executionContext.recipientSubjectId);
+        _requireRecognisedStateSubject(recognisedState, executionContext.recipientSubjectId);
         AVADataTypes.EvidenceReceipt memory evidence =
             evidenceRegistry.requireUsableEvidenceReceipt(executionContext.evidenceReceiptId, recognisedState.workflowKey);
         if (evidence.packageId != recognisedState.packageId) {
@@ -482,11 +484,12 @@ contract ConsequenceExecutor {
         AVADataTypes.ConsequenceRecord memory penalty,
         AVADataTypes.StandingPenaltyKind penaltyKind
     ) internal view returns (AVADataTypes.ChallengeOutcome outcome) {
-        outcome = _challengeOutcome(challengeId, penalty);
+        if (challengeId == 0) revert AVADataTypes.InvalidState(challengeId);
+        AVADataTypes.ChallengeRecord memory challenge = _requirePenaltyChallenge(challengeId, penalty);
+        outcome = challenge.outcome;
         if (outcome == AVADataTypes.ChallengeOutcome.RejectedGoodFaith) {
             revert AVADataTypes.InvalidState(challengeId);
         }
-        if (challengeId == 0) return outcome;
         if (
             penaltyKind == AVADataTypes.StandingPenaltyKind.MaliciousOrFabricatedChallenge
                 && outcome != AVADataTypes.ChallengeOutcome.MaliciousOrFabricated
@@ -504,6 +507,16 @@ contract ConsequenceExecutor {
                 || penaltyKind == AVADataTypes.StandingPenaltyKind.IrresponsibleReview)
                 && outcome != AVADataTypes.ChallengeOutcome.Upheld
         ) {
+            revert AVADataTypes.InvalidState(challengeId);
+        }
+        if (
+            penaltyKind == AVADataTypes.StandingPenaltyKind.AcademicFraud
+                || penaltyKind == AVADataTypes.StandingPenaltyKind.IrresponsibleReview
+        ) {
+            if (challenge.challengedRecognisedStateId != penalty.recognisedStateId) {
+                revert AVADataTypes.InvalidState(challengeId);
+            }
+        } else if (challenge.challengerSubjectId != penalty.subjectId) {
             revert AVADataTypes.InvalidState(challengeId);
         }
     }
@@ -524,10 +537,29 @@ contract ConsequenceExecutor {
         returns (AVADataTypes.ChallengeOutcome outcome)
     {
         if (challengeId == 0) return AVADataTypes.ChallengeOutcome.None;
-        AVADataTypes.ChallengeRecord memory challenge = stateMachine.getChallenge(challengeId);
+        return _requirePenaltyChallenge(challengeId, penalty).outcome;
+    }
+
+    function _requirePenaltyChallenge(uint256 challengeId, AVADataTypes.ConsequenceRecord memory penalty)
+        internal
+        view
+        returns (AVADataTypes.ChallengeRecord memory challenge)
+    {
+        challenge = stateMachine.getChallenge(challengeId);
         if (challenge.packageId != penalty.packageId) revert AVADataTypes.InvalidState(challengeId);
         if (challenge.outcome == AVADataTypes.ChallengeOutcome.None) revert AVADataTypes.InvalidState(challengeId);
-        return challenge.outcome;
+    }
+
+    function _requireRecognisedStateSubject(
+        AVADataTypes.RecognisedStateRecord memory recognisedState,
+        bytes32 subjectId
+    ) internal pure {
+        if (recognisedState.subjectId != subjectId) revert AVADataTypes.InvalidState(recognisedState.id);
+    }
+
+    function _requirePenaltySubjectMatchesRecognisedState(AVADataTypes.ConsequenceRecord memory penalty) internal view {
+        AVADataTypes.RecognisedStateRecord memory recognisedState = stateMachine.getRecognisedState(penalty.recognisedStateId);
+        _requireRecognisedStateSubject(recognisedState, penalty.subjectId);
     }
 
     function _requireEvidenceForPenalty(uint256 evidenceReceiptId, AVADataTypes.ConsequenceRecord memory penalty)

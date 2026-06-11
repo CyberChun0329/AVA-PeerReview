@@ -208,6 +208,18 @@ interface IStandingFormulaRegistry {
         address verifier
     ) external view returns (uint256);
 
+    function getSourceSetCommitmentIdForPackageProofInput(
+        uint256 packageId,
+        bytes32 workflowKey,
+        bytes32 subjectCommitment,
+        bytes32 vectorKey,
+        bytes32 categoryHash,
+        uint256 epoch,
+        bytes32 sourceRecordSetRoot,
+        bytes32 computationRuleHash,
+        address verifier
+    ) external view returns (uint256);
+
     function getStandingFormula(uint256 id) external view returns (StandingFormulaRecord memory);
 
     function getSourceSetCommitment(uint256 id) external view returns (SourceSetCommitmentRecord memory);

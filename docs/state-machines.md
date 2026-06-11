@@ -40,10 +40,16 @@ Rules currently enforced:
 - provisional recognition creates a `RecognisedStateRecord` in AVA stage
   `Verification`.
 - `openReviewChallengeWindow` requires `OpenChallengeWindow`.
-- opening the window sets the linked recognised state to `Challengeable`.
+- opening the window sets the linked recognised state to `Challengeable` and
+  records the chain timestamp readable through
+  `getChallengeWindowOpenedAt(recognisedStateId)`.
 - `vestReviewRecognition` requires `TransitionRecognisedState`, rejects if the
-  linked recognised state has any unclosed challenge, writes a generic
-  recognised-state transition, and sets the linked recognised state to `Vested`.
+  linked recognised state has any unclosed challenge, calls any selected
+  `IChallengeWindowRuleModule` timing veto, writes a generic recognised-state
+  transition, and sets the linked recognised state to `Vested`.
+- default packages remain a permissive baseline, while packages that select
+  `SubjectRateLimitModule` can reject repeated challenge filings by the same
+  subject against the same recognised state.
 - none of these steps creates standing, consequence, reward, sanction,
   allocation, service entitlement, or manuscript advantage.
 
@@ -77,9 +83,9 @@ stateDiagram-v2
     [*] --> ConcernFiled: fileChallenge
     ConcernFiled --> AdmissibilityScreening: screenChallenge
     AdmissibilityScreening --> Resolved: resolveChallenge
-    Resolved --> RestorationAvailable: applyRestoration
+    Resolved --> RestorationApplied: applyRestoration
     Resolved --> Closed: closeChallenge
-    RestorationAvailable --> Closed: closeChallenge
+    RestorationApplied --> Closed: closeChallenge
 ```
 
 Rules currently enforced:
@@ -226,15 +232,15 @@ Current module coverage:
 | --- | --- | --- | --- | --- | --- |
 | Attribution | `IAttributionModule` | `DefaultAttributionModule` | `SubjectSaltAttributionModule` | Rule package | Validates attributed object only |
 | Verification | `IVerificationModule` | `DefaultVerificationModule` | `EvidenceThresholdVerificationModule` | Rule package | Validates references, not truth |
-| Transition rule | `ITransitionRuleModule` | `DefaultTransitionRuleModule` | `NoFrozenTransitionRuleModule` | Rule package | Cannot own state storage |
+| Transition rule | `ITransitionRuleModule` | `DefaultTransitionRuleModule` | `NoFrozenTransitionRuleModule`, `MinimumChallengeWindowTransitionModule` | Rule package | Cannot own state storage; optional challenge-window timing veto before vesting |
 | Disclosure/privacy | `IDisclosurePolicyModule` | `DefaultDisclosurePolicyModule` | disclosure scenario modules, `ZKBackedDisclosureModule` | Rule package and evidence registry | No reveal or decryption |
 | Challenge lifecycle | `IChallengeLifecycleModule` | `DefaultChallengeLifecycleModule` | `PanelOnlyChallengeLifecycleModule` | Rule package | Admissibility only |
 | Evidence policy | `IEvidencePolicyModule` | `DefaultEvidencePolicyModule` | `TypedEvidencePolicyModule` | Rule package | Active on workflow-scoped evidence registration and recognised-state validation; reference/type/workflow validation only |
 | Audit adapter | `IAuditAdapter` | `DefaultAuditAdapter` | `HashAnchoredAuditAdapter` | Evidence receipt or target `packageId` | Active on workflow-aware and target-bound attestation paths; attestation reference and authority-subject validation only |
 | Editorial adapter | `IEditorialSystemAdapter` | `DefaultEditorialSystemAdapter` | `EditorialReferenceAdapter` | Rule package | Workflow-aware manuscript overload requires a known package; adapter is active only when optional external reference metadata is supplied |
-| Residual editorial authority | `IResidualEditorialAuthorityModule` | `DefaultResidualEditorialAuthorityModule` | `ProceduralEditorialAuthorityModule`, `StructuredResidualEditorialAuthorityModule` | Rule package | Procedural authority validation only; supports single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, and emergency-pause validator formats without publication decision or merit logic |
+| Residual editorial authority | `IResidualEditorialAuthorityModule` plus `AuthorityApprovalRegistry` for receipt-backed examples | `DefaultResidualEditorialAuthorityModule` | `ProceduralEditorialAuthorityModule`, `StructuredResidualEditorialAuthorityModule`, `ApprovalReceiptAuthorityModule` | Rule package | Procedural authority validation only; supports single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, emergency-pause, and approval-receipt validator formats without publication decision or merit logic |
 | Field policy | `IFieldPolicyModule` | `DefaultFieldPolicyModule` | `DisciplineFieldPolicyModule` | Rule package | Active on recognised-state validation; discipline rule validation only |
-| Anti-abuse | `IAntiAbuseModule` | `DefaultAntiAbuseModule` | `SubjectRateLimitModule` | Rule package | Active on review, challenge, and downstream record paths; no sanction execution |
+| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | `DefaultAntiAbuseModule` | `SubjectRateLimitModule` | Rule package | Active on review, challenge, and downstream record paths; default package is a permissive baseline; example module can veto selected subject/object/action paths and repeated challenge filings; no sanction execution |
 | Standing | `IStandingAdapter` | `DefaultStandingAdapter` | `VectorStandingAdapter` | Recognised-state `packageId` | Procedural weight record only |
 | Reward/value | `IRewardAdapter` | `DefaultRewardAdapter` | `StablecoinRecordRewardAdapter`, `GenericTokenRecordRewardAdapter` | Recognised-state `packageId` | Record only, no transfer |
 | Priority | `IPriorityAdapter` | `DefaultPriorityAdapter` | `PriorityTokenRecordAdapter`, `RentedPriorityRecordAdapter` | Recognised-state `packageId` | Administrative queue record only |
@@ -334,6 +340,10 @@ Rules currently enforced:
   disclosure eligibility, or evidence content.
 - authority ids representing the acting authority must match the caller's
   active role-scoped subject.
+- recognised states store the responsible role-scoped subject. Standing and
+  consequence / penalty / restoration records that target a recognised state
+  must use the same responsible subject unless a future explicitly designed
+  cross-subject record type is added.
 - downstream adapters are selected from the target recognised state's recorded
   package id, so re-registering a workflow key cannot rewrite old state
   behaviour.
@@ -346,6 +356,11 @@ Rules currently enforced:
 - penalty is decomposed into value recovery, standing penalty input, and
   eligibility / screening consequence. Standing penalty input is consumed by
   later standing computation; it is not a token deduction or balance update.
+- standing penalty input requires a nonzero compatible challenge outcome:
+  upheld for academic-fraud or irresponsible-review inputs, negligent for
+  negligent-challenge inputs, and malicious/fabricated for malicious-challenge
+  inputs. Rejected good-faith challenges cannot create misconduct standing
+  penalty input.
 - reward and penalty reversal is append-only: grant, execution, freeze, void,
   repayment obligation, setoff, waiver, satisfaction, reversal, and restoration
   records are retained rather than deleted.
@@ -430,7 +445,7 @@ Rules currently enforced:
   token paths remain bounded administrative queue/service-right artifacts only.
 - none of these paths exposes publication priority, manuscript merit,
   acceptance, or rejection functions.
-- current verification is 221 tests passing.
+- current verification is 239 tests passing.
 - The current state-machine surface includes authorised standing computation,
   credential use-surface hardening, disclosure proof-use, and lifecycle-record
   closure hardening.

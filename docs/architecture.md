@@ -180,7 +180,7 @@ Key contracts:
 | `EvidenceCommitmentRegistry` | Stores evidence receipts as commitments, URIs, workflow/type references, package identity, disclosure policy references, and lifecycle status. |
 | `DisclosurePolicyRegistry` | Stores disclosure policy metadata and active policy references. |
 | `AVARulePackageRegistry` | Registers workflow packages, module/adaptor bindings, compatibility metadata, lifecycle readiness records, and active-package pointers. |
-| `AVAStateMachine` | Stores manuscripts, review contributions, recognised states, challenge records, challenge transitions, and generic recognised-state transitions. |
+| `AVAStateMachine` | Stores manuscripts, review contributions, recognised states with responsible subjects, challenge records, challenge transitions, and generic recognised-state transitions. |
 | `StandingRegistry` | Records standing update inputs and standing computation records as governance memory, not assets. |
 | `StandingCredentialRegistry` | Issues non-transferable, expiring, revocable/supersedable proof carriers from authorised standing-computation records. |
 | `StandingFormulaRegistry` | Records formula metadata, source-set commitments, completeness attestations, and computation statements for privacy-preserving standing computation. |
@@ -204,7 +204,8 @@ A typical peer-review path looks like this:
 4. Register a manuscript pointer as off-chain metadata.
 5. Register a review contribution with reviewer subject and evidence receipt.
 6. Provisionally recognise the review contribution as a recognised state.
-7. Open a challenge window.
+7. Open a timestamped challenge window; packages may optionally require a
+   minimum elapsed window before vesting.
 8. File, screen, resolve, restore, or close challenges through authorised
    transition paths.
 9. Record generic recognised-state transitions whenever recognised-state status
@@ -234,6 +235,7 @@ These correspond to AVA's Attribution, Verification, and Allocation stages.
 ### Recognised-State Governance Support
 
 - `ITransitionRuleModule`
+- `IChallengeWindowRuleModule`
 - `IChallengeLifecycleModule`
 - `IDisclosurePolicyModule`
 - `IDisclosureLifecycleModule`
@@ -244,12 +246,16 @@ These correspond to AVA's Attribution, Verification, and Allocation stages.
 - `IAuditAdapter`
 - `IFieldPolicyModule`
 - `IAntiAbuseModule`
+- `IChallengeRateLimitModule`
 - `IEditorialSystemAdapter`
 
 These modules validate governance context, policy references, lifecycle
 readiness, residual procedural authority, and admissibility. They cannot own
 substrate storage or create publication, reveal, payment, sanction, standing,
-or truth effects.
+or truth effects. Receipt-backed authority examples use
+`AuthorityApprovalRegistry` and `ApprovalReceiptAuthorityModule` to check m-of-n
+package/action/object-bound approval receipts without giving modules storage
+ownership.
 
 ### Downstream Consequence / Execution / Proof Support
 
@@ -300,6 +306,8 @@ Challenge and correction operate over recognised states, not raw accusations.
 - Screening moves the challenge lifecycle forward but does not decide truth or
   wrongdoing.
 - Resolution is panel-authorised and rejects self-resolution by the challenger.
+- Resolution also rejects a resolver whose authority subject conflicts with the
+  challenger subject or the challenged recognised state's responsible subject.
 - Outcomes distinguish upheld challenge, rejected good-faith challenge,
   negligent challenge, and malicious or fabricated challenge.
 - Only outcome-appropriate authorised transitions can mutate the underlying
@@ -344,6 +352,11 @@ administrative effects. These surfaces remain bounded.
 - Penalty records separate value recovery, standing penalty input, and
   eligibility or screening restriction.
 - Good-faith failed challenges are not misconduct penalties.
+- Misconduct standing penalty input requires a nonzero compatible challenge
+  outcome. Academic fraud and irresponsible-review inputs require an upheld
+  challenge linked to the target recognised state. Negligent and malicious or
+  fabricated challenge inputs require the corresponding challenge-abuse outcome
+  and the challenger subject.
 - Recovery and restoration records are append-only; they do not delete prior
   history.
 
@@ -368,7 +381,7 @@ Use:
 The current verified state is:
 
 - `forge build` passes.
-- `forge test` passes with 221 tests.
+- `forge test` passes with 239 tests.
 - The baseline demo script runs locally with:
 
 ```bash

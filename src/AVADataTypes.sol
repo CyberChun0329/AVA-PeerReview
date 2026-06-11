@@ -89,7 +89,7 @@ library AVADataTypes {
         ConcernFiled,
         AdmissibilityScreening,
         Resolved,
-        RestorationAvailable,
+        RestorationApplied,
         Closed
     }
 
@@ -340,6 +340,7 @@ library AVADataTypes {
         uint256 packageId;
         AVAStage stage;
         bytes32 objectId;
+        bytes32 subjectId;
         uint256 evidenceReceiptId;
         uint256 disclosurePolicyId;
         bytes32 authorityId;
@@ -388,6 +389,7 @@ library AVADataTypes {
         Role authorityRole;
         bytes32 authorityId;
         string reasonURI;
+        uint256 createdAt;
         address createdBy;
     }
 
@@ -403,6 +405,7 @@ library AVADataTypes {
         Role authorityRole;
         bytes32 authorityId;
         string reasonURI;
+        uint256 createdAt;
         address createdBy;
     }
 
@@ -586,6 +589,24 @@ library AVADataTypes {
         string uri;
         Role authorityRole;
         bytes32 authorityId;
+        address recordedBy;
+    }
+
+    struct ObjectMigrationReadinessRecord {
+        uint256 id;
+        uint256 lifecycleRecordId;
+        bytes32 workflowKey;
+        uint256 packageId;
+        bytes32 targetWorkflowKey;
+        uint256 targetPackageId;
+        bytes32 objectId;
+        uint256 recognisedStateId;
+        uint256 evidenceReceiptId;
+        bytes32 boundaryHash;
+        Role authorityRole;
+        bytes32 authorityId;
+        string uri;
+        uint256 createdAt;
         address recordedBy;
     }
 

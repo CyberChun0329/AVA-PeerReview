@@ -8,6 +8,8 @@ import {EvidenceCommitmentRegistry} from "./EvidenceCommitmentRegistry.sol";
 import {IDisclosurePolicyModule} from "./interfaces/IDisclosurePolicyModule.sol";
 import {IChallengeLifecycleModule} from "./interfaces/IChallengeLifecycleModule.sol";
 import {IResidualEditorialAuthorityModule} from "./interfaces/IResidualEditorialAuthorityModule.sol";
+import {IChallengeWindowRuleModule} from "./interfaces/IChallengeWindowRuleModule.sol";
+import {IChallengeRateLimitModule} from "./interfaces/IChallengeRateLimitModule.sol";
 
 contract AVAStateMachine {
     struct ModuleValidationContext {
@@ -45,12 +47,15 @@ contract AVAStateMachine {
     mapping(uint256 => AVADataTypes.ChallengeTransitionRecord) private challengeTransitions;
     mapping(uint256 => AVADataTypes.RecognisedStateTransitionRecord) private recognisedStateTransitions;
     mapping(uint256 => uint256) private openChallengeCountsByRecognisedState;
+    mapping(uint256 => uint64) private challengeWindowOpenedAtByRecognisedState;
+    mapping(bytes32 => uint256) private challengeFilingCountsBySubjectTarget;
 
     event ManuscriptRegistered(uint256 indexed id, bytes32 indexed offchainRef, string uri, address registeredBy);
     event RecognisedStateRegistered(
         uint256 indexed id,
         AVADataTypes.AVAStage indexed stage,
         bytes32 indexed objectId,
+        bytes32 subjectId,
         uint256 evidenceReceiptId,
         uint256 disclosurePolicyId,
         bytes32 authorityId,
@@ -175,20 +180,6 @@ contract AVAStateMachine {
 
     function registerRecognisedState(
         AVADataTypes.Role actingRole,
-        AVADataTypes.AVAStage stage,
-        bytes32 objectId,
-        uint256 evidenceReceiptId,
-        uint256 disclosurePolicyId,
-        bytes32 authorityId,
-        AVADataTypes.RecognisedStateStatus status
-    ) external returns (uint256 id) {
-        return registerRecognisedState(
-            actingRole, defaultWorkflowKey, stage, objectId, authorityId, evidenceReceiptId, disclosurePolicyId, authorityId, status
-        );
-    }
-
-    function registerRecognisedState(
-        AVADataTypes.Role actingRole,
         bytes32 workflowKey,
         AVADataTypes.AVAStage stage,
         bytes32 objectId,
@@ -226,6 +217,7 @@ contract AVAStateMachine {
             validation.packageId,
             stage,
             validation.attributedObjectId,
+            subjectId,
             evidenceReceiptId,
             disclosurePolicyId,
             authorityId,
@@ -404,6 +396,7 @@ contract AVAStateMachine {
         );
         recognisedStates[recognisedStateId].status = AVADataTypes.RecognisedStateStatus.Challengeable;
         reviewContribution.status = AVADataTypes.ReviewContributionStatus.ChallengeWindowOpen;
+        challengeWindowOpenedAtByRecognisedState[recognisedStateId] = uint64(block.timestamp);
 
         emit ReviewChallengeWindowOpened(reviewContributionId, recognisedStateId);
     }
@@ -438,6 +431,12 @@ contract AVAStateMachine {
             fromStatus,
             AVADataTypes.RecognisedStateStatus.Vested,
             AVADataTypes.ChallengeOutcome.None
+        );
+        _validateChallengeWindowDurationIfConfigured(
+            reviewContribution.workflowKey,
+            reviewContribution.packageId,
+            reviewContribution.recognisedStateId,
+            challengeWindowOpenedAtByRecognisedState[reviewContribution.recognisedStateId]
         );
         _validateDisclosureForAction(
             reviewContribution.workflowKey,
@@ -525,6 +524,15 @@ contract AVAStateMachine {
                 filedBy: msg.sender
             })
         );
+        bytes32 filingKey =
+            keccak256(abi.encode(validation.packageId, challengedRecognisedStateId, challengerSubjectId));
+        _validateChallengeFilingIfConfigured(
+            validation.packageId,
+            workflowKey,
+            challengedRecognisedStateId,
+            challengerSubjectId,
+            challengeFilingCountsBySubjectTarget[filingKey]
+        );
 
         id = nextChallengeId++;
         challenges[id] = AVADataTypes.ChallengeRecord({
@@ -541,6 +549,7 @@ contract AVAStateMachine {
             filedBy: msg.sender
         });
         openChallengeCountsByRecognisedState[challengedRecognisedStateId] += 1;
+        challengeFilingCountsBySubjectTarget[filingKey] += 1;
 
         emit ChallengeFiled(
             id, challengedRecognisedStateId, challengerSubjectId, evidenceReceiptId, disclosurePolicyId, msg.sender
@@ -632,6 +641,11 @@ contract AVAStateMachine {
         if (msg.sender == challenge.filedBy) {
             revert AVADataTypes.NotAuthorised(msg.sender, AVADataTypes.Action.ResolveChallenge);
         }
+        AVADataTypes.RecognisedStateRecord storage challengedState =
+            recognisedStates[challenge.challengedRecognisedStateId];
+        if (authorityId == challenge.challengerSubjectId || authorityId == challengedState.subjectId) {
+            revert AVADataTypes.NotAuthorised(msg.sender, AVADataTypes.Action.ResolveChallenge);
+        }
         if (
             outcome != AVADataTypes.ChallengeOutcome.Upheld
                 && outcome != AVADataTypes.ChallengeOutcome.RejectedGoodFaith
@@ -705,7 +719,7 @@ contract AVAStateMachine {
                 workflowKey: challenge.workflowKey,
                 action: AVADataTypes.Action.ApplyRestoration,
                 fromLifecycleStatus: challenge.status,
-                toLifecycleStatus: AVADataTypes.ChallengeLifecycleStatus.RestorationAvailable,
+                toLifecycleStatus: AVADataTypes.ChallengeLifecycleStatus.RestorationApplied,
                 outcome: challenge.outcome,
                 challengedStateStatus: challengedState.status,
                 proposedStateStatus: AVADataTypes.RecognisedStateStatus.Restored,
@@ -746,7 +760,7 @@ contract AVAStateMachine {
             reasonURI
         );
         challengedState.status = AVADataTypes.RecognisedStateStatus.Restored;
-        challenge.status = AVADataTypes.ChallengeLifecycleStatus.RestorationAvailable;
+        challenge.status = AVADataTypes.ChallengeLifecycleStatus.RestorationApplied;
         challenge.lastTransitionId = transitionId;
 
         emit RestorationApplied(challengeId, challenge.challengedRecognisedStateId, transitionId);
@@ -763,7 +777,7 @@ contract AVAStateMachine {
         if (challenge.id == 0) revert AVADataTypes.UnknownReference(challengeId);
         if (
             challenge.status != AVADataTypes.ChallengeLifecycleStatus.Resolved
-                && challenge.status != AVADataTypes.ChallengeLifecycleStatus.RestorationAvailable
+                && challenge.status != AVADataTypes.ChallengeLifecycleStatus.RestorationApplied
         ) {
             revert AVADataTypes.InvalidState(challengeId);
         }
@@ -876,6 +890,11 @@ contract AVAStateMachine {
         return openChallengeCountsByRecognisedState[recognisedStateId];
     }
 
+    function getChallengeWindowOpenedAt(uint256 recognisedStateId) external view returns (uint64) {
+        if (recognisedStates[recognisedStateId].id == 0) revert AVADataTypes.UnknownReference(recognisedStateId);
+        return challengeWindowOpenedAtByRecognisedState[recognisedStateId];
+    }
+
     function transitionRecognisedState(
         AVADataTypes.Role actingRole,
         uint256 recognisedStateId,
@@ -922,6 +941,7 @@ contract AVAStateMachine {
         transition.authorityRole = actingRole;
         transition.authorityId = authorityId;
         transition.reasonURI = reasonURI;
+        transition.createdAt = block.timestamp;
         transition.createdBy = msg.sender;
         emit RecognisedStateTransitionRecorded(
             transitionId, recognisedStateId, fromStatus, toStatus, AVADataTypes.Action.TransitionRecognisedState
@@ -954,6 +974,7 @@ contract AVAStateMachine {
         transition.authorityRole = authorityRole;
         transition.authorityId = authorityId;
         transition.reasonURI = reasonURI;
+        transition.createdAt = block.timestamp;
         transition.createdBy = msg.sender;
 
         emit ChallengeTransitionRecorded(
@@ -1131,16 +1152,13 @@ contract AVAStateMachine {
             validation.packageId,
             stage,
             validation.attributedObjectId,
+            subjectId,
             evidenceReceiptId,
             disclosurePolicyId,
             authorityId,
             status,
             AVADataTypes.Action.ProvisionallyRecogniseReview
         );
-    }
-
-    function _requireDisclosurePolicyIfSpecified(uint256 disclosurePolicyId) internal view {
-        disclosurePolicyModule.validateDisclosurePolicy(disclosurePolicyId);
     }
 
     function _validateRecognisedStateModules(ModuleValidationContext memory context)
@@ -1256,6 +1274,56 @@ contract AVAStateMachine {
         rulePackage.transitionRuleModule.validateTransition(workflowKey, action, fromStatus, toStatus, outcome);
     }
 
+    function _validateChallengeWindowDurationIfConfigured(
+        bytes32 workflowKey,
+        uint256 packageId,
+        uint256 recognisedStateId,
+        uint64 openedAt
+    ) internal view {
+        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
+        if (rulePackage.workflowKey != workflowKey) revert AVADataTypes.InvalidState(packageId);
+        (bool success, bytes memory result) = address(rulePackage.transitionRuleModule).staticcall(
+            abi.encodeWithSelector(
+                IChallengeWindowRuleModule.validateChallengeWindowDuration.selector,
+                workflowKey,
+                recognisedStateId,
+                openedAt,
+                uint64(block.timestamp),
+                msg.sender
+            )
+        );
+        _handleOptionalModuleResult(success, result);
+    }
+
+    function _validateChallengeFilingIfConfigured(
+        uint256 packageId,
+        bytes32 workflowKey,
+        uint256 challengedRecognisedStateId,
+        bytes32 challengerSubjectId,
+        uint256 priorFilingCount
+    ) internal view {
+        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
+        if (rulePackage.workflowKey != workflowKey) revert AVADataTypes.InvalidState(packageId);
+        (bool success, bytes memory result) = address(rulePackage.antiAbuseModule).staticcall(
+            abi.encodeWithSelector(
+                IChallengeRateLimitModule.validateChallengeFiling.selector,
+                workflowKey,
+                challengedRecognisedStateId,
+                challengerSubjectId,
+                priorFilingCount,
+                msg.sender
+            )
+        );
+        _handleOptionalModuleResult(success, result);
+    }
+
+    function _handleOptionalModuleResult(bool success, bytes memory result) internal pure {
+        if (success || result.length == 0) return;
+        assembly {
+            revert(add(result, 32), mload(result))
+        }
+    }
+
     function _validateChallengeLifecycle(
         uint256 packageId,
         IChallengeLifecycleModule.ChallengeLifecycleContext memory context
@@ -1322,6 +1390,7 @@ contract AVAStateMachine {
         uint256 packageId,
         AVADataTypes.AVAStage stage,
         bytes32 attributedObjectId,
+        bytes32 subjectId,
         uint256 evidenceReceiptId,
         uint256 disclosurePolicyId,
         bytes32 authorityId,
@@ -1335,6 +1404,7 @@ contract AVAStateMachine {
             packageId: packageId,
             stage: stage,
             objectId: attributedObjectId,
+            subjectId: subjectId,
             evidenceReceiptId: evidenceReceiptId,
             disclosurePolicyId: disclosurePolicyId,
             authorityId: authorityId,
@@ -1343,7 +1413,7 @@ contract AVAStateMachine {
         });
 
         emit RecognisedStateRegistered(
-            id, stage, attributedObjectId, evidenceReceiptId, disclosurePolicyId, authorityId, status, msg.sender
+            id, stage, attributedObjectId, subjectId, evidenceReceiptId, disclosurePolicyId, authorityId, status, msg.sender
         );
         uint256 transitionId = nextRecognisedStateTransitionId++;
         AVADataTypes.RecognisedStateTransitionRecord storage transition = recognisedStateTransitions[transitionId];
@@ -1356,6 +1426,7 @@ contract AVAStateMachine {
         transition.evidenceReceiptId = evidenceReceiptId;
         transition.authorityRole = actingRole;
         transition.authorityId = authorityId;
+        transition.createdAt = block.timestamp;
         transition.createdBy = msg.sender;
         emit RecognisedStateTransitionRecorded(transitionId, id, AVADataTypes.RecognisedStateStatus.None, status, action);
     }
@@ -1385,6 +1456,7 @@ contract AVAStateMachine {
             authorityRole: authorityRole,
             authorityId: authorityId,
             reasonURI: reasonURI,
+            createdAt: block.timestamp,
             createdBy: msg.sender
         });
         emit RecognisedStateTransitionRecorded(id, recognisedStateId, fromStatus, toStatus, action);
