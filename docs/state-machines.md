@@ -164,19 +164,19 @@ Current outcome effects:
 
 ```mermaid
 sequenceDiagram
-    participant Actor
-    participant StateMachine as AVAStateMachine
-    participant Record as ChallengeTransitionRecord
-    participant StateRecord as RecognisedStateTransitionRecord
-    participant State as RecognisedStateRecord
+    participant A as Actor
+    participant SM as AVAStateMachine
+    participant CTR as ChallengeTransitionRecord
+    participant RSTR as RecognisedStateTransitionRecord
+    participant RS as RecognisedStateRecord
 
-    Actor->>StateMachine: resolveChallenge(...)
-    StateMachine->>Record: create OutcomeResolved transition
+    A->>SM: resolveChallenge(...)
+    SM->>CTR: create OutcomeResolved transition
     alt outcome is Upheld
-        StateMachine->>StateRecord: create recognised-state transition
-        StateMachine->>State: update status through transition
+        SM->>RSTR: create recognised-state transition
+        SM->>RS: update status through transition
     else non-mutating outcome
-        StateMachine-->>State: no status change
+        SM-->>RS: no status change
     end
 ```
 

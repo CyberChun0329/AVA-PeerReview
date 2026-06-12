@@ -40,12 +40,12 @@ sequenceDiagram
     participant Admin
     participant Reviewer
     participant Evidence as EvidenceCommitmentRegistry
-    participant State as AVAStateMachine
+    participant SM as AVAStateMachine
 
-    Admin->>State: configure Reviewer permissions
+    Admin->>SM: configure Reviewer permissions
     Reviewer->>Evidence: registerEvidenceReceipt(commitment, uri)
-    Reviewer->>State: registerReviewContribution(manuscriptId, subjectId, evidenceId)
-    State-->>Reviewer: ReviewContributionRecord(status=Submitted)
+    Reviewer->>SM: registerReviewContribution(manuscriptId, subjectId, evidenceId)
+    SM-->>Reviewer: ReviewContributionRecord(status=Submitted)
 ```
 
 Expected checks:
@@ -96,16 +96,16 @@ sequenceDiagram
     participant Challenger
     participant Editor
     participant Panel
-    participant State as AVAStateMachine
+    participant SM as AVAStateMachine
 
-    Challenger->>State: fileChallenge(challengeableRecognisedStateId)
-    State-->>Challenger: ChallengeRecord(status=ConcernFiled)
-    Editor->>State: screenChallenge(challengeId)
-    State-->>Editor: transition AdmissibilityScreened
-    Panel->>State: resolveChallenge(challengeId, outcome, toStatus)
-    State-->>Panel: transition OutcomeResolved
-    Panel->>State: applyRestoration(challengeId)
-    State-->>Panel: transition RestorationRecorded
+    Challenger->>SM: fileChallenge(challengeableRecognisedStateId)
+    SM-->>Challenger: ChallengeRecord(status=ConcernFiled)
+    Editor->>SM: screenChallenge(challengeId)
+    SM-->>Editor: transition AdmissibilityScreened
+    Panel->>SM: resolveChallenge(challengeId, outcome, toStatus)
+    SM-->>Panel: transition OutcomeResolved
+    Panel->>SM: applyRestoration(challengeId)
+    SM-->>Panel: transition RestorationRecorded
 ```
 
 Expected checks:
@@ -141,9 +141,9 @@ state history.
 sequenceDiagram
     participant Panel
     participant Standing as StandingRegistry
-    participant State as AVAStateMachine
+    participant SM as AVAStateMachine
 
-    Panel->>State: use allowed recognisedStateId
+    Panel->>SM: use allowed recognisedStateId
     Panel->>Standing: recordStandingUpdate(...)
     Standing-->>Panel: StandingUpdateRecord
 ```
@@ -175,9 +175,9 @@ record, not sanction or reward execution.
 sequenceDiagram
     participant Panel
     participant Consequence as ConsequenceExecutor
-    participant State as AVAStateMachine
+    participant SM as AVAStateMachine
 
-    Panel->>State: use allowed recognisedStateId
+    Panel->>SM: use allowed recognisedStateId
     Panel->>Consequence: registerConsequence(...)
     Consequence-->>Panel: ConsequenceRecord
 ```
@@ -207,9 +207,9 @@ Purpose: show AVA Allocation as a bounded authorised record.
 sequenceDiagram
     participant Executor as ProtocolExecutor
     participant Allocation as AllocationExecutor
-    participant State as AVAStateMachine
+    participant SM as AVAStateMachine
 
-    Executor->>State: use allowed recognisedStateId
+    Executor->>SM: use allowed recognisedStateId
     Executor->>Allocation: executeAllocation(...)
     Allocation-->>Executor: AllocationExecutionRecord
 ```
