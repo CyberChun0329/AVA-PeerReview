@@ -30,6 +30,26 @@ stateDiagram-v2
     ChallengeWindowOpen --> Vested: vestReviewRecognition
 ```
 
+```mermaid
+sequenceDiagram
+    participant RV as Reviewer
+    participant ED as Editor
+    participant ER as EvidenceCommitmentRegistry
+    participant SM as AVAStateMachine
+    participant RSTR as RecognisedStateTransitionRecord
+    participant RS as RecognisedStateRecord
+
+    RV->>ER: registerEvidenceReceipt(...)
+    RV->>SM: registerReviewContribution(...)
+    SM-->>RV: ReviewContributionRecord(status=Submitted)
+    ED->>SM: provisionallyRecogniseReview(...)
+    SM->>RSTR: record initial recognised-state transition
+    SM->>RS: store Provisional recognised state
+    ED->>SM: openReviewChallengeWindow(...)
+    SM->>RSTR: record Challengeable transition
+    SM->>RS: update status through transition
+```
+
 Rules currently enforced:
 
 - `registerReviewContribution` requires `RegisterReviewContribution`, an
@@ -95,6 +115,36 @@ stateDiagram-v2
     Resolved --> RestorationApplied: applyRestoration
     Resolved --> Closed: closeChallenge
     RestorationApplied --> Closed: closeChallenge
+```
+
+```mermaid
+sequenceDiagram
+    participant CH as Challenger
+    participant ED as Editor
+    participant PN as Panel
+    participant SM as AVAStateMachine
+    participant CTR as ChallengeTransitionRecord
+    participant RSTR as RecognisedStateTransitionRecord
+    participant RS as RecognisedStateRecord
+
+    CH->>SM: fileChallenge(...)
+    SM-->>CH: ChallengeRecord(status=ConcernFiled)
+    ED->>SM: screenChallenge(...)
+    SM->>CTR: record AdmissibilityScreened transition
+    PN->>SM: resolveChallenge(...)
+    SM->>CTR: record OutcomeResolved transition
+    alt outcome mutates recognised state
+        SM->>RSTR: record recognised-state status transition
+        SM->>RS: update status through transition
+    else outcome is record-only
+        SM-->>RS: leave recognised-state status unchanged
+    end
+    opt restoration required and authorised
+        PN->>SM: applyRestoration(...)
+        SM->>CTR: record RestorationRecorded transition
+        SM->>RSTR: record restoration status transition
+        SM->>RS: restore only through authorised transition
+    end
 ```
 
 Rules currently enforced:
@@ -200,6 +250,23 @@ Attribution, Verification, TransitionRule, Disclosure, Allocation, Standing,
 Reward, Priority, Consequence, Penalty, Restoration, ChallengeLifecycle,
 EvidencePolicy, Audit, EditorialSystem, ResidualEditorialAuthority,
 DisclosureLifecycle, FieldPolicy, and AntiAbuse.
+
+```mermaid
+sequenceDiagram
+    participant GOV as Governance
+    participant RPR as AVARulePackageRegistry
+    participant SM as AVAStateMachine
+    participant MOD as PackageModules
+    participant RS as RecognisedStateRecord
+
+    GOV->>RPR: registerRulePackage(workflowKey, modules, uri)
+    RPR-->>GOV: packageId and modulesHash
+    SM->>RPR: resolve active package for workflowKey
+    SM->>MOD: run selected validation hooks
+    SM->>RS: store stable packageId with record
+    Note over RPR,RS: later workflowKey updates do not rewrite old records
+```
+
 The challenge lifecycle binding uses `IChallengeLifecycleModule`; the default
 implementation is `DefaultChallengeLifecycleModule`. The registry does not
 create another state machine. Registered modules and adapters validate or
@@ -316,6 +383,23 @@ flowchart TB
     AllocationRecord --> Boundary
 
     LegacyStandingInput["registerStandingInput"] -. disabled .-> Boundary
+```
+
+```mermaid
+sequenceDiagram
+    participant AU as AuthorisedRole
+    participant DS as DownstreamContract
+    participant SM as AVAStateMachine
+    participant ER as EvidenceCommitmentRegistry
+    participant AD as PackageAdapter
+    participant DR as DownstreamRecord
+
+    AU->>DS: record standing, allocation, or consequence
+    DS->>SM: read recognised state and packageId
+    DS->>ER: require usable evidence receipt
+    DS->>AD: validate package-specific boundary
+    DS->>DR: store bounded record only
+    DS-->>AU: return record id
 ```
 
 Allowed recognised-state statuses for consequences, standing updates,
