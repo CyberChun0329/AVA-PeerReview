@@ -19,6 +19,7 @@ contract ConsequenceExecutor {
     mapping(uint256 => AVADataTypes.ConsequenceRecord) private consequences;
     mapping(uint256 => AVADataTypes.StandingPenaltyInputRecord) private standingPenaltyInputs;
     mapping(uint256 => AVADataTypes.EligibilityRestrictionRecord) private eligibilityRestrictions;
+    mapping(bytes32 => uint256) private activeEligibilityRestrictionIdBySubjectKind;
 
     event ConsequenceRegistered(
         uint256 indexed id,
@@ -189,7 +190,8 @@ contract ConsequenceExecutor {
             revert AVADataTypes.EmptyValue();
         }
         AVADataTypes.ConsequenceRecord memory penalty = _requirePenaltyConsequence(penaltyConsequenceId);
-        AVADataTypes.ChallengeOutcome outcome = _requireCompatibleEligibilityOutcome(challengeId, penalty);
+        AVADataTypes.ChallengeOutcome outcome =
+            _requireCompatibleEligibilityOutcome(challengeId, penalty, restrictionKind);
         _requireEvidenceForPenalty(evidenceReceiptId, penalty);
 
         id = nextEligibilityRestrictionId++;
@@ -207,6 +209,7 @@ contract ConsequenceExecutor {
             uri: uri,
             recordedBy: msg.sender
         });
+        _indexActiveEligibilityRestriction(penalty.packageId, penalty.subjectId, restrictionKind, id, expiresAt);
         emit EligibilityRestrictionRecorded(id, penaltyConsequenceId, restrictionKind, penalty.subjectId);
     }
 
@@ -218,6 +221,22 @@ contract ConsequenceExecutor {
         AVADataTypes.StandingPenaltyInputRecord memory record = standingPenaltyInputs[id];
         if (record.id == 0) revert AVADataTypes.UnknownReference(id);
         return record;
+    }
+
+    function activeEligibilityRestrictionId(
+        uint256 packageId,
+        bytes32 subjectId,
+        AVADataTypes.EligibilityRestrictionKind restrictionKind
+    ) external view returns (uint256) {
+        return _activeEligibilityRestrictionId(packageId, subjectId, restrictionKind);
+    }
+
+    function hasActiveEligibilityRestriction(
+        uint256 packageId,
+        bytes32 subjectId,
+        AVADataTypes.EligibilityRestrictionKind restrictionKind
+    ) external view returns (bool) {
+        return _activeEligibilityRestrictionId(packageId, subjectId, restrictionKind) != 0;
     }
 
     function getEligibilityRestriction(uint256 id)
@@ -523,11 +542,23 @@ contract ConsequenceExecutor {
 
     function _requireCompatibleEligibilityOutcome(
         uint256 challengeId,
-        AVADataTypes.ConsequenceRecord memory penalty
+        AVADataTypes.ConsequenceRecord memory penalty,
+        AVADataTypes.EligibilityRestrictionKind restrictionKind
     ) internal view returns (AVADataTypes.ChallengeOutcome outcome) {
-        outcome = _challengeOutcome(challengeId, penalty);
+        if (challengeId == 0) revert AVADataTypes.InvalidState(challengeId);
+        AVADataTypes.ChallengeRecord memory challenge = _requirePenaltyChallenge(challengeId, penalty);
+        outcome = challenge.outcome;
         if (outcome == AVADataTypes.ChallengeOutcome.RejectedGoodFaith) {
             revert AVADataTypes.InvalidState(challengeId);
+        }
+        if (restrictionKind == AVADataTypes.EligibilityRestrictionKind.ChallengeIntake) {
+            if (
+                outcome != AVADataTypes.ChallengeOutcome.Negligent
+                    && outcome != AVADataTypes.ChallengeOutcome.MaliciousOrFabricated
+            ) {
+                revert AVADataTypes.InvalidState(challengeId);
+            }
+            if (challenge.challengerSubjectId != penalty.subjectId) revert AVADataTypes.InvalidState(challengeId);
         }
     }
 
@@ -570,5 +601,41 @@ contract ConsequenceExecutor {
         AVADataTypes.EvidenceReceipt memory evidence =
             evidenceRegistry.requireUsableEvidenceReceipt(evidenceReceiptId, recognisedState.workflowKey);
         if (evidence.packageId != recognisedState.packageId) revert AVADataTypes.InvalidState(evidenceReceiptId);
+    }
+
+    function _indexActiveEligibilityRestriction(
+        uint256 packageId,
+        bytes32 subjectId,
+        AVADataTypes.EligibilityRestrictionKind restrictionKind,
+        uint256 restrictionId,
+        uint256 expiresAt
+    ) internal {
+        bytes32 key = keccak256(abi.encode(packageId, subjectId, restrictionKind));
+        uint256 currentId = activeEligibilityRestrictionIdBySubjectKind[key];
+        if (currentId == 0) {
+            activeEligibilityRestrictionIdBySubjectKind[key] = restrictionId;
+            return;
+        }
+        AVADataTypes.EligibilityRestrictionRecord memory current = eligibilityRestrictions[currentId];
+        if (current.id == 0 || current.expiresAt <= block.timestamp || expiresAt >= current.expiresAt) {
+            activeEligibilityRestrictionIdBySubjectKind[key] = restrictionId;
+        }
+    }
+
+    function _activeEligibilityRestrictionId(
+        uint256 packageId,
+        bytes32 subjectId,
+        AVADataTypes.EligibilityRestrictionKind restrictionKind
+    ) internal view returns (uint256) {
+        if (packageId == 0 || subjectId == bytes32(0) || restrictionKind == AVADataTypes.EligibilityRestrictionKind.None) {
+            return 0;
+        }
+        uint256 id = activeEligibilityRestrictionIdBySubjectKind[
+            keccak256(abi.encode(packageId, subjectId, restrictionKind))
+        ];
+        if (id == 0) return 0;
+        AVADataTypes.EligibilityRestrictionRecord memory record = eligibilityRestrictions[id];
+        if (record.id == 0 || record.expiresAt <= block.timestamp) return 0;
+        return id;
     }
 }

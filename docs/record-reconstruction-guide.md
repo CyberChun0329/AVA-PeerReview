@@ -54,6 +54,28 @@ supports the variable.
 | Bounded consequence or payoff proxy | Standing update input, standing computation record, credential proof surface, allocation record, consequence record, recovery record, administrative-priority artifact, settlement receipt, or eligibility record. |
 | Translation loss or off-chain condition | URI, reason reference, evidence pointer, dependency URI, source-set commitment, formula hash, or policy hash. |
 
+For state/action enumeration, the generated
+`generated/recognised-state-transition-matrix.csv` artifact provides the
+current recognised-state transition admissibility matrix. The checked-in CSV is
+hash-pinned, and test coverage compares each row with row-level kernel
+execution. It should be treated as a paper/model handoff aid, not as a
+separate source of governance authority.
+
+For scenario-level handoff, `script/AVACanonicalTrace.s.sol` executes four
+canonical traces and returns the current deterministic output. The checked-in
+`generated/canonical-scenario-traces.json` file is maintained as the repository
+artifact; the script does not rewrite it automatically. The traces use
+implemented record names such as `review_registered`, `challenge_upheld`,
+`standing_penalty_input_recorded`,
+`eligibility_restricted`, and `restoration_applied`. They do not assign
+probabilities, estimate payoffs, decide truth, execute sanctions, or describe
+publication outcomes.
+
+For translation-loss boundaries, read `translation-loss-audit.md` before
+treating a contract record as a paper or model variable. That document marks
+which concepts are encoded directly, approximated by commitments or receipts,
+reserved for human judgement, parameterised by modules, or excluded by design.
+
 The contracts do not calculate payoffs, probabilities, truth, quality, or
 manuscript merit. If a future model uses a variable that cannot be traced to an
 implemented record or to an explicitly marked off-chain abstraction, that

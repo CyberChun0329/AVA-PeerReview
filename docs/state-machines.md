@@ -76,6 +76,15 @@ downstream-eligible statuses must be reached through authorised transition
 paths that pass transition-rule validation and write generic recognised-state
 transition records.
 
+The paper-support matrix in
+`generated/recognised-state-transition-matrix.csv` is hash-pinned by
+`script/AVATransitionMatrix.s.sol`, and its rows are checked against
+row-level kernel executions in the test suite. It records the current substrate
+admissibility surface for direct recognised-state creation, review vesting,
+generic transition, challenge resolution, and restoration. The matrix is a
+deterministic documentation artifact for figures or model extraction; it is
+not a replacement for the Solidity transition checks.
+
 ## Challenge Lifecycle
 
 ```mermaid
@@ -238,9 +247,9 @@ Current module coverage:
 | Evidence policy | `IEvidencePolicyModule` | `DefaultEvidencePolicyModule` | `TypedEvidencePolicyModule` | Rule package | Active on workflow-scoped evidence registration and recognised-state validation; reference/type/workflow validation only |
 | Audit adapter | `IAuditAdapter` | `DefaultAuditAdapter` | `HashAnchoredAuditAdapter` | Evidence receipt or target `packageId` | Active on workflow-aware and target-bound attestation paths; attestation reference and authority-subject validation only |
 | Editorial adapter | `IEditorialSystemAdapter` | `DefaultEditorialSystemAdapter` | `EditorialReferenceAdapter` | Rule package | Workflow-aware manuscript overload requires a known package; adapter is active only when optional external reference metadata is supplied |
-| Residual editorial authority | `IResidualEditorialAuthorityModule` plus `AuthorityApprovalRegistry` for receipt-backed examples | `DefaultResidualEditorialAuthorityModule` | `ProceduralEditorialAuthorityModule`, `StructuredResidualEditorialAuthorityModule`, `ApprovalReceiptAuthorityModule` | Rule package | Procedural authority validation only; supports single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, emergency-pause, and approval-receipt validator formats without publication decision or merit logic |
+| Residual editorial authority | `IResidualEditorialAuthorityModule` plus `AuthorityApprovalRegistry` for receipt-backed examples | `DefaultResidualEditorialAuthorityModule` | `ProceduralEditorialAuthorityModule`, `StructuredResidualEditorialAuthorityModule`, `ApprovalReceiptAuthorityModule`, `CredentialGatedPanelModule` | Rule package | Procedural authority validation only; supports single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, emergency-pause, approval-receipt, and standing-credential-gated validator formats without publication decision or merit logic |
 | Field policy | `IFieldPolicyModule` | `DefaultFieldPolicyModule` | `DisciplineFieldPolicyModule` | Rule package | Active on recognised-state validation; discipline rule validation only |
-| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | `DefaultAntiAbuseModule` | `SubjectRateLimitModule` | Rule package | Active on review, challenge, and downstream record paths; default package is a permissive baseline; example module can veto selected subject/object/action paths and repeated challenge filings after declaring support; its challenge-filing example is one filing per package / recognised state / challenger subject; no sanction execution |
+| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | `DefaultAntiAbuseModule` | `SubjectRateLimitModule`, `RestrictionAwareChallengeIntakeModule` | Rule package | Active on review, challenge, and downstream record paths; default package is a permissive baseline; example modules can veto selected subject/object/action paths, repeated challenge filings, or active challenge-intake eligibility restrictions; no sanction execution |
 | Standing | `IStandingAdapter` | `DefaultStandingAdapter` | `VectorStandingAdapter` | Recognised-state `packageId` | Procedural weight record only |
 | Reward/value | `IRewardAdapter` | `DefaultRewardAdapter` | `StablecoinRecordRewardAdapter`, `GenericTokenRecordRewardAdapter` | Recognised-state `packageId` | Record only, no transfer |
 | Priority | `IPriorityAdapter` | `DefaultPriorityAdapter` | `PriorityTokenRecordAdapter`, `RentedPriorityRecordAdapter` | Recognised-state `packageId` | Administrative queue record only |
@@ -434,6 +443,12 @@ Rules currently enforced:
   Relevant settlements include reward execution, voiding, downgrade,
   restoration, penalty input, repayment obligation, setoff, waiver,
   satisfaction, credential suspension, and eligibility restoration.
+- governance-memory records can be read by validator-only modules in selected
+  packages: active challenge-intake eligibility restrictions can veto later
+  challenge filing by the same subject until expiry, and active
+  standing-credential proof can gate a configured panel action. These
+  validators do not write state, update standing, execute sanctions, allocate
+  value, or affect publication outcomes.
 - anonymous challenge proof-use receipts store the referenced proof receipt's
   proof context hash, verifier, and proof-domain hash while preserving
   no-reveal semantics.
@@ -445,7 +460,7 @@ Rules currently enforced:
   token paths remain bounded administrative queue/service-right artifacts only.
 - none of these paths exposes publication priority, manuscript merit,
   acceptance, or rejection functions.
-- current verification is 242 tests passing.
+- current verification is 263 tests passing.
 - The current state-machine surface includes authorised standing computation,
   credential use-surface hardening, disclosure proof-use, and lifecycle-record
   closure hardening.

@@ -68,11 +68,15 @@ disclosure state, and bounded consequence have been specified.
 8. `record-reconstruction-guide.md`
    - External reader map for reconstructing package-bound governance records
      from events, getters, ids, sources, and context hashes.
-9. `demo-scenarios.md`
+9. `translation-loss-audit.md`
+   - Paper/model handoff document explaining what the Solidity demo encodes
+     precisely, approximates through bounded records, reserves for human
+     judgement, parameterises through modules, or excludes by design.
+10. `demo-scenarios.md`
    - Demo scenario descriptions and script-level expectations.
-10. `state-machines.md`
+11. `state-machines.md`
     - Implemented state-machine and lifecycle paths.
-11. `TERMINOLOGY.md`
+12. `TERMINOLOGY.md`
     - Public glossary for AVA stages, recognised state, standing, credentials,
       priority artifacts, disclosure proof-use, and bounded consequences.
 

@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this AVA Peer Review Solidity demo, please cite it as a software artifact."
+type: software
+title: "AVA Peer Review Solidity Demo"
+version: "0.13.1"
+date-released: "2026-06-12"
+authors:
+  - alias: "CyberChun0329"
+repository-code: "https://github.com/CyberChun0329/AVA-PeerReview"
+license: MIT
+keywords:
+  - "AVA protocol"
+  - "peer review"
+  - "Solidity"
+  - "recognised-state governance"
+  - "Base-compatible EVM"

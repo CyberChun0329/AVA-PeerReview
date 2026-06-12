@@ -633,6 +633,12 @@ credentialProvesSubjectStanding(
     bytes32 categoryHash,
     int256 requiredThreshold
 )
+activeStandingCredentialId(
+    uint256 packageId,
+    bytes32 subjectId,
+    bytes32 vectorKey,
+    bytes32 categoryHash
+)
 getStandingCredential(uint256 id)
 getStandingCredentialSettlement(uint256 id)
 ```
@@ -653,7 +659,14 @@ requested subject, vector, category, and threshold.
 the role-scoped subject identifier or subject commitment; it does not require
 the holder account or public identity in the proof call. Both proof helpers
 fail closed for wrong package, subject, vector, category, threshold, or range
-requests.
+requests. `activeStandingCredentialId` is a bounded lookup for validator
+modules that need the current active credential for a package/subject/vector
+and category. The active index is latest-issued-wins for that key: older
+credential ids remain inspectable through explicit id lookup, but validator
+gates that use the active index follow the most recent indexed credential and
+fail closed when it is unusable. It returns zero if no matching credential
+exists or if the indexed credential is expired, revoked, superseded, suspended,
+or backed by an inactive computation.
 `supersedeCredential` requires the replacement credential to stay within the
 same stable `packageId`, subject, dimension/vector, category, and computation
 rule, and to use a strictly higher epoch.
@@ -812,6 +825,16 @@ recordEligibilityRestriction(
 )
 getStandingPenaltyInput(uint256 id)
 getEligibilityRestriction(uint256 id)
+activeEligibilityRestrictionId(
+    uint256 packageId,
+    bytes32 subjectId,
+    EligibilityRestrictionKind restrictionKind
+)
+hasActiveEligibilityRestriction(
+    uint256 packageId,
+    bytes32 subjectId,
+    EligibilityRestrictionKind restrictionKind
+)
 ```
 
 Success semantics: append a record tied to an existing
@@ -823,7 +846,13 @@ challenge id with a compatible outcome. `AcademicFraud` and
 recognised state. `NegligentChallenge` and `MaliciousOrFabricatedChallenge`
 require the corresponding challenge-abuse outcome and challenger subject.
 `RejectedGoodFaith` challenges cannot become misconduct standing-penalty or
-eligibility-restriction records.
+eligibility-restriction records. Challenge-intake eligibility restrictions
+must be linked to a negligent or malicious/fabricated challenge outcome for the
+restricted challenger subject. The active lookup helpers are package-bound and
+return zero after expiry or when no matching active restriction exists. The
+current demo has no early-lift function; a restriction remains active until
+`expiresAt` unless a later version adds an explicit restriction-supersession or
+restriction-lift record.
 
 Must not do: update standing directly, transfer value, execute sanction, erase
 reward history, create public reputation score, create token balance, or affect

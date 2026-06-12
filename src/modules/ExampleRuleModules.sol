@@ -14,6 +14,9 @@ import {IFieldPolicyModule} from "../interfaces/IFieldPolicyModule.sol";
 import {IAntiAbuseModule} from "../interfaces/IAntiAbuseModule.sol";
 import {IChallengeWindowRuleModule} from "../interfaces/IChallengeWindowRuleModule.sol";
 import {IChallengeRateLimitModule} from "../interfaces/IChallengeRateLimitModule.sol";
+import {AVAStateMachine} from "../AVAStateMachine.sol";
+import {ConsequenceExecutor} from "../ConsequenceExecutor.sol";
+import {StandingCredentialRegistry} from "../StandingCredentialRegistry.sol";
 
 contract SubjectSaltAttributionModule is IAttributionModule {
     function validateAttribution(
@@ -357,5 +360,105 @@ contract SubjectRateLimitModule is IAntiAbuseModule, IChallengeRateLimitModule {
             revert AVADataTypes.EmptyValue();
         }
         if (priorFilingCount != 0) revert AVADataTypes.InvalidState(challengedRecognisedStateId);
+    }
+}
+
+contract RestrictionAwareChallengeIntakeModule is IAntiAbuseModule, IChallengeRateLimitModule {
+    ConsequenceExecutor public immutable CONSEQUENCE_EXECUTOR;
+    AVAStateMachine public immutable STATE_MACHINE;
+
+    constructor(ConsequenceExecutor consequenceExecutor_, AVAStateMachine stateMachine_) {
+        CONSEQUENCE_EXECUTOR = consequenceExecutor_;
+        STATE_MACHINE = stateMachine_;
+    }
+
+    function validateUse(
+        bytes32 workflowKey,
+        AVADataTypes.Role,
+        AVADataTypes.Action,
+        bytes32 subjectId,
+        bytes32 objectId,
+        address actor
+    ) external pure {
+        if (workflowKey == bytes32(0) || subjectId == bytes32(0) || objectId == bytes32(0) || actor == address(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
+    }
+
+    function supportsChallengeRateLimit() external pure returns (bool) {
+        return true;
+    }
+
+    function validateChallengeFiling(
+        bytes32 workflowKey,
+        uint256 challengedRecognisedStateId,
+        bytes32 challengerSubjectId,
+        uint256,
+        address actor
+    ) external view {
+        if (
+            workflowKey == bytes32(0) || challengedRecognisedStateId == 0 || challengerSubjectId == bytes32(0)
+                || actor == address(0)
+        ) {
+            revert AVADataTypes.EmptyValue();
+        }
+        AVADataTypes.RecognisedStateRecord memory state = STATE_MACHINE.getRecognisedState(challengedRecognisedStateId);
+        if (state.workflowKey != workflowKey) revert AVADataTypes.InvalidState(challengedRecognisedStateId);
+        if (
+            CONSEQUENCE_EXECUTOR.activeEligibilityRestrictionId(
+                state.packageId, challengerSubjectId, AVADataTypes.EligibilityRestrictionKind.ChallengeIntake
+            ) != 0
+        ) {
+            revert AVADataTypes.InvalidState(challengedRecognisedStateId);
+        }
+    }
+}
+
+contract CredentialGatedPanelModule is IResidualEditorialAuthorityModule {
+    StandingCredentialRegistry public immutable CREDENTIAL_REGISTRY;
+    AVAStateMachine public immutable STATE_MACHINE;
+    AVADataTypes.Action public immutable GATED_ACTION;
+    bytes32 public immutable VECTOR_KEY;
+    bytes32 public immutable CATEGORY_HASH;
+    int256 public immutable REQUIRED_THRESHOLD;
+
+    constructor(
+        StandingCredentialRegistry credentialRegistry_,
+        AVAStateMachine stateMachine_,
+        AVADataTypes.Action gatedAction_,
+        bytes32 vectorKey_,
+        bytes32 categoryHash_,
+        int256 requiredThreshold_
+    ) {
+        if (vectorKey_ == bytes32(0) || categoryHash_ == bytes32(0)) revert AVADataTypes.EmptyValue();
+        CREDENTIAL_REGISTRY = credentialRegistry_;
+        STATE_MACHINE = stateMachine_;
+        GATED_ACTION = gatedAction_;
+        VECTOR_KEY = vectorKey_;
+        CATEGORY_HASH = categoryHash_;
+        REQUIRED_THRESHOLD = requiredThreshold_;
+    }
+
+    function validateResidualEditorialAuthority(ResidualEditorialAuthorityContext calldata context) external view {
+        if (
+            context.workflowKey == bytes32(0) || context.objectId == bytes32(0) || context.evidenceReceiptId == 0
+                || context.authorityId == bytes32(0) || context.actor == address(0)
+        ) {
+            revert AVADataTypes.EmptyValue();
+        }
+        if (context.action != GATED_ACTION) return;
+        if (context.actingRole != AVADataTypes.Role.Panel) revert AVADataTypes.InvalidRole();
+
+        AVADataTypes.RecognisedStateRecord memory state = STATE_MACHINE.getRecognisedState(context.recognisedStateId);
+        if (state.workflowKey != context.workflowKey) revert AVADataTypes.InvalidState(context.recognisedStateId);
+        uint256 credentialId =
+            CREDENTIAL_REGISTRY.activeStandingCredentialId(state.packageId, context.authorityId, VECTOR_KEY, CATEGORY_HASH);
+        if (
+            !CREDENTIAL_REGISTRY.credentialProvesSubjectStanding(
+                credentialId, state.packageId, context.authorityId, VECTOR_KEY, CATEGORY_HASH, REQUIRED_THRESHOLD
+            )
+        ) {
+            revert AVADataTypes.InvalidState(context.recognisedStateId);
+        }
     }
 }

@@ -28,6 +28,7 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
 
     mapping(uint256 => AVADataTypes.StandingCredentialRecord) private standingCredentials;
     mapping(uint256 => AVADataTypes.StandingCredentialSettlementRecord) private standingCredentialSettlements;
+    mapping(bytes32 => uint256) private activeCredentialIdBySubjectVectorCategory;
 
     event StandingCredentialIssued(
         uint256 indexed id,
@@ -224,6 +225,24 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         return _isActiveCredential(credential);
     }
 
+    function activeStandingCredentialId(
+        uint256 packageId,
+        bytes32 subjectId,
+        bytes32 vectorKey,
+        bytes32 categoryHash
+    ) external view returns (uint256) {
+        if (packageId == 0 || subjectId == bytes32(0) || vectorKey == bytes32(0) || categoryHash == bytes32(0)) {
+            return 0;
+        }
+        uint256 credentialId = activeCredentialIdBySubjectVectorCategory[
+            keccak256(abi.encode(packageId, subjectId, vectorKey, categoryHash))
+        ];
+        if (credentialId == 0) return 0;
+        AVADataTypes.StandingCredentialRecord memory credential = standingCredentials[credentialId];
+        if (!_isActiveCredential(credential)) return 0;
+        return credentialId;
+    }
+
     function authorityMatrix() external view returns (AuthorityMatrix) {
         return AUTHORITY_MATRIX;
     }
@@ -358,6 +377,9 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         emit StandingCredentialIssued(
             id, input.standingComputationRecordId, computation.subjectId, input.categoryHash, input.expiresAt
         );
+        activeCredentialIdBySubjectVectorCategory[
+            keccak256(abi.encode(computation.packageId, computation.subjectId, computation.vectorKey, input.categoryHash))
+        ] = id;
     }
 
     function _isActiveCredential(AVADataTypes.StandingCredentialRecord memory credential) internal view returns (bool) {

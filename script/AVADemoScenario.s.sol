@@ -201,6 +201,36 @@ contract DemoActor {
         return stateMachine.transitionRecognisedState(actingRole, recognisedStateId, toStatus, authorityId, reasonURI);
     }
 
+    function vestReviewRecognition(
+        AVAStateMachine stateMachine,
+        AVADataTypes.Role actingRole,
+        uint256 reviewContributionId,
+        bytes32 authorityId,
+        string calldata reasonURI
+    ) external returns (uint256) {
+        return stateMachine.vestReviewRecognition(actingRole, reviewContributionId, authorityId, reasonURI);
+    }
+
+    function applyRestoration(
+        AVAStateMachine stateMachine,
+        AVADataTypes.Role actingRole,
+        uint256 challengeId,
+        bytes32 authorityId,
+        string calldata reasonURI
+    ) external {
+        stateMachine.applyRestoration(actingRole, challengeId, authorityId, reasonURI);
+    }
+
+    function closeChallenge(
+        AVAStateMachine stateMachine,
+        AVADataTypes.Role actingRole,
+        uint256 challengeId,
+        bytes32 authorityId,
+        string calldata reasonURI
+    ) external {
+        stateMachine.closeChallenge(actingRole, challengeId, authorityId, reasonURI);
+    }
+
     function executeAllocation(
         AllocationExecutor executor,
         AVADataTypes.Role actingRole,
@@ -214,6 +244,51 @@ contract DemoActor {
     ) external returns (uint256) {
         return executor.executeAllocation(
             actingRole, recognisedStateId, allocationKind, subjectId, amountOrUnits, evidenceReceiptId, authorityId, uri
+        );
+    }
+
+    function recordPenalty(
+        ConsequenceExecutor executor,
+        AVADataTypes.Role actingRole,
+        uint256 recognisedStateId,
+        bytes32 subjectId,
+        uint256 evidenceReceiptId,
+        bytes32 authorityId,
+        string calldata uri
+    ) external returns (uint256) {
+        return executor.recordPenalty(actingRole, recognisedStateId, subjectId, evidenceReceiptId, authorityId, uri);
+    }
+
+    function recordStandingPenaltyInput(
+        ConsequenceExecutor executor,
+        AVADataTypes.Role actingRole,
+        uint256 penaltyConsequenceId,
+        uint256 challengeId,
+        AVADataTypes.StandingPenaltyKind penaltyKind,
+        string calldata dimension,
+        int256 delta,
+        uint256 evidenceReceiptId,
+        bytes32 authorityId,
+        string calldata uri
+    ) external returns (uint256) {
+        return executor.recordStandingPenaltyInput(
+            actingRole, penaltyConsequenceId, challengeId, penaltyKind, dimension, delta, evidenceReceiptId, authorityId, uri
+        );
+    }
+
+    function recordEligibilityRestriction(
+        ConsequenceExecutor executor,
+        AVADataTypes.Role actingRole,
+        uint256 penaltyConsequenceId,
+        uint256 challengeId,
+        AVADataTypes.EligibilityRestrictionKind restrictionKind,
+        uint256 expiresAt,
+        uint256 evidenceReceiptId,
+        bytes32 authorityId,
+        string calldata uri
+    ) external returns (uint256) {
+        return executor.recordEligibilityRestriction(
+            actingRole, penaltyConsequenceId, challengeId, restrictionKind, expiresAt, evidenceReceiptId, authorityId, uri
         );
     }
 

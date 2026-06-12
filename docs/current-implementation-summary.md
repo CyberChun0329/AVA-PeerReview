@@ -29,6 +29,34 @@ the actor, target object, evidence receipt, governing package, status
 transition, and bounded consequence. The demo itself does not run a model or
 simulation.
 
+The repository also includes a deterministic transition-admissibility artifact
+at `generated/recognised-state-transition-matrix.csv`, hash-pinned by
+`script/AVATransitionMatrix.s.sol` and checked row by row against kernel
+execution in the test suite. It is for paper figures and future state/action
+extraction only; the Solidity contracts remain the source of transition
+authority.
+
+The test suite also includes a small boundary-claim surface with named
+tests for paper-facing claims: administrative priority token execution cannot
+touch manuscript records or publication selectors; raw review ids cannot
+trigger standing, allocation, consequence, or settlement effects; disclosure
+and ZK proof-use store context and nullifier receipts rather than reveal
+payloads; direct high-impact recognised-state creation is rejected; and
+forbidden publication, reveal, sanction, standing-token, and reputation-token
+selectors remain absent.
+
+`script/AVACanonicalTrace.s.sol` executes four canonical scenario traces and
+returns JSON through `runTrace()`. The checked-in
+`generated/canonical-scenario-traces.json` file is the current deterministic
+output for model/paper handoff. It is a trace artifact, not a model,
+simulator, sanction engine, or publication workflow.
+
+`docs/translation-loss-audit.md` explains which research-framework concepts
+are precisely encoded, approximated through bounded records, reserved for
+human judgement, parameterised through modules, or excluded from the current
+demo. It is the paper-facing guide for avoiding overclaiming when interpreting
+the Solidity records.
+
 ## Current Boundary
 
 The demo implements AVA as:
@@ -105,6 +133,11 @@ panel-visible audit, standing credential, disclosure proof-use, and bounded
 settlement surfaces all use this pattern. They differ in module or adapter
 selection, not in a rewrite of the recognised-state substrate.
 
+The current example modules also show governance memory as a later validation
+input. An eligibility-restriction record can veto later challenge intake in a
+selected workflow, and an active standing credential can gate a panel action
+without becoming standing itself, a reward, or a publication signal.
+
 ## Privacy And Standing
 
 Standing and reputation are computed governance memory, not assets.
@@ -136,6 +169,15 @@ rate-limited packages can reject early vesting or repeated challenge filing
 without adding production scheduling or sanction execution. The example
 `SubjectRateLimitModule` is intentionally conservative: for a selected package,
 it means one filing per challenger subject against the same recognised state.
+`RestrictionAwareChallengeIntakeModule` is another validator-only example: it
+reads active, package-bound eligibility restrictions and rejects later
+challenge filing by the restricted subject while the restriction is unexpired.
+
+Standing credentials can also be used as validator inputs. The example
+`CredentialGatedPanelModule` checks for an active, package-bound credential
+over the acting panel subject, vector, category, and threshold before allowing
+a configured panel action. It does not issue credentials, update standing,
+execute penalties, reveal identity, or create publication effects.
 
 Residual authority can also be receipt-backed. `AuthorityApprovalRegistry`
 stores package/action/object-bound approval receipts, and
@@ -147,7 +189,7 @@ conflict exclusion without taking over state storage.
 Current verification:
 
 - `forge build` passes.
-- `forge test` passes with 242 tests.
+- `forge test` passes with 263 tests.
 - The baseline demo script runs locally with:
 
 ```bash

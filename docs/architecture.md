@@ -61,6 +61,12 @@ modelling as states, actions, transitions, information conditions, and payoff
 proxies. The Solidity demo itself does not run a model, simulation,
 probability estimate, truth engine, or manuscript-merit calculation.
 
+For paper-facing verification, the repository includes a hash-pinned
+recognised-state transition matrix and named boundary-claim tests. Matrix rows
+are checked against row-level kernel execution, and the boundary tests tie the
+no-publication, no-truth, no-reveal, no-sanction-execution, no-standing-token,
+raw-id, and high-impact-status boundaries to executable artifacts.
+
 ## 3. System Layers
 
 The demo has four practical layers.
@@ -133,6 +139,17 @@ Modules validate or veto. They do not grant authority, mutate substrate storage
 directly, reinterpret ids, reveal identity, execute sanctions, decide
 publication, or judge scientific truth. The substrate writes records only after
 the relevant substrate gates and module checks all pass.
+
+Two example validator modules show how governance memory can later constrain
+workflow use without becoming a punishment or reward engine.
+`RestrictionAwareChallengeIntakeModule` reads active package-bound eligibility
+restrictions and can veto later challenge intake by the restricted subject
+until expiry; there is no early-lift path in the current demo.
+`CredentialGatedPanelModule` reads active standing credentials for a panel
+authority subject and can veto a configured panel action unless the active
+credential index resolves to a usable package-, subject-, vector-, category-,
+and threshold-matching credential. Both modules are validator-only and write no
+records.
 
 ### Privacy And Proof Layer
 
@@ -384,7 +401,7 @@ Use:
 The current verified state is:
 
 - `forge build` passes.
-- `forge test` passes with 242 tests.
+- `forge test` passes with 263 tests.
 - The baseline demo script runs locally with:
 
 ```bash

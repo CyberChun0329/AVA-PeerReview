@@ -127,7 +127,7 @@ abstraction.
 The current verified demo state records:
 
 - `forge build` passes;
-- `forge test` passes with 242 tests;
+- `forge test` passes with 263 tests;
 - the baseline demo script runs with `--offline` in the local Foundry
   environment used for verification.
 

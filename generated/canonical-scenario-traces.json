@@ -1,0 +1,66 @@
+{
+  "schema": "ava-canonical-trace-v1",
+  "scenarios": [
+    {
+      "name": "honest_review_challenge_window_vesting",
+      "trace": [
+        "review_registered",
+        "challenge_opened",
+        "recognition_vested"
+      ],
+      "ids": {
+        "manuscriptId": 1,
+        "recognisedStateId": 1,
+        "reviewContributionId": 1,
+        "vestingTransitionId": 3
+      }
+    },
+    {
+      "name": "upheld_challenge_correction_standing_record",
+      "trace": [
+        "challenge_filed",
+        "challenge_screened",
+        "challenge_upheld",
+        "recognition_downgraded",
+        "bounded_consequence_recorded",
+        "standing_update_recorded"
+      ],
+      "ids": {
+        "recognisedStateId": 1,
+        "challengeId": 1,
+        "consequenceId": 1,
+        "standingUpdateId": 1
+      }
+    },
+    {
+      "name": "malicious_challenge_penalty_and_eligibility_restriction",
+      "trace": [
+        "challenge_malicious_or_fabricated",
+        "penalty_recorded",
+        "standing_penalty_input_recorded",
+        "eligibility_restricted"
+      ],
+      "ids": {
+        "challengeId": 1,
+        "penaltyConsequenceId": 1,
+        "standingPenaltyInputId": 1,
+        "eligibilityRestrictionId": 1
+      }
+    },
+    {
+      "name": "restoration_after_correction",
+      "trace": [
+        "challenge_upheld",
+        "recognition_downgraded",
+        "restoration_applied",
+        "recognition_restored"
+      ],
+      "ids": {
+        "recognisedStateId": 1,
+        "challengeId": 1,
+        "restorationChallengeTransitionId": 3,
+        "restorationStateTransitionId": 4
+      }
+    }
+  ]
+}

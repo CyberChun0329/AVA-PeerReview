@@ -93,7 +93,8 @@ forge build
 forge test
 ```
 
-The current verification state records `239` passing tests.
+The current verification state records `263` passing tests, verified with
+`forge 1.5.1-stable`.
 
 The public repository includes a GitHub Actions workflow that runs `forge
 build` and `forge test` on pushes to `main` and on pull requests.

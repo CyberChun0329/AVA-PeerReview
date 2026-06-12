@@ -79,12 +79,12 @@ AVA stages.
 | Disclosure policy | `IDisclosurePolicyModule` | Evidence registry and state/challenge paths | Policy/reference compatibility only; no reveal/decrypt/ACL |
 | Disclosure lifecycle | `IDisclosureLifecycleModule` | `recordDisclosureLifecycleReadiness` | Readiness record only; no reveal/decrypt/ACL/identity disclosure |
 | Disclosure execution | `IDisclosureExecutionModule` | `DisclosureAccessExecutor` using target `packageId` | Access grant/revoke/expiry/supersession, lifecycle, proof-use, and voluntary-intent receipt validation only; no reveal/decrypt/ACL engine |
-| Residual editorial authority | `IResidualEditorialAuthorityModule` plus `AuthorityApprovalRegistry` for receipt-backed examples | `AVAStateMachine` recognised-state and challenge-governance paths | Procedural authority validation only, including example single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, emergency-pause, and approval-receipt validator formats; no acceptance, rejection, merit, or publication priority |
+| Residual editorial authority | `IResidualEditorialAuthorityModule` plus `AuthorityApprovalRegistry` for receipt-backed examples | `AVAStateMachine` recognised-state and challenge-governance paths | Procedural authority validation only, including example single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, emergency-pause, approval-receipt, and standing-credential-gated validator formats; no acceptance, rejection, merit, or publication priority |
 | Evidence policy | `IEvidencePolicyModule` | Evidence registration and evidence-backed state/challenge paths | Workflow/type/reference compatibility only; no truth validation |
 | Evidence lifecycle | `IEvidenceLifecycleModule` | Evidence registration, evidence use, evidence lifecycle hook | Status-bound lifecycle validation only; no delete/reveal/truth adjudication |
 | Audit adapter | `IAuditAdapter` | `AttestationAuditModule` workflow-aware and target-bound attestation paths | Attestation reference/hash validation only; audit storage remains substrate-owned |
 | Field policy | `IFieldPolicyModule` | `AVAStateMachine` recognised-state validation | Field/venue admissibility only; cannot replace authority/evidence/status gates |
-| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | Review, challenge, standing, allocation, consequence paths | Veto only; default package remains permissive; selected packages that declare `supportsChallengeRateLimit()` can reject repeated challenge filing; the example counter is one filing per package / recognised state / challenger subject; declared validator reverts are vetoes; no sanction execution, standing update, or state write |
+| Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | Review, challenge, standing, allocation, consequence paths | Veto only; default package remains permissive; selected packages that declare `supportsChallengeRateLimit()` can reject repeated challenge filing or active eligibility restrictions; the example counter is one filing per package / recognised state / challenger subject, and `RestrictionAwareChallengeIntakeModule` can veto challenge intake while a package-bound challenge-intake restriction is active; declared validator reverts are vetoes; no sanction execution, standing update, or state write |
 
 `IEditorialSystemAdapter` remains an optional manuscript metadata-reference
 bridge outside the AVA core-stage / recognised-state support / downstream
@@ -543,7 +543,11 @@ receipts for a source.
 Standing credential proof checks are package-, subject-, vector-, category-,
 threshold-, and range-bound. Standing-relevant settlement impact records suspend
 active standing credentials before those credentials can be used as proof again,
-but unrelated or mismatched settlement sources cannot suspend a credential.
+but unrelated or mismatched settlement sources cannot suspend a credential. The
+active credential index is latest-issued-wins and fail-closed; older credential
+records remain inspectable by id, but validator modules that use the active
+index follow the most recent indexed credential for that package/subject/vector
+and category.
 
 Standing-computation records carry explicit provenance and freshness state:
 epoch, source-record-set hash, computation-rule hash, and

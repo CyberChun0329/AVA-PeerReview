@@ -14,6 +14,15 @@ standing-credential, settlement, recovery, and external-operation surfaces are
 covered by tests and current architecture docs rather than folded into the
 single baseline script.
 
+`script/AVACanonicalTrace.s.sol` is the paper/model handoff trace harness.
+Run `AVACanonicalTrace --sig "runTrace()" --offline` to export four
+deterministic scenario traces. The checked-in output is
+`generated/canonical-scenario-traces.json`. The script returns the JSON; the
+checked-in generated file is maintained as a repository artifact rather than
+being rewritten automatically by the script. These traces name records and
+transitions only; they do not encode sanction execution, truth decisions,
+manuscript acceptance, merit scoring, or publication outcomes.
+
 The script runtime command that avoids the normal sandbox Foundry/macOS
 proxy/signature panic is:
 
