@@ -23,5 +23,28 @@ jobs:
       - name: Build
         run: forge build
 
+      - name: Compatibility tool unit tests
+        run: python3 -m unittest scripts/tests/test_ava_compatibility.py
+
+      - name: Canonical ABI compatibility gate
+        run: python3 scripts/ava_compatibility.py abi --check
+
+      - name: Core and application import boundary gate
+        run: python3 scripts/ava_compatibility.py boundaries
+
+      - name: Reconstruct canonical rule-package manifest
+        run: forge script script/AVACanonicalPackageManifest.s.sol:AVACanonicalPackageManifest --sig "run()" --offline
+
+      - name: Canonical rule-package compatibility gate
+        run: |
+          python3 scripts/ava_compatibility.py package --manifest generated/canonical-rule-package-manifest.json
+          git diff --exit-code -- generated/canonical-rule-package-manifest.json
+
       - name: Test
         run: forge test
+
+      - name: Canonical production contract size gate
+        run: forge test --match-contract CanonicalRuntimeSizeTest
+
+      - name: Retained-stack regression
+        run: FOUNDRY_PROFILE=retained forge test

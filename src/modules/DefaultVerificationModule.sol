@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {IVerificationModule} from "../interfaces/IVerificationModule.sol";
 
-contract DefaultVerificationModule is IVerificationModule {
-    function validateVerification(
-        bytes32 workflowKey,
-        AVADataTypes.Role,
-        AVADataTypes.AVAStage,
-        bytes32 objectId,
-        uint256 evidenceReceiptId
-    ) external pure {
-        if (workflowKey == bytes32(0) || objectId == bytes32(0) || evidenceReceiptId == 0) {
+contract DefaultVerificationModule is IVerificationModule, RuleModuleIdentity {
+    function validateVerification(VerificationContext calldata context) external pure {
+        if (
+            context.workflowKey == bytes32(0) || context.packageId == 0 || context.objectId == bytes32(0)
+                || context.evidenceReceiptId == 0 || context.subjectId == bytes32(0) || context.actor == address(0)
+        ) {
             revert AVADataTypes.EmptyValue();
         }
     }

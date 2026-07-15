@@ -3,7 +3,6 @@ pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "./AVADataTypes.sol";
 import {AuthorityMatrix} from "./AuthorityMatrix.sol";
-import {RoleIdentityRegistry} from "./RoleIdentityRegistry.sol";
 import {AVAStateMachine} from "./AVAStateMachine.sol";
 import {EvidenceCommitmentRegistry} from "./EvidenceCommitmentRegistry.sol";
 import {StandingRegistry} from "./StandingRegistry.sol";
@@ -11,8 +10,11 @@ import {AllocationExecutor} from "./AllocationExecutor.sol";
 import {ConsequenceExecutor} from "./ConsequenceExecutor.sol";
 import {IStandingCredentialIssuer} from "./interfaces/IStandingCredentialIssuer.sol";
 import {IValueSettlementExecutor} from "./interfaces/IValueSettlementExecutor.sol";
+import {StandingRevisionRegistry} from "./StandingRevisionRegistry.sol";
+import {AVARulePackageRegistry} from "./AVARulePackageRegistry.sol";
 
 contract StandingCredentialRegistry is IStandingCredentialIssuer {
+    uint256 public constant MAX_CREDENTIAL_VALIDITY = 365 days;
     string private constant NAME = "AVA Standing Credential";
     string private constant SYMBOL = "AVASC";
 
@@ -23,6 +25,7 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
     AllocationExecutor private immutable ALLOCATION_EXECUTOR;
     ConsequenceExecutor private immutable CONSEQUENCE_EXECUTOR;
     IValueSettlementExecutor private immutable VALUE_SETTLEMENT_EXECUTOR;
+    StandingRevisionRegistry private immutable STANDING_REVISION_REGISTRY;
     uint256 public nextStandingCredentialId = 1;
     uint256 public nextStandingCredentialSettlementId = 1;
 
@@ -38,7 +41,9 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         uint256 expiresAt
     );
     event StandingCredentialRevoked(uint256 indexed id, bytes32 authorityId, string uri);
-    event StandingCredentialSuperseded(uint256 indexed id, uint256 indexed supersededBy, bytes32 authorityId, string uri);
+    event StandingCredentialSuperseded(
+        uint256 indexed id, uint256 indexed supersededBy, bytes32 authorityId, string uri
+    );
     event StandingCredentialSettlementRecorded(
         uint256 indexed id,
         uint256 indexed credentialId,
@@ -54,8 +59,12 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         StandingRegistry standingRegistry_,
         AllocationExecutor allocationExecutor_,
         ConsequenceExecutor consequenceExecutor_,
-        IValueSettlementExecutor valueSettlementExecutor_
+        IValueSettlementExecutor valueSettlementExecutor_,
+        StandingRevisionRegistry standingRevisionRegistry_
     ) {
+        if (address(standingRevisionRegistry_) == address(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
         AUTHORITY_MATRIX = authorityMatrix_;
         STATE_MACHINE = stateMachine_;
         EVIDENCE_REGISTRY = evidenceRegistry_;
@@ -63,16 +72,17 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         ALLOCATION_EXECUTOR = allocationExecutor_;
         CONSEQUENCE_EXECUTOR = consequenceExecutor_;
         VALUE_SETTLEMENT_EXECUTOR = valueSettlementExecutor_;
+        STANDING_REVISION_REGISTRY = standingRevisionRegistry_;
     }
 
-    function issueCredential(
-        AVADataTypes.Role actingRole,
-        StandingCredentialInput calldata input
-    ) external returns (uint256 id) {
+    function issueCredential(AVADataTypes.Role actingRole, StandingCredentialInput calldata input)
+        external
+        returns (uint256 id)
+    {
         AUTHORITY_MATRIX.requireAuthorisedSubject(
             msg.sender, actingRole, AVADataTypes.Action.IssueStandingCredential, input.authorityId
         );
-        id = _issueCredential(actingRole, input);
+        id = _issueCredential(actingRole, input, 0);
     }
 
     function revokeCredential(
@@ -107,7 +117,7 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         if (oldCredential.status != AVADataTypes.StandingCredentialStatus.Active) {
             revert AVADataTypes.InvalidState(credentialId);
         }
-        id = _issueCredential(actingRole, input);
+        id = _issueCredential(actingRole, input, credentialId);
         AVADataTypes.StandingCredentialRecord memory newCredential = standingCredentials[id];
         if (
             newCredential.packageId != oldCredential.packageId || newCredential.subjectId != oldCredential.subjectId
@@ -187,21 +197,6 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         return record;
     }
 
-    function credentialProves(
-        uint256 credentialId,
-        bytes32 subjectId,
-        bytes32 vectorKey,
-        bytes32 categoryHash,
-        int256 requiredThreshold
-    ) external view returns (bool) {
-        AVADataTypes.StandingCredentialRecord memory credential = standingCredentials[credentialId];
-        if (credential.id == 0) return false;
-        if (!_isActiveCredential(credential)) return false;
-        return credential.subjectId == subjectId && credential.vectorKey == vectorKey
-            && credential.categoryHash == categoryHash && credential.standingValue >= requiredThreshold
-            && requiredThreshold >= credential.lowerBound && requiredThreshold <= credential.upperBound;
-    }
-
     function credentialProvesSubjectStanding(
         uint256 credentialId,
         uint256 packageId,
@@ -225,18 +220,16 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         return _isActiveCredential(credential);
     }
 
-    function activeStandingCredentialId(
-        uint256 packageId,
-        bytes32 subjectId,
-        bytes32 vectorKey,
-        bytes32 categoryHash
-    ) external view returns (uint256) {
+    function activeStandingCredentialId(uint256 packageId, bytes32 subjectId, bytes32 vectorKey, bytes32 categoryHash)
+        external
+        view
+        returns (uint256)
+    {
         if (packageId == 0 || subjectId == bytes32(0) || vectorKey == bytes32(0) || categoryHash == bytes32(0)) {
             return 0;
         }
-        uint256 credentialId = activeCredentialIdBySubjectVectorCategory[
-            keccak256(abi.encode(packageId, subjectId, vectorKey, categoryHash))
-        ];
+        uint256 credentialId =
+            activeCredentialIdBySubjectVectorCategory[_credentialKey(packageId, subjectId, vectorKey, categoryHash)];
         if (credentialId == 0) return 0;
         AVADataTypes.StandingCredentialRecord memory credential = standingCredentials[credentialId];
         if (!_isActiveCredential(credential)) return 0;
@@ -308,21 +301,26 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
 
     function _issueCredential(
         AVADataTypes.Role actingRole,
-        StandingCredentialInput calldata input
+        StandingCredentialInput calldata input,
+        uint256 supersededCredentialId
     ) internal returns (uint256 id) {
         if (
             input.standingComputationRecordId == 0 || input.categoryHash == bytes32(0) || input.epoch == 0
                 || input.expiresAt <= block.timestamp || input.computationRuleHash == bytes32(0)
-                || input.authorityId == bytes32(0) || bytes(input.uri).length == 0 || input.lowerBound > input.upperBound
-                || input.threshold < input.lowerBound || input.threshold > input.upperBound
+                || input.expiresAt > block.timestamp + MAX_CREDENTIAL_VALIDITY
+                || input.authorityId == bytes32(0) || bytes(input.uri).length == 0
+                || input.lowerBound > input.upperBound || input.threshold < input.lowerBound
+                || input.threshold > input.upperBound
         ) {
             revert AVADataTypes.EmptyValue();
         }
         AVADataTypes.StandingComputationRecord memory computation =
             STANDING_REGISTRY.getStandingComputationRecord(input.standingComputationRecordId);
         if (
-            computation.status != AVADataTypes.StandingComputationStatus.Active || input.epoch != computation.epoch
-                || input.computationRuleHash != computation.computationRuleHash
+            !STANDING_REGISTRY.isStandingComputationActive(input.standingComputationRecordId)
+                || input.epoch != computation.epoch || input.computationRuleHash != computation.computationRuleHash
+                || computation.standingRevision
+                    != STANDING_REVISION_REGISTRY.currentRevision(computation.packageId, computation.subjectId)
         ) {
             revert AVADataTypes.InvalidState(input.standingComputationRecordId);
         }
@@ -338,13 +336,25 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         if (recognisedState.packageId != computation.packageId) {
             revert AVADataTypes.InvalidState(computation.recognisedStateId);
         }
-        AVADataTypes.EvidenceReceipt memory evidence =
-            EVIDENCE_REGISTRY.requireUsableEvidenceReceipt(computation.evidenceReceiptId, recognisedState.workflowKey);
-        if (evidence.packageId != recognisedState.packageId) revert AVADataTypes.InvalidState(computation.evidenceReceiptId);
+        _validateCredentialSourceLifecycle(computation, recognisedState, supersededCredentialId);
 
-        RoleIdentityRegistry roleRegistry = AUTHORITY_MATRIX.roleRegistry();
-        AVADataTypes.RoleSubject memory subject = roleRegistry.getSubject(computation.subjectId);
-        if (!subject.active || subject.account == address(0)) revert AVADataTypes.UnknownSubject(computation.subjectId);
+        AVADataTypes.RoleSubject memory subject = AUTHORITY_MATRIX.roleRegistry().getSubject(computation.subjectId);
+        if (!subject.active || subject.account == address(0)) {
+            revert AVADataTypes.UnknownSubject(computation.subjectId);
+        }
+
+        bytes32 credentialKey =
+            _credentialKey(computation.packageId, computation.subjectId, computation.vectorKey, input.categoryHash);
+        uint256 currentCredentialId = activeCredentialIdBySubjectVectorCategory[credentialKey];
+        if (supersededCredentialId != 0 && currentCredentialId != supersededCredentialId) {
+            revert AVADataTypes.InvalidState(supersededCredentialId);
+        }
+        if (
+            currentCredentialId != 0 && currentCredentialId != supersededCredentialId
+                && _isActiveCredential(standingCredentials[currentCredentialId])
+        ) {
+            revert AVADataTypes.InvalidState(currentCredentialId);
+        }
 
         id = nextStandingCredentialId++;
         standingCredentials[id] = AVADataTypes.StandingCredentialRecord({
@@ -353,6 +363,7 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
             recognisedStateId: computation.recognisedStateId,
             workflowKey: recognisedState.workflowKey,
             packageId: computation.packageId,
+            standingRevision: computation.standingRevision,
             subjectId: computation.subjectId,
             holder: subject.account,
             dimension: computation.dimension,
@@ -377,14 +388,70 @@ contract StandingCredentialRegistry is IStandingCredentialIssuer {
         emit StandingCredentialIssued(
             id, input.standingComputationRecordId, computation.subjectId, input.categoryHash, input.expiresAt
         );
-        activeCredentialIdBySubjectVectorCategory[
-            keccak256(abi.encode(computation.packageId, computation.subjectId, computation.vectorKey, input.categoryHash))
-        ] = id;
+        activeCredentialIdBySubjectVectorCategory[credentialKey] = id;
     }
 
     function _isActiveCredential(AVADataTypes.StandingCredentialRecord memory credential) internal view returns (bool) {
-        return credential.status == AVADataTypes.StandingCredentialStatus.Active && block.timestamp < credential.expiresAt
+        return credential.status == AVADataTypes.StandingCredentialStatus.Active
+            && block.timestamp < credential.expiresAt
+            && activeCredentialIdBySubjectVectorCategory[
+                    _credentialKey(
+                    credential.packageId, credential.subjectId, credential.vectorKey, credential.categoryHash
+                )
+                ] == credential.id
+            && credential.standingRevision
+                == STANDING_REVISION_REGISTRY.currentRevision(credential.packageId, credential.subjectId)
             && STANDING_REGISTRY.isStandingComputationActive(credential.standingComputationRecordId);
+    }
+
+    function _credentialKey(uint256 packageId, bytes32 subjectId, bytes32 vectorKey, bytes32 categoryHash)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(packageId, subjectId, vectorKey, categoryHash));
+    }
+
+    function _validateCredentialEvidenceLifecycle(
+        AVARulePackageRegistry.RulePackage memory rulePackage,
+        uint256 evidenceReceiptId,
+        AVADataTypes.Action action
+    ) internal view {
+        rulePackage.evidenceLifecycleModule
+            .validateEvidenceLifecycle(
+                rulePackage.workflowKey,
+                action,
+                evidenceReceiptId,
+                AVADataTypes.EvidenceLifecycleKind.None,
+                0,
+                bytes32(0),
+                msg.sender
+            );
+    }
+
+    function _validateCredentialSourceLifecycle(
+        AVADataTypes.StandingComputationRecord memory computation,
+        AVADataTypes.RecognisedStateRecord memory recognisedState,
+        uint256 supersededCredentialId
+    ) internal view {
+        AVADataTypes.EvidenceReceipt memory evidence = EVIDENCE_REGISTRY.requireUsableEvidenceReceipt(
+            computation.evidenceReceiptId, recognisedState.appId, recognisedState.workflowKey
+        );
+        if (evidence.packageId != recognisedState.packageId) {
+            revert AVADataTypes.InvalidState(computation.evidenceReceiptId);
+        }
+        AVARulePackageRegistry.RulePackage memory rulePackage =
+            EVIDENCE_REGISTRY.rulePackageRegistry().getRulePackageById(computation.packageId);
+        if (rulePackage.appId != recognisedState.appId || rulePackage.workflowKey != recognisedState.workflowKey) {
+            revert AVADataTypes.InvalidState(computation.packageId);
+        }
+        AVADataTypes.Action action = supersededCredentialId == 0
+            ? AVADataTypes.Action.IssueStandingCredential
+            : AVADataTypes.Action.SupersedeStandingCredential;
+        _validateCredentialEvidenceLifecycle(rulePackage, recognisedState.evidenceReceiptId, action);
+        if (computation.evidenceReceiptId != recognisedState.evidenceReceiptId) {
+            _validateCredentialEvidenceLifecycle(rulePackage, computation.evidenceReceiptId, action);
+        }
     }
 
     function _requireBoundSource(

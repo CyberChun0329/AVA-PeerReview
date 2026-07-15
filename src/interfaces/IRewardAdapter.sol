@@ -2,8 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "../AVADataTypes.sol";
+import {IRuleModuleIdentity} from "./IRuleModuleIdentity.sol";
 
-interface IRewardAdapter {
+interface IRewardAdapter is IRuleModuleIdentity {
     function validateRewardRecord(
         AVADataTypes.Role actingRole,
         uint256 recognisedStateId,

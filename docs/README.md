@@ -41,6 +41,12 @@ recognised-state governance substrate. Smart contracts preserve authorised
 records and transitions after the governed object, evidence, authority,
 disclosure state, and bounded consequence have been specified.
 
+The default Foundry profile is the canonical implementation under `src/core/`,
+`src/extensions/`, and `src/apps/peerreview/`. Root-level pre-separation
+contracts are retained behind `FOUNDRY_PROFILE=retained` for regression only.
+Public architecture claims should be supported by the canonical profile,
+canonical trace, and canonical transition matrix rather than by retained paths.
+
 ## Read First
 
 1. `public-technical-overview.md`
@@ -95,3 +101,23 @@ priority artifact, public prestige, or manuscript merit. Disclosure and ZK
 paths are record/proof surfaces only; they do not reveal identity, decrypt
 evidence, implement production ACL, judge scientific truth, execute sanctions,
 or decide publication outcomes.
+
+## Verification Profiles
+
+```bash
+forge build
+forge test
+forge script script/AVACanonicalTrace.s.sol:AVACanonicalTrace --sig "runTrace()" --offline
+python3 scripts/ava_compatibility.py abi --check
+python3 scripts/ava_compatibility.py boundaries
+```
+
+The canonical profile currently passes 250 tests. The explicit retained
+profile, run with `FOUNDRY_PROFILE=retained forge test`, passes 637 regression
+tests. Both figures describe the current local verification state; they are not
+claims of a production audit.
+
+`generated/canonical-abi-manifest.json` locks the canonical public ABI surface.
+`generated/canonical-rule-package-manifest.json` reconstructs the two canonical
+Peer Review workflow packages from a deterministic local script run. The latter
+is an integration and audit artifact, not a production deployment manifest.

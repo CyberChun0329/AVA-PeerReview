@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {IValueExecutionAdapter} from "../interfaces/IValueExecutionAdapter.sol";
 import {IStandingComputationModule} from "../interfaces/IStandingComputationModule.sol";
@@ -8,7 +10,7 @@ import {IRulePackageLifecycleModule} from "../interfaces/IRulePackageLifecycleMo
 import {IEvidenceLifecycleModule} from "../interfaces/IEvidenceLifecycleModule.sol";
 import {IDisclosureLifecycleModule} from "../interfaces/IDisclosureLifecycleModule.sol";
 
-contract ClaimEscrowRecordValueAdapter is IValueExecutionAdapter {
+contract ClaimEscrowRecordValueAdapter is IValueExecutionAdapter, RuleModuleIdentity {
     function validateValueExecution(AVADataTypes.ValueExecutionContext calldata context) external pure {
         if (
             context.recognisedStateId == 0 || context.recipientSubjectId == bytes32(0) || context.amount == 0
@@ -37,7 +39,7 @@ contract ClaimEscrowRecordValueAdapter is IValueExecutionAdapter {
     }
 }
 
-contract VectorStandingComputationModule is IStandingComputationModule {
+contract VectorStandingComputationModule is IStandingComputationModule, RuleModuleIdentity {
     function validateStandingComputation(AVADataTypes.StandingComputationContext calldata context) external pure {
         if (
             context.recognisedStateId == 0 || context.subjectId == bytes32(0) || context.vectorKey == bytes32(0)
@@ -55,7 +57,7 @@ contract VectorStandingComputationModule is IStandingComputationModule {
     }
 }
 
-contract FormulaV0StandingComputationModule is IStandingComputationModule {
+contract FormulaV0StandingComputationModule is IStandingComputationModule, RuleModuleIdentity {
     bytes32 public constant FORMULA_RULE_DOMAIN =
         keccak256("ava-standing-formula-v0-weighted-ledger-decay-confidence");
     bytes32 public constant REVIEW_RELIABILITY_VECTOR = keccak256("review_reliability");
@@ -105,7 +107,7 @@ contract FormulaV0StandingComputationModule is IStandingComputationModule {
     }
 }
 
-contract VersionedRulePackageLifecycleModule is IRulePackageLifecycleModule {
+contract VersionedRulePackageLifecycleModule is IRulePackageLifecycleModule, RuleModuleIdentity {
     uint64 public immutable minimumVersion;
 
     constructor(uint64 minimumVersion_) {
@@ -116,7 +118,7 @@ contract VersionedRulePackageLifecycleModule is IRulePackageLifecycleModule {
     function validateRulePackageLifecycle(RulePackageLifecycleContext calldata context) external view {
         if (
             context.workflowKey == bytes32(0) || context.modulesHash == bytes32(0)
-                || context.modulesCodeHash == bytes32(0) || context.version < minimumVersion
+                || context.modulesIdentityHash == bytes32(0) || context.version < minimumVersion
                 || context.compatibilityKey == bytes32(0) || context.deprecated || context.actor == address(0)
         ) {
             revert AVADataTypes.InvalidState(uint256(context.workflowKey));
@@ -126,7 +128,7 @@ contract VersionedRulePackageLifecycleModule is IRulePackageLifecycleModule {
         if (targetRequired) {
             if (
                 context.targetWorkflowKey == bytes32(0) || context.targetPackageId == 0
-                    || context.targetModulesHash == bytes32(0) || context.targetModulesCodeHash == bytes32(0)
+                    || context.targetModulesHash == bytes32(0) || context.targetModulesIdentityHash == bytes32(0)
                     || context.targetVersion == 0 || context.targetCompatibilityKey == bytes32(0)
             ) {
                 revert AVADataTypes.EmptyValue();
@@ -137,11 +139,11 @@ contract VersionedRulePackageLifecycleModule is IRulePackageLifecycleModule {
     }
 }
 
-contract RejectingEvidenceLifecycleModule is IEvidenceLifecycleModule {
-    AVADataTypes.Action public blockedAction;
+contract RejectingEvidenceLifecycleModule is IEvidenceLifecycleModule, RuleModuleIdentity {
+    AVADataTypes.Action public immutable BLOCKED_ACTION;
 
     constructor(AVADataTypes.Action blockedAction_) {
-        blockedAction = blockedAction_;
+        BLOCKED_ACTION = blockedAction_;
     }
 
     function validateEvidenceLifecycle(
@@ -156,15 +158,15 @@ contract RejectingEvidenceLifecycleModule is IEvidenceLifecycleModule {
         if (workflowKey == bytes32(0) || evidenceReceiptId == 0 || actor == address(0)) {
             revert AVADataTypes.EmptyValue();
         }
-        if (action == blockedAction) revert AVADataTypes.InvalidState(evidenceReceiptId);
+        if (action == BLOCKED_ACTION) revert AVADataTypes.InvalidState(evidenceReceiptId);
     }
 }
 
-contract RejectingDisclosureLifecycleModule is IDisclosureLifecycleModule {
-    AVADataTypes.DisclosureLifecycleKind public blockedKind;
+contract RejectingDisclosureLifecycleModule is IDisclosureLifecycleModule, RuleModuleIdentity {
+    AVADataTypes.DisclosureLifecycleKind public immutable BLOCKED_KIND;
 
     constructor(AVADataTypes.DisclosureLifecycleKind blockedKind_) {
-        blockedKind = blockedKind_;
+        BLOCKED_KIND = blockedKind_;
     }
 
     function validateDisclosureLifecycle(
@@ -181,6 +183,6 @@ contract RejectingDisclosureLifecycleModule is IDisclosureLifecycleModule {
         ) {
             revert AVADataTypes.EmptyValue();
         }
-        if (kind == blockedKind) revert AVADataTypes.InvalidState(uint256(kind));
+        if (kind == BLOCKED_KIND) revert AVADataTypes.InvalidState(uint256(kind));
     }
 }

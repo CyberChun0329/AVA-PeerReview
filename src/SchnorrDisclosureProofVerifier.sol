@@ -44,7 +44,7 @@ contract SchnorrDisclosureProofVerifier is IZKProofVerifier {
     function _ecAdd(G1Point memory a, G1Point memory b) internal view returns (G1Point memory result, bool ok) {
         uint256[4] memory input = [a.x, a.y, b.x, b.y];
         uint256[2] memory output;
-        assembly {
+        assembly ("memory-safe") {
             ok := staticcall(gas(), 6, input, 0x80, output, 0x40)
         }
         result = G1Point({x: output[0], y: output[1]});
@@ -53,7 +53,7 @@ contract SchnorrDisclosureProofVerifier is IZKProofVerifier {
     function _ecMul(G1Point memory point, uint256 scalar) internal view returns (G1Point memory result, bool ok) {
         uint256[3] memory input = [point.x, point.y, scalar];
         uint256[2] memory output;
-        assembly {
+        assembly ("memory-safe") {
             ok := staticcall(gas(), 7, input, 0x60, output, 0x40)
         }
         result = G1Point({x: output[0], y: output[1]});

@@ -4,14 +4,26 @@ pragma solidity ^0.8.24;
 import {AVADataTypes} from "./AVADataTypes.sol";
 import {AuthorityMatrix} from "./AuthorityMatrix.sol";
 import {AVAStateMachine} from "./AVAStateMachine.sol";
+import {AVAChallengeWorkflow} from "./AVAChallengeWorkflow.sol";
 import {AVARulePackageRegistry} from "./AVARulePackageRegistry.sol";
 import {EvidenceCommitmentRegistry} from "./EvidenceCommitmentRegistry.sol";
+import {StandingRevisionRegistry} from "./StandingRevisionRegistry.sol";
+import {ConsequenceBoundaryValidator} from "./ConsequenceBoundaryValidator.sol";
+
+interface IValueSettlementReader {
+    function getValueSettlement(uint256 id) external view returns (AVADataTypes.ValueSettlementRecord memory);
+}
 
 contract ConsequenceExecutor {
-    AuthorityMatrix public immutable authorityMatrix;
-    AVAStateMachine public immutable stateMachine;
-    AVARulePackageRegistry public immutable rulePackageRegistry;
-    EvidenceCommitmentRegistry public immutable evidenceRegistry;
+    address private immutable admin;
+    AuthorityMatrix private immutable authorityMatrix;
+    AVAStateMachine private immutable stateMachine;
+    AVAChallengeWorkflow private immutable challengeWorkflow;
+    AVARulePackageRegistry private immutable rulePackageRegistry;
+    EvidenceCommitmentRegistry private immutable evidenceRegistry;
+    StandingRevisionRegistry private immutable standingRevisionRegistry;
+    ConsequenceBoundaryValidator private boundaryValidator;
+    IValueSettlementReader private valueSettlementReader;
     uint256 public nextConsequenceId = 1;
     uint256 public nextStandingPenaltyInputId = 1;
     uint256 public nextEligibilityRestrictionId = 1;
@@ -20,6 +32,9 @@ contract ConsequenceExecutor {
     mapping(uint256 => AVADataTypes.StandingPenaltyInputRecord) private standingPenaltyInputs;
     mapping(uint256 => AVADataTypes.EligibilityRestrictionRecord) private eligibilityRestrictions;
     mapping(bytes32 => uint256) private activeEligibilityRestrictionIdBySubjectKind;
+    mapping(bytes32 => uint256) private standingPenaltyInputIdByHash;
+    mapping(bytes32 => uint256) private eligibilityRestrictionIdByHash;
+    mapping(bytes32 => uint256) private penaltyConsequenceIdBySourceHash;
 
     event ConsequenceRegistered(
         uint256 indexed id,
@@ -35,7 +50,7 @@ contract ConsequenceExecutor {
     event StandingPenaltyInputRecorded(
         uint256 indexed id,
         uint256 indexed penaltyConsequenceId,
-        AVADataTypes.StandingPenaltyKind indexed penaltyKind,
+        AVADataTypes.GovernanceFindingKind indexed findingKind,
         bytes32 subjectId,
         int256 delta
     );
@@ -45,17 +60,42 @@ contract ConsequenceExecutor {
         AVADataTypes.EligibilityRestrictionKind indexed restrictionKind,
         bytes32 subjectId
     );
+    event ValueSettlementReaderBound(address indexed reader);
+    event PenaltyConsequenceBound(
+        uint256 indexed consequenceId,
+        uint256 indexed challengeId,
+        AVADataTypes.GovernanceFindingKind indexed findingKind,
+        uint256 decisionPackageId,
+        uint256 originSettlementId
+    );
 
     constructor(
         AuthorityMatrix authorityMatrix_,
         AVAStateMachine stateMachine_,
+        AVAChallengeWorkflow challengeWorkflow_,
         AVARulePackageRegistry rulePackageRegistry_,
-        EvidenceCommitmentRegistry evidenceRegistry_
+        EvidenceCommitmentRegistry evidenceRegistry_,
+        StandingRevisionRegistry standingRevisionRegistry_
     ) {
+        if (address(standingRevisionRegistry_) == address(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
+        admin = msg.sender;
         authorityMatrix = authorityMatrix_;
         stateMachine = stateMachine_;
+        challengeWorkflow = challengeWorkflow_;
         rulePackageRegistry = rulePackageRegistry_;
         evidenceRegistry = evidenceRegistry_;
+        standingRevisionRegistry = standingRevisionRegistry_;
+        boundaryValidator = new ConsequenceBoundaryValidator();
+    }
+
+    function bindValueSettlementReader(IValueSettlementReader reader) external {
+        if (msg.sender != admin) revert AVADataTypes.NotAdmin(msg.sender);
+        if (address(valueSettlementReader) != address(0)) revert AVADataTypes.InvalidState(0);
+        if (address(reader) == address(0) || address(reader).code.length == 0) revert AVADataTypes.EmptyValue();
+        valueSettlementReader = reader;
+        emit ValueSettlementReaderBound(address(reader));
     }
 
     function registerConsequence(
@@ -68,7 +108,9 @@ contract ConsequenceExecutor {
         string calldata uri
     ) external returns (uint256 id) {
         return _registerConsequenceWithExecution(
-            actingRole, kind, _defaultValueExecutionContext(recognisedStateId, subjectId, 1, evidenceReceiptId, authorityId, uri)
+            actingRole,
+            kind,
+            _defaultValueExecutionContext(recognisedStateId, subjectId, 1, evidenceReceiptId, authorityId, uri)
         );
     }
 
@@ -82,22 +124,10 @@ contract ConsequenceExecutor {
 
     function recordPenalty(
         AVADataTypes.Role actingRole,
-        uint256 recognisedStateId,
-        bytes32 subjectId,
-        uint256 evidenceReceiptId,
-        bytes32 authorityId,
-        string calldata uri
-    ) external returns (uint256 id) {
-        return _recordPenaltyWithExecution(
-            actingRole, _defaultValueExecutionContext(recognisedStateId, subjectId, 1, evidenceReceiptId, authorityId, uri)
-        );
-    }
-
-    function recordPenaltyWithExecution(
-        AVADataTypes.Role actingRole,
+        AVADataTypes.PenaltyConsequenceContext calldata penaltyContext,
         AVADataTypes.ValueExecutionContext calldata executionContext
     ) external returns (uint256 id) {
-        return _recordPenaltyWithExecution(actingRole, executionContext);
+        return _recordPenalty(actingRole, penaltyContext, executionContext);
     }
 
     function recordRestoration(
@@ -109,7 +139,8 @@ contract ConsequenceExecutor {
         string calldata uri
     ) external returns (uint256 id) {
         return _recordRestorationWithExecution(
-            actingRole, _defaultValueExecutionContext(recognisedStateId, subjectId, 1, evidenceReceiptId, authorityId, uri)
+            actingRole,
+            _defaultValueExecutionContext(recognisedStateId, subjectId, 1, evidenceReceiptId, authorityId, uri)
         );
     }
 
@@ -126,11 +157,21 @@ contract ConsequenceExecutor {
         return consequence;
     }
 
+    function consequenceSubstrate()
+        external
+        view
+        returns (
+            AVAStateMachine stateMachine_,
+            AVARulePackageRegistry rulePackageRegistry_,
+            EvidenceCommitmentRegistry evidenceRegistry_
+        )
+    {
+        return (stateMachine, rulePackageRegistry, evidenceRegistry);
+    }
+
     function recordStandingPenaltyInput(
         AVADataTypes.Role actingRole,
         uint256 penaltyConsequenceId,
-        uint256 challengeId,
-        AVADataTypes.StandingPenaltyKind penaltyKind,
         string calldata dimension,
         int256 delta,
         uint256 evidenceReceiptId,
@@ -141,23 +182,44 @@ contract ConsequenceExecutor {
             msg.sender, actingRole, AVADataTypes.Action.RegisterConsequence, authorityId
         );
         if (
-            penaltyKind == AVADataTypes.StandingPenaltyKind.None || bytes(dimension).length == 0 || delta >= 0
-                || evidenceReceiptId == 0 || authorityId == bytes32(0) || bytes(uri).length == 0
+            bytes(dimension).length == 0 || delta >= 0 || evidenceReceiptId == 0 || authorityId == bytes32(0)
+                || bytes(uri).length == 0
         ) {
             revert AVADataTypes.EmptyValue();
         }
         AVADataTypes.ConsequenceRecord memory penalty = _requirePenaltyConsequence(penaltyConsequenceId);
-        AVADataTypes.ChallengeOutcome outcome = _requireCompatiblePenaltyOutcome(challengeId, penalty, penaltyKind);
-        _requirePenaltySubjectMatchesRecognisedState(penalty);
         _requireEvidenceForPenalty(evidenceReceiptId, penalty);
+        AVADataTypes.StandingPenaltyValidationContext memory validationContext =
+            AVADataTypes.StandingPenaltyValidationContext({
+                penaltyConsequenceId: penaltyConsequenceId,
+                packageId: penalty.packageId,
+                challengeId: penalty.challengeId,
+                findingKind: penalty.findingKind,
+                challengeOutcome: penalty.challengeOutcome,
+                subjectId: penalty.subjectId,
+                dimension: dimension,
+                delta: delta,
+                evidenceReceiptId: evidenceReceiptId,
+                authorityId: authorityId,
+                actor: msg.sender
+            });
+        rulePackageRegistry.getRulePackageById(penalty.packageId).penaltyAdapter
+            .validateStandingPenaltyInput(validationContext);
+        bytes32 inputHash = _hashFourWords(
+            bytes32(penalty.packageId), bytes32(penalty.challengeId), penalty.subjectId, keccak256(bytes(dimension))
+        );
+        if (standingPenaltyInputIdByHash[inputHash] != 0) {
+            revert AVADataTypes.InvalidState(standingPenaltyInputIdByHash[inputHash]);
+        }
 
         id = nextStandingPenaltyInputId++;
         standingPenaltyInputs[id] = AVADataTypes.StandingPenaltyInputRecord({
             id: id,
             penaltyConsequenceId: penaltyConsequenceId,
-            challengeId: challengeId,
-            penaltyKind: penaltyKind,
-            challengeOutcome: outcome,
+            packageId: penalty.packageId,
+            challengeId: penalty.challengeId,
+            findingKind: penalty.findingKind,
+            challengeOutcome: penalty.challengeOutcome,
             subjectId: penalty.subjectId,
             dimension: dimension,
             delta: delta,
@@ -167,13 +229,16 @@ contract ConsequenceExecutor {
             uri: uri,
             recordedBy: msg.sender
         });
-        emit StandingPenaltyInputRecorded(id, penaltyConsequenceId, penaltyKind, penalty.subjectId, delta);
+        standingPenaltyInputIdByHash[inputHash] = id;
+        standingRevisionRegistry.advanceRevision(
+            penalty.packageId, penalty.subjectId, AVADataTypes.StandingRevisionReason.StandingPenalty, id
+        );
+        emit StandingPenaltyInputRecorded(id, penaltyConsequenceId, penalty.findingKind, penalty.subjectId, delta);
     }
 
     function recordEligibilityRestriction(
         AVADataTypes.Role actingRole,
         uint256 penaltyConsequenceId,
-        uint256 challengeId,
         AVADataTypes.EligibilityRestrictionKind restrictionKind,
         uint256 expiresAt,
         uint256 evidenceReceiptId,
@@ -190,17 +255,42 @@ contract ConsequenceExecutor {
             revert AVADataTypes.EmptyValue();
         }
         AVADataTypes.ConsequenceRecord memory penalty = _requirePenaltyConsequence(penaltyConsequenceId);
-        AVADataTypes.ChallengeOutcome outcome =
-            _requireCompatibleEligibilityOutcome(challengeId, penalty, restrictionKind);
+        boundaryValidator.requireCompatibleEligibilityOutcome(
+            penalty.challengeOutcome, penalty.findingKind, penalty.challengeId, restrictionKind
+        );
         _requireEvidenceForPenalty(evidenceReceiptId, penalty);
+        AVADataTypes.EligibilityRestrictionValidationContext memory validationContext =
+            AVADataTypes.EligibilityRestrictionValidationContext({
+                penaltyConsequenceId: penaltyConsequenceId,
+                packageId: penalty.packageId,
+                challengeId: penalty.challengeId,
+                findingKind: penalty.findingKind,
+                challengeOutcome: penalty.challengeOutcome,
+                restrictionKind: restrictionKind,
+                subjectId: penalty.subjectId,
+                expiresAt: expiresAt,
+                evidenceReceiptId: evidenceReceiptId,
+                authorityId: authorityId,
+                actor: msg.sender
+            });
+        rulePackageRegistry.getRulePackageById(penalty.packageId).penaltyAdapter
+            .validateEligibilityRestriction(validationContext);
+        bytes32 inputHash = _hashThreeWords(
+            bytes32(penalty.packageId), bytes32(penaltyConsequenceId), bytes32(uint256(restrictionKind))
+        );
+        if (eligibilityRestrictionIdByHash[inputHash] != 0) {
+            revert AVADataTypes.InvalidState(eligibilityRestrictionIdByHash[inputHash]);
+        }
 
         id = nextEligibilityRestrictionId++;
         eligibilityRestrictions[id] = AVADataTypes.EligibilityRestrictionRecord({
             id: id,
             penaltyConsequenceId: penaltyConsequenceId,
-            challengeId: challengeId,
+            packageId: penalty.packageId,
+            challengeId: penalty.challengeId,
+            findingKind: penalty.findingKind,
             restrictionKind: restrictionKind,
-            challengeOutcome: outcome,
+            challengeOutcome: penalty.challengeOutcome,
             subjectId: penalty.subjectId,
             expiresAt: expiresAt,
             evidenceReceiptId: evidenceReceiptId,
@@ -209,7 +299,11 @@ contract ConsequenceExecutor {
             uri: uri,
             recordedBy: msg.sender
         });
+        eligibilityRestrictionIdByHash[inputHash] = id;
         _indexActiveEligibilityRestriction(penalty.packageId, penalty.subjectId, restrictionKind, id, expiresAt);
+        standingRevisionRegistry.advanceRevision(
+            penalty.packageId, penalty.subjectId, AVADataTypes.StandingRevisionReason.EligibilityRestriction, id
+        );
         emit EligibilityRestrictionRecorded(id, penaltyConsequenceId, restrictionKind, penalty.subjectId);
     }
 
@@ -229,14 +323,6 @@ contract ConsequenceExecutor {
         AVADataTypes.EligibilityRestrictionKind restrictionKind
     ) external view returns (uint256) {
         return _activeEligibilityRestrictionId(packageId, subjectId, restrictionKind);
-    }
-
-    function hasActiveEligibilityRestriction(
-        uint256 packageId,
-        bytes32 subjectId,
-        AVADataTypes.EligibilityRestrictionKind restrictionKind
-    ) external view returns (bool) {
-        return _activeEligibilityRestrictionId(packageId, subjectId, restrictionKind) != 0;
     }
 
     function getEligibilityRestriction(uint256 id)
@@ -263,20 +349,31 @@ contract ConsequenceExecutor {
         ) {
             revert AVADataTypes.InvalidState(recognisedStateId);
         }
+        evidenceRegistry.requireUsableEvidenceReceiptForPackage(
+            recognisedState.evidenceReceiptId, recognisedState.packageId
+        );
     }
 
     function _recordConsequence(
         AVADataTypes.Role actingRole,
         AVADataTypes.ConsequenceKind kind,
         AVADataTypes.ValueExecutionContext memory executionContext,
-        uint256 packageId
+        uint256 packageId,
+        uint256 decisionPackageId,
+        AVADataTypes.PenaltyConsequenceContext memory penaltyContext,
+        AVADataTypes.ChallengeOutcome challengeOutcome
     ) internal returns (uint256 id) {
         id = nextConsequenceId++;
         consequences[id] = AVADataTypes.ConsequenceRecord({
             id: id,
             recognisedStateId: executionContext.recognisedStateId,
             packageId: packageId,
+            decisionPackageId: decisionPackageId,
             kind: kind,
+            challengeId: penaltyContext.challengeId,
+            findingKind: penaltyContext.findingKind,
+            challengeOutcome: challengeOutcome,
+            originSettlementId: penaltyContext.originSettlementId,
             subjectId: executionContext.recipientSubjectId,
             asset: executionContext.asset,
             payer: executionContext.payer,
@@ -311,9 +408,15 @@ contract ConsequenceExecutor {
         bytes32 subjectId,
         uint256 recognisedStateId
     ) internal view {
-        rulePackage.antiAbuseModule.validateUse(
-            workflowKey, actingRole, AVADataTypes.Action.RegisterConsequence, subjectId, bytes32(recognisedStateId), msg.sender
-        );
+        rulePackage.antiAbuseModule
+            .validateUse(
+                workflowKey,
+                actingRole,
+                AVADataTypes.Action.RegisterConsequence,
+                subjectId,
+                bytes32(recognisedStateId),
+                msg.sender
+            );
     }
 
     function _validateValueExecution(
@@ -347,98 +450,137 @@ contract ConsequenceExecutor {
         });
     }
 
-    function _requireValidExecutionContext(AVADataTypes.ValueExecutionContext memory executionContext) internal view {
-        if (
-            executionContext.recognisedStateId == 0 || executionContext.recipientSubjectId == bytes32(0)
-                || executionContext.amount == 0 || executionContext.executionReference == bytes32(0)
-                || executionContext.evidenceReceiptId == 0 || executionContext.authorityId == bytes32(0)
-                || executionContext.actor != msg.sender
-                || (executionContext.mode == AVADataTypes.ValueExecutionMode.RecordOnly
-                    && executionContext.settlementKind != AVADataTypes.ValueSettlementKind.None)
-                || (executionContext.mode != AVADataTypes.ValueExecutionMode.RecordOnly
-                    && executionContext.settlementKind == AVADataTypes.ValueSettlementKind.None)
-        ) {
-            revert AVADataTypes.EmptyValue();
-        }
-    }
-
     function _registerConsequenceWithExecution(
         AVADataTypes.Role actingRole,
         AVADataTypes.ConsequenceKind kind,
         AVADataTypes.ValueExecutionContext memory executionContext
     ) internal returns (uint256 id) {
-        if (kind == AVADataTypes.ConsequenceKind.None) {
-            revert AVADataTypes.EmptyValue();
-        }
-        _requireGenericConsequenceKind(kind, executionContext.recognisedStateId);
-        _requireSettlementKindForConsequence(kind, executionContext);
+        boundaryValidator.requireExecutionContext(kind, executionContext, msg.sender, true);
         AVARulePackageRegistry.RulePackage memory rulePackage =
             _prepareConsequenceExecution(actingRole, executionContext);
-        rulePackage.consequenceAdapter.validateConsequence(
+        rulePackage.consequenceAdapter
+            .validateConsequence(
+                actingRole,
+                executionContext.recognisedStateId,
+                kind,
+                executionContext.recipientSubjectId,
+                executionContext.evidenceReceiptId,
+                executionContext.authorityId,
+                executionContext.uri,
+                msg.sender
+            );
+        id = _recordConsequence(
             actingRole,
-            executionContext.recognisedStateId,
             kind,
-            executionContext.recipientSubjectId,
-            executionContext.evidenceReceiptId,
-            executionContext.authorityId,
-            executionContext.uri,
-            msg.sender
+            executionContext,
+            rulePackage.packageId,
+            rulePackage.packageId,
+            _emptyPenaltyContext(),
+            AVADataTypes.ChallengeOutcome.None
         );
-        id = _recordConsequence(actingRole, kind, executionContext, rulePackage.packageId);
     }
 
-    function _requireGenericConsequenceKind(AVADataTypes.ConsequenceKind kind, uint256 recognisedStateId)
-        internal
-        pure
-    {
-        if (
-            kind == AVADataTypes.ConsequenceKind.PenaltyRecord
-                || kind == AVADataTypes.ConsequenceKind.RestorationRecord
-        ) {
-            revert AVADataTypes.InvalidState(recognisedStateId);
-        }
-    }
-
-    function _recordPenaltyWithExecution(
+    function _recordPenalty(
         AVADataTypes.Role actingRole,
+        AVADataTypes.PenaltyConsequenceContext memory penaltyContext,
         AVADataTypes.ValueExecutionContext memory executionContext
     ) internal returns (uint256 id) {
-        AVARulePackageRegistry.RulePackage memory rulePackage =
-            _prepareConsequenceExecution(actingRole, executionContext);
-        _requireSettlementKindForConsequence(AVADataTypes.ConsequenceKind.PenaltyRecord, executionContext);
-        rulePackage.penaltyAdapter.validatePenaltyRecord(
-            actingRole,
-            executionContext.recognisedStateId,
-            executionContext.recipientSubjectId,
-            executionContext.evidenceReceiptId,
-            executionContext.authorityId,
-            executionContext.uri,
-            msg.sender
+        boundaryValidator.requireExecutionContext(
+            AVADataTypes.ConsequenceKind.PenaltyRecord, executionContext, msg.sender, false
         );
+        (AVARulePackageRegistry.RulePackage memory rulePackage, AVADataTypes.ChallengeRecord memory challenge) =
+            _preparePenaltyExecution(actingRole, penaltyContext, executionContext);
+        _requireOriginSettlement(penaltyContext.originSettlementId, executionContext, rulePackage.packageId);
+        bytes32 sourceHash = _penaltyConsequenceSourceHash(
+            rulePackage.packageId, challenge.packageId, challenge.outcome, penaltyContext, executionContext
+        );
+        uint256 existingPenaltyId = penaltyConsequenceIdBySourceHash[sourceHash];
+        if (existingPenaltyId != 0) revert AVADataTypes.InvalidState(existingPenaltyId);
+        rulePackage.penaltyAdapter
+            .validatePenaltyRecord(
+                actingRole,
+                executionContext.recognisedStateId,
+                penaltyContext.challengeId,
+                penaltyContext.findingKind,
+                challenge.outcome,
+                executionContext.recipientSubjectId,
+                executionContext.evidenceReceiptId,
+                executionContext.authorityId,
+                executionContext.uri,
+                msg.sender
+            );
         id = _recordConsequence(
-            actingRole, AVADataTypes.ConsequenceKind.PenaltyRecord, executionContext, rulePackage.packageId
+            actingRole,
+            AVADataTypes.ConsequenceKind.PenaltyRecord,
+            executionContext,
+            rulePackage.packageId,
+            challenge.packageId,
+            penaltyContext,
+            challenge.outcome
         );
+        penaltyConsequenceIdBySourceHash[sourceHash] = id;
+        emit PenaltyConsequenceBound(
+            id,
+            penaltyContext.challengeId,
+            penaltyContext.findingKind,
+            challenge.packageId,
+            penaltyContext.originSettlementId
+        );
+    }
+
+    function _penaltyConsequenceSourceHash(
+        uint256 packageId,
+        uint256 decisionPackageId,
+        AVADataTypes.ChallengeOutcome outcome,
+        AVADataTypes.PenaltyConsequenceContext memory penaltyContext,
+        AVADataTypes.ValueExecutionContext memory executionContext
+    ) internal pure returns (bytes32 result) {
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, packageId)
+            mstore(add(ptr, 0x20), decisionPackageId)
+            mstore(add(ptr, 0x40), mload(executionContext))
+            mstore(add(ptr, 0x60), mload(penaltyContext))
+            mstore(add(ptr, 0x80), mload(add(penaltyContext, 0x20)))
+            mstore(add(ptr, 0xa0), outcome)
+            mstore(add(ptr, 0xc0), mload(add(executionContext, 0x60)))
+            mstore(add(ptr, 0xe0), mload(add(penaltyContext, 0x40)))
+            result := keccak256(ptr, 0x100)
+        }
     }
 
     function _recordRestorationWithExecution(
         AVADataTypes.Role actingRole,
         AVADataTypes.ValueExecutionContext memory executionContext
     ) internal returns (uint256 id) {
+        boundaryValidator.requireExecutionContext(
+            AVADataTypes.ConsequenceKind.RestorationRecord, executionContext, msg.sender, false
+        );
         AVARulePackageRegistry.RulePackage memory rulePackage =
             _prepareConsequenceExecution(actingRole, executionContext);
-        _requireSettlementKindForConsequence(AVADataTypes.ConsequenceKind.RestorationRecord, executionContext);
-        rulePackage.restorationAdapter.validateRestorationRecord(
-            actingRole,
-            executionContext.recognisedStateId,
-            executionContext.recipientSubjectId,
-            executionContext.evidenceReceiptId,
-            executionContext.authorityId,
-            executionContext.uri,
-            msg.sender
-        );
+        rulePackage.restorationAdapter
+            .validateRestorationRecord(
+                actingRole,
+                executionContext.recognisedStateId,
+                executionContext.recipientSubjectId,
+                executionContext.evidenceReceiptId,
+                executionContext.authorityId,
+                executionContext.uri,
+                msg.sender
+            );
         id = _recordConsequence(
-            actingRole, AVADataTypes.ConsequenceKind.RestorationRecord, executionContext, rulePackage.packageId
+            actingRole,
+            AVADataTypes.ConsequenceKind.RestorationRecord,
+            executionContext,
+            rulePackage.packageId,
+            rulePackage.packageId,
+            _emptyPenaltyContext(),
+            AVADataTypes.ChallengeOutcome.None
         );
+    }
+
+    function _emptyPenaltyContext() internal pure returns (AVADataTypes.PenaltyConsequenceContext memory context) {
+        context.findingKind = AVADataTypes.GovernanceFindingKind.None;
     }
 
     function _prepareConsequenceExecution(
@@ -450,15 +592,16 @@ contract ConsequenceExecutor {
         );
         AVADataTypes.RecognisedStateRecord memory recognisedState =
             _requireAllowedRecognisedState(executionContext.recognisedStateId);
-        _requireValidExecutionContext(executionContext);
         authorityMatrix.requireKnownActiveSubject(executionContext.recipientSubjectId);
         _requireRecognisedStateSubject(recognisedState, executionContext.recipientSubjectId);
-        AVADataTypes.EvidenceReceipt memory evidence =
-            evidenceRegistry.requireUsableEvidenceReceipt(executionContext.evidenceReceiptId, recognisedState.workflowKey);
-        if (evidence.packageId != recognisedState.packageId) {
-            revert AVADataTypes.InvalidState(executionContext.evidenceReceiptId);
-        }
+        evidenceRegistry.requireUsableEvidenceReceiptForPackage(
+            executionContext.evidenceReceiptId, recognisedState.packageId
+        );
         rulePackage = rulePackageRegistry.getRulePackageById(recognisedState.packageId);
+        _validateEvidenceLifecycle(rulePackage, recognisedState.evidenceReceiptId);
+        if (executionContext.evidenceReceiptId != recognisedState.evidenceReceiptId) {
+            _validateEvidenceLifecycle(rulePackage, executionContext.evidenceReceiptId);
+        }
         _validateAntiAbuse(
             rulePackage,
             recognisedState.workflowKey,
@@ -469,20 +612,77 @@ contract ConsequenceExecutor {
         _validateValueExecution(rulePackage, executionContext);
     }
 
-    function _requireSettlementKindForConsequence(
-        AVADataTypes.ConsequenceKind consequenceKind,
+    function _preparePenaltyExecution(
+        AVADataTypes.Role actingRole,
+        AVADataTypes.PenaltyConsequenceContext memory penaltyContext,
         AVADataTypes.ValueExecutionContext memory executionContext
-    ) internal pure {
-        if (executionContext.mode == AVADataTypes.ValueExecutionMode.RecordOnly) {
-            return;
-        }
+    )
+        internal
+        view
+        returns (AVARulePackageRegistry.RulePackage memory rulePackage, AVADataTypes.ChallengeRecord memory challenge)
+    {
+        authorityMatrix.requireAuthorisedSubject(
+            msg.sender, actingRole, AVADataTypes.Action.RegisterConsequence, executionContext.authorityId
+        );
+        AVADataTypes.RecognisedStateRecord memory recognisedState =
+            stateMachine.getRecognisedState(executionContext.recognisedStateId);
+        authorityMatrix.requireKnownActiveSubject(executionContext.recipientSubjectId);
+        challenge = challengeWorkflow.getChallenge(penaltyContext.challengeId);
         if (
-            consequenceKind != AVADataTypes.ConsequenceKind.PenaltyRecord
-                || executionContext.mode != AVADataTypes.ValueExecutionMode.Claim
-                || executionContext.settlementKind != AVADataTypes.ValueSettlementKind.ClawbackTransfer
+            penaltyContext.findingKind == AVADataTypes.GovernanceFindingKind.None
+                || challenge.challengedRecognisedStateId != recognisedState.id
+                || challenge.targetWorkflowKey != recognisedState.workflowKey
+                || challenge.targetPackageId != recognisedState.packageId
+                || challenge.outcome == AVADataTypes.ChallengeOutcome.None
         ) {
-            revert AVADataTypes.InvalidState(executionContext.recognisedStateId);
+            revert AVADataTypes.InvalidState(penaltyContext.challengeId);
         }
+        AVADataTypes.Role subjectRole =
+        authorityMatrix.roleRegistry().getSubject(executionContext.recipientSubjectId).role;
+        boundaryValidator.requireCompatibleFindingSubject(
+            challenge.outcome,
+            challenge.id,
+            challenge.challengerSubjectId,
+            recognisedState.subjectId,
+            penaltyContext.findingKind,
+            executionContext.recipientSubjectId,
+            subjectRole
+        );
+        bool challengerFinding = penaltyContext.findingKind == AVADataTypes.GovernanceFindingKind.NegligentChallenge
+            || penaltyContext.findingKind == AVADataTypes.GovernanceFindingKind.MaliciousOrFabricatedChallenge;
+        uint256 effectPackageId;
+        bytes32 effectWorkflowKey;
+        if (challengerFinding) {
+            if (
+                recognisedState.status != AVADataTypes.RecognisedStateStatus.Challengeable
+                    && recognisedState.status != AVADataTypes.RecognisedStateStatus.Vested
+                    && recognisedState.status != AVADataTypes.RecognisedStateStatus.Restored
+            ) {
+                revert AVADataTypes.InvalidState(recognisedState.id);
+            }
+            effectPackageId = challenge.packageId;
+            effectWorkflowKey = challenge.workflowKey;
+        } else {
+            _requireAllowedRecognisedState(recognisedState.id);
+            effectPackageId = recognisedState.packageId;
+            effectWorkflowKey = recognisedState.workflowKey;
+        }
+        rulePackage = rulePackageRegistry.getRulePackageById(effectPackageId);
+        evidenceRegistry.requireUsableEvidenceReceiptForPackage(executionContext.evidenceReceiptId, effectPackageId);
+        if (!challengerFinding) {
+            _validateEvidenceLifecycle(rulePackage, recognisedState.evidenceReceiptId);
+        }
+        if (challengerFinding || executionContext.evidenceReceiptId != recognisedState.evidenceReceiptId) {
+            _validateEvidenceLifecycle(rulePackage, executionContext.evidenceReceiptId);
+        }
+        _validateAntiAbuse(
+            rulePackage,
+            effectWorkflowKey,
+            actingRole,
+            executionContext.recipientSubjectId,
+            executionContext.recognisedStateId
+        );
+        _validateValueExecution(rulePackage, executionContext);
     }
 
     function _requirePenaltyConsequence(uint256 penaltyConsequenceId)
@@ -492,115 +692,75 @@ contract ConsequenceExecutor {
     {
         penalty = consequences[penaltyConsequenceId];
         if (penalty.id == 0) revert AVADataTypes.UnknownReference(penaltyConsequenceId);
-        if (penalty.kind != AVADataTypes.ConsequenceKind.PenaltyRecord) {
+        if (
+            penalty.kind != AVADataTypes.ConsequenceKind.PenaltyRecord
+                || penalty.challengeOutcome == AVADataTypes.ChallengeOutcome.RejectedGoodFaith
+        ) {
             revert AVADataTypes.InvalidState(penaltyConsequenceId);
         }
         authorityMatrix.requireKnownActiveSubject(penalty.subjectId);
     }
 
-    function _requireCompatiblePenaltyOutcome(
-        uint256 challengeId,
-        AVADataTypes.ConsequenceRecord memory penalty,
-        AVADataTypes.StandingPenaltyKind penaltyKind
-    ) internal view returns (AVADataTypes.ChallengeOutcome outcome) {
-        if (challengeId == 0) revert AVADataTypes.InvalidState(challengeId);
-        AVADataTypes.ChallengeRecord memory challenge = _requirePenaltyChallenge(challengeId, penalty);
-        outcome = challenge.outcome;
-        if (outcome == AVADataTypes.ChallengeOutcome.RejectedGoodFaith) {
-            revert AVADataTypes.InvalidState(challengeId);
+    function _requireOriginSettlement(
+        uint256 originSettlementId,
+        AVADataTypes.ValueExecutionContext memory executionContext,
+        uint256 packageId
+    ) internal view {
+        if (executionContext.mode == AVADataTypes.ValueExecutionMode.RecordOnly) {
+            if (originSettlementId != 0) revert AVADataTypes.InvalidState(originSettlementId);
+            return;
         }
+        if (originSettlementId == 0 || address(valueSettlementReader) == address(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
+        AVADataTypes.ValueSettlementRecord memory origin = valueSettlementReader.getValueSettlement(originSettlementId);
+        bool completedTokenTransfer = origin.kind == AVADataTypes.ValueSettlementKind.TokenTransfer
+            && origin.status == AVADataTypes.ValueSettlementStatus.Settled;
+        bool completedEscrowClaim = origin.kind == AVADataTypes.ValueSettlementKind.EscrowClaim
+            && origin.status == AVADataTypes.ValueSettlementStatus.Claimed;
         if (
-            penaltyKind == AVADataTypes.StandingPenaltyKind.MaliciousOrFabricatedChallenge
-                && outcome != AVADataTypes.ChallengeOutcome.MaliciousOrFabricated
+            (!completedTokenTransfer && !completedEscrowClaim) || origin.packageId != packageId
+                || origin.recognisedStateId != executionContext.recognisedStateId
+                || origin.subjectId != executionContext.recipientSubjectId || origin.asset != executionContext.asset
+                || origin.payer != executionContext.payer || origin.amountOrUnits != executionContext.amount
         ) {
-            revert AVADataTypes.InvalidState(challengeId);
+            revert AVADataTypes.InvalidState(originSettlementId);
         }
-        if (
-            penaltyKind == AVADataTypes.StandingPenaltyKind.NegligentChallenge
-                && outcome != AVADataTypes.ChallengeOutcome.Negligent
-        ) {
-            revert AVADataTypes.InvalidState(challengeId);
-        }
-        if (
-            (penaltyKind == AVADataTypes.StandingPenaltyKind.AcademicFraud
-                || penaltyKind == AVADataTypes.StandingPenaltyKind.IrresponsibleReview)
-                && outcome != AVADataTypes.ChallengeOutcome.Upheld
-        ) {
-            revert AVADataTypes.InvalidState(challengeId);
-        }
-        if (
-            penaltyKind == AVADataTypes.StandingPenaltyKind.AcademicFraud
-                || penaltyKind == AVADataTypes.StandingPenaltyKind.IrresponsibleReview
-        ) {
-            if (challenge.challengedRecognisedStateId != penalty.recognisedStateId) {
-                revert AVADataTypes.InvalidState(challengeId);
-            }
-        } else if (challenge.challengerSubjectId != penalty.subjectId) {
-            revert AVADataTypes.InvalidState(challengeId);
-        }
-    }
-
-    function _requireCompatibleEligibilityOutcome(
-        uint256 challengeId,
-        AVADataTypes.ConsequenceRecord memory penalty,
-        AVADataTypes.EligibilityRestrictionKind restrictionKind
-    ) internal view returns (AVADataTypes.ChallengeOutcome outcome) {
-        if (challengeId == 0) revert AVADataTypes.InvalidState(challengeId);
-        AVADataTypes.ChallengeRecord memory challenge = _requirePenaltyChallenge(challengeId, penalty);
-        outcome = challenge.outcome;
-        if (outcome == AVADataTypes.ChallengeOutcome.RejectedGoodFaith) {
-            revert AVADataTypes.InvalidState(challengeId);
-        }
-        if (restrictionKind == AVADataTypes.EligibilityRestrictionKind.ChallengeIntake) {
-            if (
-                outcome != AVADataTypes.ChallengeOutcome.Negligent
-                    && outcome != AVADataTypes.ChallengeOutcome.MaliciousOrFabricated
-            ) {
-                revert AVADataTypes.InvalidState(challengeId);
-            }
-            if (challenge.challengerSubjectId != penalty.subjectId) revert AVADataTypes.InvalidState(challengeId);
-        }
-    }
-
-    function _challengeOutcome(uint256 challengeId, AVADataTypes.ConsequenceRecord memory penalty)
-        internal
-        view
-        returns (AVADataTypes.ChallengeOutcome outcome)
-    {
-        if (challengeId == 0) return AVADataTypes.ChallengeOutcome.None;
-        return _requirePenaltyChallenge(challengeId, penalty).outcome;
-    }
-
-    function _requirePenaltyChallenge(uint256 challengeId, AVADataTypes.ConsequenceRecord memory penalty)
-        internal
-        view
-        returns (AVADataTypes.ChallengeRecord memory challenge)
-    {
-        challenge = stateMachine.getChallenge(challengeId);
-        if (challenge.packageId != penalty.packageId) revert AVADataTypes.InvalidState(challengeId);
-        if (challenge.outcome == AVADataTypes.ChallengeOutcome.None) revert AVADataTypes.InvalidState(challengeId);
     }
 
     function _requireRecognisedStateSubject(
         AVADataTypes.RecognisedStateRecord memory recognisedState,
         bytes32 subjectId
     ) internal pure {
-        if (recognisedState.subjectId != subjectId) revert AVADataTypes.InvalidState(recognisedState.id);
-    }
-
-    function _requirePenaltySubjectMatchesRecognisedState(AVADataTypes.ConsequenceRecord memory penalty) internal view {
-        AVADataTypes.RecognisedStateRecord memory recognisedState = stateMachine.getRecognisedState(penalty.recognisedStateId);
-        _requireRecognisedStateSubject(recognisedState, penalty.subjectId);
+        if (recognisedState.subjectId != subjectId) {
+            revert AVADataTypes.InvalidState(recognisedState.id);
+        }
     }
 
     function _requireEvidenceForPenalty(uint256 evidenceReceiptId, AVADataTypes.ConsequenceRecord memory penalty)
         internal
         view
     {
-        AVADataTypes.RecognisedStateRecord memory recognisedState = stateMachine.getRecognisedState(penalty.recognisedStateId);
-        AVADataTypes.EvidenceReceipt memory evidence =
-            evidenceRegistry.requireUsableEvidenceReceipt(evidenceReceiptId, recognisedState.workflowKey);
-        if (evidence.packageId != recognisedState.packageId) revert AVADataTypes.InvalidState(evidenceReceiptId);
+        AVARulePackageRegistry.RulePackage memory rulePackage =
+            rulePackageRegistry.getRulePackageById(penalty.packageId);
+        evidenceRegistry.requireUsableEvidenceReceiptForPackage(evidenceReceiptId, penalty.packageId);
+        _validateEvidenceLifecycle(rulePackage, evidenceReceiptId);
+    }
+
+    function _validateEvidenceLifecycle(
+        AVARulePackageRegistry.RulePackage memory rulePackage,
+        uint256 evidenceReceiptId
+    ) internal view {
+        rulePackage.evidenceLifecycleModule
+            .validateEvidenceLifecycle(
+                rulePackage.workflowKey,
+                AVADataTypes.Action.RegisterConsequence,
+                evidenceReceiptId,
+                AVADataTypes.EvidenceLifecycleKind.None,
+                0,
+                bytes32(0),
+                msg.sender
+            );
     }
 
     function _indexActiveEligibilityRestriction(
@@ -610,7 +770,7 @@ contract ConsequenceExecutor {
         uint256 restrictionId,
         uint256 expiresAt
     ) internal {
-        bytes32 key = keccak256(abi.encode(packageId, subjectId, restrictionKind));
+        bytes32 key = _hashThreeWords(bytes32(packageId), subjectId, bytes32(uint256(restrictionKind)));
         uint256 currentId = activeEligibilityRestrictionIdBySubjectKind[key];
         if (currentId == 0) {
             activeEligibilityRestrictionIdBySubjectKind[key] = restrictionId;
@@ -627,15 +787,42 @@ contract ConsequenceExecutor {
         bytes32 subjectId,
         AVADataTypes.EligibilityRestrictionKind restrictionKind
     ) internal view returns (uint256) {
-        if (packageId == 0 || subjectId == bytes32(0) || restrictionKind == AVADataTypes.EligibilityRestrictionKind.None) {
+        if (
+            packageId == 0 || subjectId == bytes32(0) || restrictionKind == AVADataTypes.EligibilityRestrictionKind.None
+        ) {
             return 0;
         }
         uint256 id = activeEligibilityRestrictionIdBySubjectKind[
-            keccak256(abi.encode(packageId, subjectId, restrictionKind))
+            _hashThreeWords(bytes32(packageId), subjectId, bytes32(uint256(restrictionKind)))
         ];
         if (id == 0) return 0;
         AVADataTypes.EligibilityRestrictionRecord memory record = eligibilityRestrictions[id];
         if (record.id == 0 || record.expiresAt <= block.timestamp) return 0;
         return id;
+    }
+
+    function _hashThreeWords(bytes32 first, bytes32 second, bytes32 third) internal pure returns (bytes32 result) {
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, first)
+            mstore(add(ptr, 0x20), second)
+            mstore(add(ptr, 0x40), third)
+            result := keccak256(ptr, 0x60)
+        }
+    }
+
+    function _hashFourWords(bytes32 first, bytes32 second, bytes32 third, bytes32 fourth)
+        internal
+        pure
+        returns (bytes32 result)
+    {
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, first)
+            mstore(add(ptr, 0x20), second)
+            mstore(add(ptr, 0x40), third)
+            mstore(add(ptr, 0x60), fourth)
+            result := keccak256(ptr, 0x80)
+        }
     }
 }

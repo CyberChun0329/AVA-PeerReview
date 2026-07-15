@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {AuthorityApprovalRegistry} from "../AuthorityApprovalRegistry.sol";
 import {IResidualEditorialAuthorityModule} from "../interfaces/IResidualEditorialAuthorityModule.sol";
 
-contract ApprovalReceiptAuthorityModule is IResidualEditorialAuthorityModule {
+contract ApprovalReceiptAuthorityModule is IResidualEditorialAuthorityModule, RuleModuleIdentity {
     AuthorityApprovalRegistry public immutable APPROVAL_REGISTRY;
     uint256 public immutable PACKAGE_ID;
     AVADataTypes.Role public immutable REQUIRED_ROLE;
@@ -35,8 +37,10 @@ contract ApprovalReceiptAuthorityModule is IResidualEditorialAuthorityModule {
     function validateResidualEditorialAuthority(ResidualEditorialAuthorityContext calldata context) external view {
         if (context.action != REQUIRED_ACTION) return;
         if (
-            context.workflowKey == bytes32(0) || context.recognisedStateId == 0 || context.objectId == bytes32(0)
+            context.workflowKey == bytes32(0) || context.packageId != PACKAGE_ID || context.targetPackageId == 0
+                || context.recognisedStateId == 0 || context.challengeId == 0 || context.objectId == bytes32(0)
                 || context.evidenceReceiptId == 0 || context.authorityId == bytes32(0) || context.actor == address(0)
+                || context.decisionHash == bytes32(0)
         ) {
             revert AVADataTypes.EmptyValue();
         }
@@ -46,14 +50,45 @@ contract ApprovalReceiptAuthorityModule is IResidualEditorialAuthorityModule {
         }
         if (
             !APPROVAL_REGISTRY.hasActiveApproval(
-                context.workflowKey, PACKAGE_ID, context.action, context.recognisedStateId, context.objectId, context.authorityId
+                context.workflowKey,
+                PACKAGE_ID,
+                context.action,
+                REQUIRED_ROLE,
+                context.recognisedStateId,
+                context.challengeId,
+                context.objectId,
+                context.decisionHash,
+                context.authorityId
             )
         ) {
             revert AVADataTypes.InvalidState(context.recognisedStateId);
         }
         uint256 count = APPROVAL_REGISTRY.approvalCount(
-            context.workflowKey, PACKAGE_ID, context.action, context.recognisedStateId, context.objectId
+            context.workflowKey,
+            PACKAGE_ID,
+            context.action,
+            REQUIRED_ROLE,
+            context.recognisedStateId,
+            context.challengeId,
+            context.objectId,
+            context.decisionHash
         );
+        if (
+            EXCLUDED_AUTHORITY_ID != bytes32(0)
+                && APPROVAL_REGISTRY.hasActiveApproval(
+                    context.workflowKey,
+                    PACKAGE_ID,
+                    context.action,
+                    REQUIRED_ROLE,
+                    context.recognisedStateId,
+                    context.challengeId,
+                    context.objectId,
+                    context.decisionHash,
+                    EXCLUDED_AUTHORITY_ID
+                )
+        ) {
+            count -= 1;
+        }
         if (count < REQUIRED_THRESHOLD) revert AVADataTypes.InvalidState(context.recognisedStateId);
     }
 }

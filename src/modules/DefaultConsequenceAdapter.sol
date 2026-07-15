@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {IConsequenceAdapter} from "../interfaces/IConsequenceAdapter.sol";
 
-contract DefaultConsequenceAdapter is IConsequenceAdapter {
+contract DefaultConsequenceAdapter is IConsequenceAdapter, RuleModuleIdentity {
     function validateConsequence(
         AVADataTypes.Role,
         uint256,

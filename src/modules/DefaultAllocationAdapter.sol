@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {IAVAAllocationModule} from "../interfaces/IAVAAllocationModule.sol";
 
-contract DefaultAllocationAdapter is IAVAAllocationModule {
+contract DefaultAllocationAdapter is IAVAAllocationModule, RuleModuleIdentity {
     function validateAllocation(
         AVADataTypes.Role,
         uint256,

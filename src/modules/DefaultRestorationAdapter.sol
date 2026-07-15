@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {IRestorationAdapter} from "../interfaces/IRestorationAdapter.sol";
 
-contract DefaultRestorationAdapter is IRestorationAdapter {
+contract DefaultRestorationAdapter is IRestorationAdapter, RuleModuleIdentity {
     function validateRestorationRecord(
         AVADataTypes.Role,
         uint256,

@@ -28,12 +28,6 @@ contract AuthorityMatrix {
         emit PermissionSet(role, action, permitted);
     }
 
-    function requireAuthorised(address actor, AVADataTypes.Role role, AVADataTypes.Action action) external view {
-        if (!roleRegistry.hasRole(actor, role) || !isPermitted[role][action]) {
-            revert AVADataTypes.NotAuthorised(actor, action);
-        }
-    }
-
     function requireAuthorisedSubject(
         address actor,
         AVADataTypes.Role role,
@@ -59,12 +53,6 @@ contract AuthorityMatrix {
                 || !roleRegistry.isSubjectFor(actor, role, subjectId)
         ) {
             revert AVADataTypes.NotAuthorised(actor, action);
-        }
-    }
-
-    function requireSubjectForRole(address actor, AVADataTypes.Role role, bytes32 subjectId) external view {
-        if (!roleRegistry.isSubjectFor(actor, role, subjectId)) {
-            revert AVADataTypes.NotAuthorised(actor, AVADataTypes.Action.RegisterRecognisedState);
         }
     }
 

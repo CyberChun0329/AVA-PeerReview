@@ -2,7 +2,7 @@
 
 Status: current paper/model handoff aid
 
-Date: 2026-06-12
+Date: 2026-07-12
 
 This document explains what the current AVA Peer Review Solidity demo encodes
 directly, what it represents through bounded records, and what it deliberately
@@ -36,7 +36,7 @@ fourth AVA stage.
 
 | Category | Meaning in this demo | Current implementation evidence | Boundary |
 | --- | --- | --- | --- |
-| Precisely encoded | The contract stores the relevant governance fact as a typed record, transition, status, id, enum, event, or getter. | Role-scoped subjects in `RoleIdentityRegistry`; package identity in `AVARulePackageRegistry`; evidence receipts in `EvidenceCommitmentRegistry`; recognised states and transitions in `AVAStateMachine`; challenge transitions and outcomes in `AVAStateMachine`; standing, allocation, consequence, proof-use, settlement, recovery, and credential records in their dedicated registries. | These facts are executable substrate facts, not scientific truth or editorial merit. |
+| Precisely encoded | The contract stores the relevant governance fact as a typed record, transition, status, id, enum, event, or getter. | App-scoped subjects in `AVAIdentityRegistry`; package identity in `AVACoreRulePackageRegistry`; evidence receipts in `AVAEvidenceRegistry`; governed objects, recognised states, and generic transitions in `AVAGovernanceKernel`; recursive challenge lifecycle in `AVAChallengeExtension`; standing, allocation, consequence, proof-use, settlement, recovery, and credential records in dedicated extensions. | These facts are executable substrate facts, not scientific truth or editorial merit. |
 | Approximated | The contract stores a commitment, hash, URI, type hash, formula hash, policy hash, source-set commitment, or proof receipt rather than the underlying full content. | Evidence `commitment`, `uri`, `evidenceTypeHash`, and `disclosurePolicyId`; standing computation `formulaHash`, `sourceSetCommitmentId`, and output hashes; ZK proof receipts and proof-use nullifiers; canonical trace JSON; transition matrix CSV. | Solidity checks existence, binding, package identity, subject context, and replay rules where implemented; it does not inspect evidence content or verify scientific quality. |
 | Human-reserved | The framework concept is intentionally not decided by the smart contracts. | Forbidden-selector tests and boundary docs assert absence of manuscript acceptance, rejection, merit scoring, publication priority, truth adjudication, reveal/decrypt, and sanction execution. | These remain institutional, editorial, legal, scientific, or future model-layer matters. |
 | Parameterised | The substrate exposes an interface or module slot so a workflow package can choose a rule without rewriting the core recognised-state storage. | Rule-package modules for attribution, verification, allocation, transition rules, challenge lifecycle, disclosure policy/lifecycle/execution, evidence policy/lifecycle, audit, field policy, anti-abuse, residual authority, standing, reward, priority, penalty, restoration, value execution, external operation, and ZK verification. | Modules validate or route bounded records. They must not bypass non-delegable substrate gates, mutate historical records, reveal identity, decide truth, or add publication logic. |
@@ -48,30 +48,34 @@ fourth AVA stage.
 The following concepts are encoded as typed substrate facts:
 
 - Role-scoped subject identity:
-  `RoleIdentityRegistry` binds each active account/role pair to one canonical
-  subject. Contracts use `subjectId` rather than treating an account as the
-  research identity.
+  `AVAIdentityRegistry` binds each active account/application/role tuple to one
+  canonical subject. Contracts use `subjectId` rather than treating an account
+  as the research identity.
 - Authority:
-  `AuthorityMatrix` remains the non-delegable role/action/subject gate.
-  Residual authority modules can validate additional policy conditions, but
-  they do not own state storage or mutate records.
+  `AVAAuthorityMatrix` remains the non-delegable
+  application/role/action/subject gate. Package authority modules can validate
+  additional policy conditions, but they do not own state storage or mutate
+  records.
 - Package identity:
-  `AVARulePackageRegistry` gives each workflow package a stable `packageId`,
-  `modulesHash`, version, compatibility key, and module bundle. Historical
-  records bind to package identity rather than being reinterpreted through the
-  latest active workflow pointer.
+  `AVACoreRulePackageRegistry` gives each `(appId, workflowKey)` package a
+  stable `packageId`, module hashes, version, compatibility key, and
+  capability bindings. Historical records bind to package identity rather than
+  being reinterpreted through the latest active workflow pointer.
 - Evidence reference:
-  `EvidenceCommitmentRegistry` stores package-bound evidence receipts and
-  lifecycle records. Downstream records validate receipt existence and package
-  compatibility where the target record requires evidence.
+  `AVAEvidenceRegistry` stores app/workflow/package/subject-bound evidence
+  receipts and lifecycle records. Downstream records validate receipt
+  existence and package compatibility where the target record requires
+  evidence.
 - Recognised state:
-  `AVAStateMachine` stores the object, AVA stage, responsible subject,
-  evidence, disclosure policy, authority, package id, and recognised-state
-  status. Higher-impact statuses arise through authorised transition paths.
+  `AVAGovernanceKernel` stores the governed object, AVA stage, responsible
+  subject, evidence, disclosure policy, authority, package id, recognised-state
+  status, and latest transition id. Higher-impact statuses arise through
+  authorised transition paths constrained by `AVACoreTransitionRules`.
 - Challenge/correction/restoration:
-  Challenges target recognised states. Lifecycle status and outcome are
-  separated. Resolution and restoration write transition records and preserve
-  history.
+  A challenge first becomes its own governed object and recognised state under
+  an independent package. `AVAChallengeExtension` then targets another
+  recognised state. Lifecycle status and outcome are separated; correction and
+  restoration write both challenge and generic state-transition lineage.
 - Standing, allocation, consequence, settlement, recovery, credential, and
   proof-use records:
   Each downstream family has its own record layer and package-bound context.
@@ -144,6 +148,10 @@ The module boundary is not permission to override the substrate. Core storage,
 package identity, recognised-state status transitions, subject binding,
 evidence existence, authority checks, and no-publication/no-truth/no-reveal
 boundaries remain substrate-level constraints.
+
+The root-level pre-separation contracts remain regression evidence only. They
+do not supply a second current substrate or broaden a canonical module's
+authority.
 
 ## Excluded Surface
 

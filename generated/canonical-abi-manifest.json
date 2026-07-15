@@ -1,0 +1,2253 @@
+{
+  "contracts": {
+    "src/AVAApplicationRegistry.sol:AVAApplicationRegistry": {
+      "abiSurfaceHash": "0x2eb3d0bcf36d36de5181691f33f1b24ab8010d3532779b26899993a9a9ce0b5f",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "NotAdmin(address)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "signature": "ApplicationRegistered(bytes32,bytes32,bytes32,string,address)"
+        }
+      ],
+      "selectors": {
+        "ADMIN()": "0x2a0acc6a",
+        "getApplication(bytes32)": "0xbc506f64",
+        "registerApplication(bytes32,bytes32,bytes32,string)": "0x46fac82a",
+        "requireApplicationReference(bytes32)": "0x496a234f"
+      }
+    },
+    "src/apps/peerreview/PeerReviewApplicationModule.sol:PeerReviewApplicationModule": {
+      "abiSurfaceHash": "0xd6763b5800c4ef34e6cad4ef082edc3cfa39b918970352a65be7d4d20120828b",
+      "errors": [
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "applicationId()": "0x8ad10419",
+        "moduleIdentityHash()": "0xa7092996",
+        "validateDownstreamRecord((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address))": "0x22e66cc0",
+        "validateEvidence((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,address))": "0xfd5c7a6a",
+        "validateGovernedObject((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,address))": "0x1eb54345",
+        "validateRecognisedStateFormation((bytes32,bytes32,uint256,bytes32,uint256,bytes32,bytes32,uint8,uint8,bytes32,address))": "0xd52ca8f0",
+        "validateRecognisedStateTransition((bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,uint8,uint8,uint8,uint8,bytes32,uint256,bytes32,address))": "0x00a7f3fc"
+      }
+    },
+    "src/apps/peerreview/PeerReviewDisclosurePolicyModules.sol:PeerReviewAnonymousChallengeProofPolicyModule": {
+      "abiSurfaceHash": "0x131e2d91adb33f134239ce5f393806b2f4052a9759b39ce2b80030f240dac462",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "CHALLENGER_ROLE_KEY()": "0x27948f1a",
+        "DISCLOSURE_POLICY_ID()": "0xa25b745f",
+        "PROOF_REGISTRY()": "0x7585fa87",
+        "moduleIdentityHash()": "0xa7092996",
+        "validateDisclosure((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,address))": "0xe4fc6394"
+      }
+    },
+    "src/apps/peerreview/PeerReviewDisclosurePolicyModules.sol:PeerReviewCoreDisclosurePolicyModule": {
+      "abiSurfaceHash": "0x6e28227e53d84e6303b580e86f5b907f9e58ea444368cd31e2e85a8742bc57d4",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "DISCLOSURE_POLICY_ID()": "0xa25b745f",
+        "SCENARIO()": "0x0c3aa47a",
+        "moduleIdentityHash()": "0xa7092996",
+        "validateDisclosure((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,address))": "0xe4fc6394"
+      }
+    },
+    "src/apps/peerreview/PeerReviewDisclosurePolicyModules.sol:PeerReviewDisclosureReceiptPolicyModule": {
+      "abiSurfaceHash": "0x008bf8576754a78c0ac58d8a43f77996f29a8c39ef47a0978c87d1263a50a222",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "DISCLOSURE_POLICY_ID()": "0xa25b745f",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "SCENARIO()": "0x0c3aa47a",
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b"
+      }
+    },
+    "src/apps/peerreview/PeerReviewDisclosurePolicyModules.sol:PeerReviewZKProofReceiptPolicyModule": {
+      "abiSurfaceHash": "0xca993157ffcdaf75bc3ca57ed7f63af565e00a7aa20df0a7436445ca5ccf085b",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "DISCLOSURE_POLICY_ID()": "0xa25b745f",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b"
+      }
+    },
+    "src/apps/peerreview/PeerReviewPenaltyPolicyModule.sol:PeerReviewPenaltyPolicyModule": {
+      "abiSurfaceHash": "0xbe67da0aa62faca3fac29b1a4ed034a416c03e7ca257fce294c61b646fed27a5",
+      "errors": [
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "MAX_ABSOLUTE_STANDING_DELTA()": "0x36ef4527",
+        "MAX_RESTRICTION_DURATION()": "0x03669df7",
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b"
+      }
+    },
+    "src/core/AVAAuthorityMatrix.sol:AVAAuthorityMatrix": {
+      "abiSurfaceHash": "0x2386677208de7d017a27d24ea6362cd90fe128db815070750876ef9116316a9c",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "NotAdmin(address)",
+        "NotAuthorised(address,bytes32)",
+        "SubjectMismatch(bytes32,bytes32)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false
+          ],
+          "signature": "PermissionConfigured(bytes32,bytes32,bytes32,bool)"
+        }
+      ],
+      "selectors": {
+        "ADMIN()": "0x2a0acc6a",
+        "APPLICATION_REGISTRY()": "0xd206a63e",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "isAuthorised(address,bytes32,bytes32,bytes32)": "0xb29689d7",
+        "requireAuthorisedCanonicalSubject(address,bytes32,bytes32,bytes32)": "0xa7993087",
+        "requireAuthorisedSubject(address,bytes32,bytes32,bytes32,bytes32)": "0x7f0dc8f1",
+        "setPermission(bytes32,bytes32,bytes32,bool)": "0x5d894db9"
+      }
+    },
+    "src/core/AVACoreRulePackageRegistry.sol:AVACoreRulePackageRegistry": {
+      "abiSurfaceHash": "0x7b5ee47ea2fbf887d021da129a43a713c87419a7bba8b88176159a5810786920",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true
+          ],
+          "signature": "RulePackageCapabilityBound(uint256,bytes32,address)"
+        },
+        {
+          "indexed": [
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "RulePackageIdentityBound(uint256,bytes32,uint64,bytes32,bytes32)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "signature": "RulePackageRegistered(uint256,bytes32,bytes32,bytes32,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "signature": "RulePackageSuperseded(bytes32,bytes32,uint256,uint256,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            false,
+            false
+          ],
+          "signature": "RulePackageVerificationBound(uint256,bytes32,bytes32,uint256)"
+        }
+      ],
+      "selectors": {
+        "APPLICATION_REGISTRY()": "0xd206a63e",
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "MAX_CAPABILITIES_PER_PACKAGE()": "0x31a00c13",
+        "getActivePackageId(bytes32,bytes32)": "0xc4b63719",
+        "getActiveVerifiedModulesCompact(bytes32,bytes32,uint256,bytes32[])": "0xa1df3218",
+        "getCapabilityKeys(uint256)": "0xf55b1a2e",
+        "getModule(uint256,bytes32)": "0x5578536d",
+        "getOptionalModule(uint256,bytes32)": "0x6f0c7b48",
+        "getRulePackage(bytes32,bytes32)": "0x45650764",
+        "getRulePackageById(uint256)": "0x4f7b7f89",
+        "getVerifiedChallengePolicyModules(uint256)": "0x9cad2f65",
+        "getVerifiedModules(uint256,bytes32[])": "0x58ebc8f6",
+        "getVerifiedModulesCompact(uint256,bytes32[])": "0xc828d651",
+        "getVerifiedPackageContext(uint256)": "0x14d546e7",
+        "getVerifiedWorkflowPolicyModules(uint256)": "0x7b0c17b4",
+        "nextPackageId()": "0xd7da9e4f",
+        "registerRulePackage((bytes32,bytes32,bytes32,bytes32,uint64,bytes32,string),(bytes32,address)[])": "0x2a36816a",
+        "supersedeRulePackage((bytes32,bytes32,bytes32,bytes32,uint64,bytes32,string),uint256,(bytes32,address)[])": "0xf790407a"
+      }
+    },
+    "src/core/AVACoreTypes.sol:AVACoreTypes": {
+      "abiSurfaceHash": "0xef577e52fa8ffb159962b1ffa86d59d253d66a6128b2e26b90b8f8a97b32686f",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "NotAdmin(address)",
+        "NotAuthorised(address,bytes32)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownApplication(bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [],
+      "selectors": {}
+    },
+    "src/core/AVADisclosurePolicyRegistry.sol:AVADisclosurePolicyRegistry": {
+      "abiSurfaceHash": "0x651fe29f56b7c652f716b4bcfecb91cec985049a3a54ac24fff0fb8709a367c2",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "signature": "DisclosurePolicyRegistered(uint256,bytes32,bytes32,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "APPLICATION_REGISTRY()": "0xd206a63e",
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "getPolicy(uint256)": "0x2b07fce3",
+        "getPolicyReference(uint256)": "0x74362c3b",
+        "nextPolicyId()": "0xcad0b8db",
+        "registerPolicy(bytes32,bytes32,bytes32,bytes32,string,string)": "0x0ccf3595",
+        "requireActivePolicy(uint256,bytes32)": "0x94afb8d7",
+        "requireActivePolicyReference(uint256,bytes32)": "0x809e18e6"
+      }
+    },
+    "src/core/AVAEvidenceRegistry.sol:AVAEvidenceRegistry": {
+      "abiSurfaceHash": "0x4434bcaf2392437691fc28e14e28091557605cff326c160bd49cc2a0ca035cd9",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "signature": "EvidenceLifecycleRecorded(uint256,uint256,uint8,uint8,bytes32,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "EvidenceRegistered(uint256,bytes32,uint256,bytes32,bytes32,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "getEvidence(uint256)": "0xc956f143",
+        "getEvidenceLifecycleRecord(uint256)": "0x859d8e81",
+        "getEvidenceReference(uint256)": "0xfddebbf3",
+        "nextEvidenceId()": "0x29caec32",
+        "nextLifecycleRecordId()": "0x28257da5",
+        "recordEvidenceLifecycle(uint256,bytes32,bytes32,uint8,uint256,bytes32,string)": "0xdb9bea94",
+        "registerEvidence((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,uint256,bytes32,string))": "0x0825cab2",
+        "requireEvidenceReferenceForPackage(uint256,uint256)": "0xe63121d4",
+        "requireUsableEvidenceReferenceForPackage(uint256,uint256)": "0xe676d97c"
+      }
+    },
+    "src/core/AVAGovernanceKernel.sol:AVAGovernanceKernel": {
+      "abiSurfaceHash": "0x3ebafdc340fc29b67d14e81f1e1b6405defe96d4eb5e00ab41cd1ac13b2151b6",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "NotAdmin(address)",
+        "NotAuthorised(address,bytes32)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "GovernedObjectRegistered(uint256,bytes32,bytes32,bytes32,uint256,bytes32,uint256,bytes32,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true
+          ],
+          "signature": "PostTransitionHookBound(uint256,address,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "RecognisedStateFormed(uint256,uint256,bytes32,uint256,uint8,uint8,uint256,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true
+          ],
+          "signature": "RecognisedStateTransitionSourceBound(uint256,uint256,uint256)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "RecognisedStateTransitioned(uint256,uint256,bytes32,uint8,uint8,uint8,uint256,bytes32,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true
+          ],
+          "signature": "SourceBoundTransitionRequesterBound(uint256,address,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true
+          ],
+          "signature": "TransitionGuardBound(uint256,address,address)"
+        }
+      ],
+      "selectors": {
+        "ADMIN()": "0x2a0acc6a",
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "POLICY_ROUTER()": "0xa38700c2",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "bindPostTransitionHook(uint256,address)": "0x615f7aca",
+        "bindSourceBoundTransitionRequester(uint256,address)": "0x3cfadb00",
+        "bindTransitionGuard(uint256,address)": "0x50c8ea94",
+        "formRecognisedState((uint256,bytes32,bytes32,uint8,uint8,bytes32,string))": "0x45eb0099",
+        "getGovernedObject(uint256)": "0xc7e41847",
+        "getGovernedObjectId(bytes32,bytes32)": "0xdcd93af4",
+        "getGovernedObjectReference(uint256)": "0xb3ac5f17",
+        "getRecognisedState(uint256)": "0xdea36386",
+        "getRecognisedStateReference(uint256)": "0x7e406b51",
+        "getRecognisedStateTransition(uint256)": "0x99a29ab5",
+        "getRecognisedStateTransitionReference(uint256)": "0x9a6f3340",
+        "nextGovernedObjectId()": "0x789afe89",
+        "nextRecognisedStateId()": "0x6366a925",
+        "nextTransitionId()": "0xff7969ae",
+        "postTransitionHookByPackage(uint256)": "0xb181aa4b",
+        "postTransitionHookIdentityByPackage(uint256)": "0x1643ca59",
+        "recognisedStateUseStartedByPackage(uint256)": "0x07a8d1de",
+        "registerGovernedObject((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,string))": "0xaded99b7",
+        "requestSourceBoundTransition((uint256,uint256,uint256,uint256,uint256,uint256,bytes32,bytes32,bytes32,bytes32,uint8,uint8,bytes32,string))": "0xc322b9ec",
+        "sourceBoundTransitionRequesterByPackage(uint256)": "0xb007c669",
+        "sourceBoundTransitionRequesterIdentityByPackage(uint256)": "0x1e1ca02c",
+        "transitionGuardByPackage(uint256)": "0xac2083d4",
+        "transitionGuardIdentityByPackage(uint256)": "0x4d43c09b",
+        "transitionRecognisedState((uint256,bytes32,bytes32,uint8,bytes32,string))": "0xb40e7587",
+        "vestRecognisedState((uint256,bytes32,bytes32,uint8,bytes32,string))": "0x1d7068c8"
+      }
+    },
+    "src/core/AVAIdentityRegistry.sol:AVAIdentityRegistry": {
+      "abiSurfaceHash": "0x04b683e18ea69ea1ec87976ed7d2873a5838eb4e638d7a8e09e592c73666d709",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "NotAdmin(address)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "signature": "SubjectAssigned(bytes32,bytes32,bytes32,address,string)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false
+          ],
+          "signature": "SubjectDeactivated(bytes32,bytes32,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "ADMIN()": "0x2a0acc6a",
+        "APPLICATION_REGISTRY()": "0xd206a63e",
+        "assignSubject(address,bytes32,bytes32,bytes32,string)": "0x5888de99",
+        "deactivateSubject(bytes32)": "0x23df9e0f",
+        "getSubject(bytes32)": "0xc67716c7",
+        "getSubjectContext(bytes32)": "0x60e542a4",
+        "hasRole(address,bytes32,bytes32)": "0xd865ae9b",
+        "requireActiveSubject(bytes32,bytes32)": "0x495c860a",
+        "requireActiveSubjectContext(bytes32,bytes32)": "0x101ddb59",
+        "requireActiveSubjectReference(bytes32,bytes32)": "0xab348b6a",
+        "subjectOf(address,bytes32,bytes32)": "0xf6a3b608"
+      }
+    },
+    "src/core/AVAWorkflowPolicyRouter.sol:AVAWorkflowPolicyRouter": {
+      "abiSurfaceHash": "0xee7a76f8824b2de993c178248e7bee964616f3b0b3b0d4ffd322721dcbc9d485",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "FORMATION_DECISION_DOMAIN()": "0x70707d6d",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "TRANSITION_DECISION_DOMAIN()": "0x3d1a509e",
+        "computeFormationDecisionHash(((bytes32,bytes32,uint256,bytes32,uint256,bytes32,bytes32,uint8,uint8,bytes32,address),uint256,uint256,bytes32))": "0xc0778b62",
+        "computeTransitionDecisionHash(((bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,uint8,uint8,uint8,uint8,bytes32,uint256,bytes32,address),bytes32,uint256,uint256,uint256,uint256,uint256,uint256,uint256,bytes32,bytes32,bool))": "0xc0924cab",
+        "validateChallengePolicies((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,uint256,uint256,bytes32,bytes32,bytes32,uint8,uint256,uint256,bytes32,bytes32,address,bool,bool))": "0x500fe714",
+        "validateFormation(((bytes32,bytes32,uint256,bytes32,uint256,bytes32,bytes32,uint8,uint8,bytes32,address),uint256,uint256,bytes32))": "0x31e40ea2",
+        "validateTransition(((bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,uint8,uint8,uint8,uint8,bytes32,uint256,bytes32,address),bytes32,uint256,uint256,uint256,uint256,uint256,uint256,uint256,bytes32,bytes32,bool))": "0xbf1a3175"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAAllocationPolicyModule": {
+      "abiSurfaceHash": "0x2a10d761f4e92a53a8877ff7534a8ef9ce09bf08ad759ed8d4f3f4cbfd15d9c1",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAllocation(((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address),uint256))": "0x8a02d420"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAAntiAbusePolicyModule": {
+      "abiSurfaceHash": "0xa51c3ab84c94d5b0389488c127e436c92e6504b5dea7158a168f4e7443de7605",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAntiAbuse((bytes32,bytes32,uint256,bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,address))": "0xf68c83c0"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAAttributionModule": {
+      "abiSurfaceHash": "0x1c7d0c312cc01a10211a0a0af12c88579e01ebeeaad57d77d5ec5bda6b71a145",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAttribution((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,address))": "0x8e9ac01d"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAAuthorityPolicyModule": {
+      "abiSurfaceHash": "0x35717fd0424998709f2bd8ec4f2d601fa5a3bed79272a88df73dcbc3ffdc6f7f",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAuthority((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,uint256,bytes32,bytes32,bytes32,address))": "0xb0f4f76a"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAChallengePolicyModule": {
+      "abiSurfaceHash": "0xc0a37551390cc7a1e6b8ea6189cdc4d828b5733ec143ab82823520838d5ebcf4",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateChallenge((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,bytes32,uint8,bytes32,address))": "0x16bea8ac"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAConsequencePolicyModule": {
+      "abiSurfaceHash": "0x0b7bfc91ffe7b039d872a9a7aa7b7433ed923a6afbede1f1cb83bd945c12f6b7",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateConsequence((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address))": "0xabd84a5e"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVADisclosurePolicyModule": {
+      "abiSurfaceHash": "0x1f6ae55911fa44b78b9ae0c65cf8c765d3282b5a0cca71c6850389822ee78173",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateDisclosure((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,address))": "0xe4fc6394"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAEvidenceLifecycleModule": {
+      "abiSurfaceHash": "0x1d6878c7cb3a1f8ce548c8fb73e779d3896403bfc4fb1778ca282f6cac5be71e",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateEvidenceLifecycle((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint8,uint8,uint8,uint256,bytes32,bytes32,bytes32,address))": "0x0166e9b1",
+        "validateEvidenceUse((bytes32,bytes32,uint256,bytes32,bytes32,uint8,uint256,bytes32,bytes32,uint256,bytes32,uint256,uint8,bytes32,address))": "0x74c118c7"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAEvidencePolicyModule": {
+      "abiSurfaceHash": "0x5dda9f84609a9d1c1f3f0c3ae65e0ccd79c0515e349ffd4674c8c4d0af27c3e1",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateEvidence((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,address))": "0xfd5c7a6a",
+        "validateEvidenceUse((bytes32,bytes32,uint256,bytes32,bytes32,uint8,uint256,bytes32,bytes32,uint256,bytes32,uint256,uint8,bytes32,address))": "0x74c118c7"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAFieldPolicyModule": {
+      "abiSurfaceHash": "0x80ea93bec58fae0ba5f480ebd7c13b0995f040c4685ef03a12f5f2557ed7053d",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateFieldPolicy((bytes32,bytes32,uint256,bytes32,bytes32,uint8,uint256,bytes32,bytes32,uint256,bytes32,address))": "0x6f2756f1"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAStandingPolicyModule": {
+      "abiSurfaceHash": "0x1ed94838f1e02e8200d1902f25f887d2b846e076ce3ea2d9c66a34227f67914e",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateStanding(((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address),int256))": "0x1a723eb7"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVATransitionRuleModule": {
+      "abiSurfaceHash": "0x395d630f94f316126e35fe90e552d3e1725fb19a7ecb4c895430c0e85af5b884",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateTransition((bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,uint8,uint8,uint8,uint8,bytes32,uint256,bytes32,address))": "0x571d5681"
+      }
+    },
+    "src/core/interfaces/IAVACoreRuleModules.sol:IAVAVerificationModule": {
+      "abiSurfaceHash": "0x102b22ecad9e38360253821baca5f597870b35b6f4a1771298476586eed0235e",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateVerification((bytes32,bytes32,uint256,bytes32,uint256,bytes32,bytes32,uint8,uint8,bytes32,address))": "0x46e1f208"
+      }
+    },
+    "src/core/interfaces/IAVAPostTransitionHook.sol:IAVAPostTransitionHook": {
+      "abiSurfaceHash": "0x7b1a67f6b1d585f9e22eadce195344d12bfe8fb97486b98b00c6137008484ae0",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "onRecognisedStateTransition((bytes32,bytes32,uint256,uint256,uint256,uint256,bytes32,uint8,uint8,uint8))": "0xdb1db6c8"
+      }
+    },
+    "src/core/interfaces/IAVATransitionGuard.sol:IAVATransitionGuard": {
+      "abiSurfaceHash": "0xf27a3856ad960fab4e46002afd41e7f18c0bd70496ec30fa68780da6b9496022",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateTransition(uint256,uint256,uint8,uint8,uint8)": "0x24925377"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultAVACorePolicyBundle": {
+      "abiSurfaceHash": "0xbb882e2281a727e770598dc1684dc25ccf3cf52aac92dd97a8af36751911a33f",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAllocation(((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address),uint256))": "0x8a02d420",
+        "validateAntiAbuse((bytes32,bytes32,uint256,bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,address))": "0xf68c83c0",
+        "validateAttribution((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,address))": "0x8e9ac01d",
+        "validateAuthority((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,uint256,bytes32,bytes32,bytes32,address))": "0xb0f4f76a",
+        "validateChallenge((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,bytes32,uint8,bytes32,address))": "0x16bea8ac",
+        "validateConsequence((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address))": "0xabd84a5e",
+        "validateDisclosure((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,address))": "0xe4fc6394",
+        "validateEvidence((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,address))": "0xfd5c7a6a",
+        "validateEvidenceLifecycle((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint8,uint8,uint8,uint256,bytes32,bytes32,bytes32,address))": "0x0166e9b1",
+        "validateEvidenceUse((bytes32,bytes32,uint256,bytes32,bytes32,uint8,uint256,bytes32,bytes32,uint256,bytes32,uint256,uint8,bytes32,address))": "0x74c118c7",
+        "validateFieldPolicy((bytes32,bytes32,uint256,bytes32,bytes32,uint8,uint256,bytes32,bytes32,uint256,bytes32,address))": "0x6f2756f1",
+        "validateStanding(((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address),int256))": "0x1a723eb7",
+        "validateTransition((bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,uint8,uint8,uint8,uint8,bytes32,uint256,bytes32,address))": "0x571d5681",
+        "validateVerification((bytes32,bytes32,uint256,bytes32,uint256,bytes32,bytes32,uint8,uint8,bytes32,address))": "0x46e1f208"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreAllocationPolicyModule": {
+      "abiSurfaceHash": "0xe09891e13191224cc9650592aea47e4c0e596a3eee4877f7c391c5b4452db59f",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAllocation(((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address),uint256))": "0x8a02d420"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreAttributionModule": {
+      "abiSurfaceHash": "0xe718dc5bdeaf0456255815664d0348108951a6d766d3f9fee2726dd3d473f697",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAttribution((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,address))": "0x8e9ac01d"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreAuthorityPolicyModule": {
+      "abiSurfaceHash": "0x071588404b682a9936e74a71380639288053f088af0729986564e69857a5df5b",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAuthority((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,uint256,bytes32,bytes32,bytes32,address))": "0xb0f4f76a"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreChallengePolicyModule": {
+      "abiSurfaceHash": "0x0156b21254e9690abc3b1a563921593c265a3e366a912ccf709203e7ddc91deb",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateChallenge((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,bytes32,uint8,bytes32,address))": "0x16bea8ac"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreConsequencePolicyModule": {
+      "abiSurfaceHash": "0xf526bdb5cd2de0cb63a5f55c1ac6a4db3a5ee84c08b285bb9cffeb1af99f8a9c",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateConsequence((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address))": "0xabd84a5e"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreDisclosurePolicyModule": {
+      "abiSurfaceHash": "0xfac9816fd3c2c830e5cb75d4b97127ecad53402fb78759dfd00673b4c60a3d84",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateDisclosure((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,address))": "0xe4fc6394"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreEvidenceLifecycleModule": {
+      "abiSurfaceHash": "0x60fac8a59a16f62529518053d8cc8c198e5c5333d91119004c89f541f269a469",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateEvidenceLifecycle((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint8,uint8,uint8,uint256,bytes32,bytes32,bytes32,address))": "0x0166e9b1",
+        "validateEvidenceUse((bytes32,bytes32,uint256,bytes32,bytes32,uint8,uint256,bytes32,bytes32,uint256,bytes32,uint256,uint8,bytes32,address))": "0x74c118c7"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreEvidencePolicyModule": {
+      "abiSurfaceHash": "0x4734a64586c500391a22615f3915e86f3ac58a1b8663134b3c8e3473a350db7f",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateEvidence((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,address))": "0xfd5c7a6a",
+        "validateEvidenceUse((bytes32,bytes32,uint256,bytes32,bytes32,uint8,uint256,bytes32,bytes32,uint256,bytes32,uint256,uint8,bytes32,address))": "0x74c118c7"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreStandingPolicyModule": {
+      "abiSurfaceHash": "0x09029ba280e1c8ccb4952c528cc045a895c288f3e0ba11ea6232a1067e874cf5",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateStanding(((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address),int256))": "0x1a723eb7"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreTransitionRuleModule": {
+      "abiSurfaceHash": "0xef99ddb1bcf18dcc25573dfef0cdd88e959237993c53d993069ebeff67187407",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateTransition((bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,uint8,uint8,uint8,uint8,bytes32,uint256,bytes32,address))": "0x571d5681"
+      }
+    },
+    "src/core/modules/DefaultAVACoreRuleModules.sol:DefaultCoreVerificationModule": {
+      "abiSurfaceHash": "0xe1fa654ffbb473d3dc3579f69abba83baf2462db4bc92ffa5b7fa053fab0db31",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateVerification((bytes32,bytes32,uint256,bytes32,uint256,bytes32,bytes32,uint8,uint8,bytes32,address))": "0x46e1f208"
+      }
+    },
+    "src/core/modules/DefaultAVAOptionalPolicyModules.sol:DefaultAVAAntiAbusePolicyModule": {
+      "abiSurfaceHash": "0x618876c37877ecdc35f6c91fc7295ddbac06bb807d28f1da3e0f944b316d7aa3",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAntiAbuse((bytes32,bytes32,uint256,bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,address))": "0xf68c83c0"
+      }
+    },
+    "src/core/modules/DefaultAVAOptionalPolicyModules.sol:DefaultAVAFieldPolicyModule": {
+      "abiSurfaceHash": "0xd46acce5f8643f48e4f18340ac78da4cc1c090f3877adbf292533d76f8229fbd",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateFieldPolicy((bytes32,bytes32,uint256,bytes32,bytes32,uint8,uint256,bytes32,bytes32,uint256,bytes32,address))": "0x6f2756f1"
+      }
+    },
+    "src/extensions/audit/AVAAuditReceiptExtension.sol:AVAAuditReceiptExtension": {
+      "abiSurfaceHash": "0xa893392df13ae3189f0ebbf8781c609152b8b2aa1e0ff4ce8a026f262891f3ac",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "AuditReceiptRecorded(uint256,bytes32,uint8,uint256,uint256,bytes32,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "AUDIT_CONTEXT_DOMAIN()": "0x0dcfcc61",
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "CHALLENGE_EXTENSION()": "0x64da6aaa",
+        "CHALLENGE_TRANSITION_SOURCE_TYPE()": "0xeaba8014",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "EVIDENCE_SOURCE_TYPE()": "0xaff02c78",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "STATE_SOURCE_TYPE()": "0x68beefe8",
+        "TRANSITION_SOURCE_TYPE()": "0xd031fb09",
+        "auditReceiptIdByContextHash(bytes32)": "0x32abc3e8",
+        "getAuditReceipt(uint256)": "0xa12874d6",
+        "nextAuditReceiptId()": "0xef5aaa22",
+        "recordAudit((uint8,uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,bytes32,string))": "0xdff2262d"
+      }
+    },
+    "src/extensions/authority/AVAApprovalReceiptExtension.sol:AVAApprovalReceiptExtension": {
+      "abiSurfaceHash": "0xbfcac2fddad6c3ed9d82501a083f774d45e61734076db46c67da4a3d32fd9281",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "ApprovalReceiptRecorded(uint256,bytes32,uint256,uint8,uint256,bytes32,bytes32,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "CHALLENGE_EXTENSION()": "0x64da6aaa",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "MAX_APPROVERS_PER_DECISION()": "0x680b7b1d",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "approvalAuthorityCount(uint256,uint8,uint256,bytes32,bytes32,bytes32)": "0xcbb79185",
+        "approvalCount(uint256,uint8,uint256,bytes32,bytes32,bytes32)": "0xb0900ae4",
+        "approvalIdByAuthorityDecision(bytes32)": "0x4bce90ac",
+        "getApprovalReceipt(uint256)": "0xb648b4b6",
+        "hasActiveApproval(uint256,uint8,uint256,bytes32,bytes32,bytes32,bytes32)": "0x033d7b01",
+        "hasApprovalThreshold(uint256,uint8,uint256,bytes32,bytes32,bytes32,uint256)": "0xe61cbd10",
+        "nextApprovalReceiptId()": "0xe95b8196",
+        "recordApproval((uint256,uint8,uint256,uint256,bytes32,bytes32,bytes32,bytes32,uint256,uint64,bytes32,string))": "0xc542328a"
+      }
+    },
+    "src/extensions/authority/AVAApprovalReceiptExtension.sol:ApprovalReceiptAuthorityPolicyModule": {
+      "abiSurfaceHash": "0xb16e919f25d05bdd9d31d106a0d08932d593a60887b16ffab227a3ec07f94877",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "APPROVAL_REGISTRY()": "0xecb01b3b",
+        "REQUIRED_ACTION_KEY()": "0x9566ce1b",
+        "REQUIRED_APPROVALS()": "0x599c5533",
+        "REQUIRED_APPROVAL_ROLE_KEY()": "0xec603216",
+        "TARGET_KIND()": "0x207f25aa",
+        "moduleIdentityHash()": "0xa7092996",
+        "validateAuthority((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,uint256,bytes32,bytes32,bytes32,address))": "0xb0f4f76a"
+      }
+    },
+    "src/extensions/authority/AVAApprovalReceiptExtension.sol:DefaultAVAApprovalPolicyModule": {
+      "abiSurfaceHash": "0x412f784a83d91b33f8119695879171ac7cb15a6c5bb0098a29dd82c1a2c70418",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateApproval((bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint64,bytes32,address))": "0xb2cb9901"
+      }
+    },
+    "src/extensions/authority/AVAApprovalReceiptExtension.sol:IAVAApprovalPolicyModule": {
+      "abiSurfaceHash": "0x5d6dee5bb2d1ee48b111a4a0cbb22e12afe96130b23456fe93bf8acb954cb6f2",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateApproval((bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint64,bytes32,address))": "0xb2cb9901"
+      }
+    },
+    "src/extensions/challenge/AVAChallengeExtension.sol:AVAChallengeExtension": {
+      "abiSurfaceHash": "0x90f724d185f9b21e25b839c9c5a4a91db06e8c36cd09477fda0073d49f157c86",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "NotAuthorised(address,bytes32)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "ChallengeFiled(uint256,bytes32,uint256,uint256,uint256,uint256,bytes32,uint256,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "ChallengeTransitionRecorded(uint256,uint256,uint8,uint8,uint8,uint8,uint256,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "POLICY_ROUTER()": "0xa38700c2",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "applyRestoration(uint256,bytes32,bytes32,bytes32,string)": "0xb2d6b23d",
+        "challengeIdByRecognisedState(uint256)": "0x45272f6c",
+        "closeChallenge(uint256,bytes32,bytes32,bytes32,string)": "0x02b1e3a7",
+        "fileChallenge((bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,string))": "0x26445990",
+        "getChallenge(uint256)": "0x1bdd4b74",
+        "getChallengeTransition(uint256)": "0xe5442bca",
+        "moduleIdentityHash()": "0xa7092996",
+        "nextChallengeId()": "0xfc67aa50",
+        "nextTransitionId()": "0xff7969ae",
+        "openChallengeCountByRecognisedState(uint256)": "0x6f7f0dab",
+        "recordRestorationAvailability(uint256,bytes32,bytes32,bytes32,string)": "0xf3ffbb1a",
+        "resolveChallenge((uint256,bytes32,bytes32,uint8,uint8,bytes32,string))": "0x174454ac",
+        "screenChallenge(uint256,bytes32,bytes32)": "0xf1cf30a8",
+        "validateTransition(uint256,uint256,uint8,uint8,uint8)": "0x24925377"
+      }
+    },
+    "src/extensions/downstream/AVADownstreamRecordExtensions.sol:AVAAllocationRecordExtension": {
+      "abiSurfaceHash": "0x3f949ea5eda8a9edc853594b56b1ecea483c6cabdebe910b6a0148b7940c061a",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "AllocationRecorded(uint256,uint256,bytes32,uint256,bytes32,uint256,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "MAX_ALLOCATION_UNITS()": "0x95eb492a",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "SOURCE_TYPE_KEY()": "0xaf59b461",
+        "getAllocation(uint256)": "0x5a5804b3",
+        "getDownstreamSource(uint256)": "0x7229c36a",
+        "nextAllocationId()": "0xe430d815",
+        "recordAllocation((uint256,bytes32,bytes32,bytes32,uint256,bytes32,uint256,bytes32,string))": "0x4e4507fe"
+      }
+    },
+    "src/extensions/downstream/AVADownstreamRecordExtensions.sol:AVAConsequenceRecordExtension": {
+      "abiSurfaceHash": "0x0b78faf642e057333a1ea45fa2b39fecf06cf823405f6acb05ba59ce346e2338",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "signature": "ConsequenceRecorded(uint256,uint256,bytes32,uint256,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "SOURCE_TYPE_KEY()": "0xaf59b461",
+        "getConsequence(uint256)": "0x220da457",
+        "getDownstreamSource(uint256)": "0x7229c36a",
+        "nextConsequenceId()": "0xe6da1267",
+        "recordConsequence((uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,string))": "0x605fcc09"
+      }
+    },
+    "src/extensions/downstream/AVADownstreamRecordExtensions.sol:AVADownstreamRecordBase": {
+      "abiSurfaceHash": "0x86d9675654810c719b2b9f9f3f4671ec43f7f705c74362a65e60026a8abdb6fc",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255"
+      }
+    },
+    "src/extensions/downstream/AVADownstreamRecordExtensions.sol:AVAStandingRecordExtension": {
+      "abiSurfaceHash": "0x7530917f6cb4462eaecbac8fc0969680eae4206ba7698ca81090da640083c7de",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "StandingUpdateRecorded(uint256,uint256,bytes32,uint256,bytes32,int256,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "MAX_ABSOLUTE_DELTA()": "0x9b68a4d6",
+        "REVISION_REGISTRY()": "0xce4298db",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "getStandingUpdate(uint256)": "0x99959653",
+        "nextStandingUpdateId()": "0x44917fbf",
+        "recordStandingUpdate((uint256,bytes32,bytes32,bytes32,uint256,bytes32,int256,bytes32,string))": "0x75879629"
+      }
+    },
+    "src/extensions/downstream/IAVADownstreamRecordSource.sol:IAVADownstreamRecordSource": {
+      "abiSurfaceHash": "0xbcf58c365c469da5de79c4400b4f2ca69e2678b0dbfe4a213d6c19d9ab46ab83",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "getDownstreamSource(uint256)": "0x7229c36a"
+      }
+    },
+    "src/extensions/external/AVAExternalOperationExtension.sol:AVAExternalOperationExtension": {
+      "abiSurfaceHash": "0x2a3192ffadd2967d88f7699eb5290af096831cd652ffd98c093448413b32b3d5",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "ExternalOperationReceiptRecorded(uint256,bytes32,uint256,uint8,uint256,bytes32,uint8,uint256,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "OPERATION_CONTEXT_DOMAIN()": "0xdcabdd02",
+        "OPERATION_REQUEST_SOURCE_TYPE()": "0x303eff89",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "TARGET_RESOLVER()": "0xbb6db938",
+        "getOperation(uint256)": "0x202e3924",
+        "nextOperationReceiptId()": "0x8f883d8a",
+        "recordOutcome(uint256,uint8,bytes32,bytes32,bytes32,string)": "0x4b8d3efb",
+        "requestOperation((uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,string))": "0xc97c891b",
+        "requestTargetOperation((uint8,uint256,bytes32,bytes32,bytes32,bytes32,string))": "0x12352bcb",
+        "requestedOperationIdBySource(bytes32)": "0xd61124aa",
+        "terminalReceiptIdByOperation(uint256)": "0xd403e732"
+      }
+    },
+    "src/extensions/external/AVAExternalOperationTargetResolver.sol:AVAExternalOperationTargetResolver": {
+      "abiSurfaceHash": "0x75d38ec7fe5ae0b5faca191874d4409cd81dc4d822f1457c495959cd62e86ecf",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "ALLOCATION_SOURCE()": "0x63338e66",
+        "CHALLENGE_EXTENSION()": "0x64da6aaa",
+        "CHALLENGE_SOURCE_TYPE()": "0x7f705d81",
+        "CONSEQUENCE_SOURCE()": "0x4d7f6521",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "EVIDENCE_SOURCE_TYPE()": "0xaff02c78",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "SETTLEMENT_SOURCE()": "0xeeee581c",
+        "STATE_SOURCE_TYPE()": "0x68beefe8",
+        "resolveTarget(uint8,uint256)": "0x26f8b3df"
+      }
+    },
+    "src/extensions/external/AVAExternalOperationTargetResolver.sol:IAVAExternalOperationTargetResolver": {
+      "abiSurfaceHash": "0xf2739c39fd5de753c804ba1df3d495669c2dc70f9ac8e19feef58ac800225539",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "resolveTarget(uint8,uint256)": "0x26f8b3df"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:AVAPenaltyRestorationExtension": {
+      "abiSurfaceHash": "0x8c0bfbd7c9eb4d3b0af9975d8056662bf8ab675ecb44ddb596bcc092042a32c1",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "signature": "EligibilityRestrictionRecorded(uint256,uint256,bytes32,bytes32,uint64,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "PenaltyRecorded(uint256,uint256,bytes32,uint256,bytes32,uint8,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "signature": "RestorationRecorded(uint256,uint256,uint256,uint256,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "signature": "StandingPenaltyInputRecorded(uint256,uint256,bytes32,bytes32,int256,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "CHALLENGE_EXTENSION()": "0x64da6aaa",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "MAX_ABSOLUTE_STANDING_PENALTY_DELTA()": "0x93cb9b2f",
+        "MAX_ELIGIBILITY_RESTRICTION_DURATION()": "0xed18856a",
+        "REVISION_REGISTRY()": "0xce4298db",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "getEligibilityRestriction(uint256)": "0xf198af73",
+        "getPenalty(uint256)": "0x96e59682",
+        "getRestoration(uint256)": "0x0ea30ebd",
+        "getStandingPenaltyInput(uint256)": "0x7d5bc3ff",
+        "nextEligibilityRestrictionId()": "0xc18dc009",
+        "nextPenaltyId()": "0x9c97f54f",
+        "nextRestorationId()": "0xbd926b9f",
+        "nextStandingPenaltyInputId()": "0xda1256ff",
+        "penaltyIdByChallengeSubject(bytes32)": "0x034674cf",
+        "recordEligibilityRestriction((uint256,bytes32,bytes32,bytes32,uint64,bytes32,string))": "0x3a23857d",
+        "recordPenalty((uint256,bytes32,bytes32,bytes32,bytes32,string))": "0x828065d5",
+        "recordRestoration((uint256,bytes32,bytes32,bytes32,string))": "0x9277a466",
+        "recordStandingPenaltyInput((uint256,bytes32,bytes32,bytes32,int256,bytes32,string))": "0x904f55c8",
+        "restorationIdByChallenge(uint256)": "0x20c95e51",
+        "restrictionIdByPenaltyKind(bytes32)": "0x8707468b",
+        "standingPenaltyIdByPenaltyDimension(bytes32)": "0xe4794752"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:AVARewardPriorityExtension": {
+      "abiSurfaceHash": "0x7ec69d0dafdc6ddd0d89efeee83b9213b0e91203c38ce1444b0a2fdd9cb75d46",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "AdministrativePriorityRecorded(uint256,uint256,bytes32,uint256,bytes32,uint256,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "RewardRecorded(uint256,uint256,bytes32,uint256,bytes32,uint256,address)"
+        }
+      ],
+      "selectors": {
+        "ALLOCATION_SOURCE()": "0x63338e66",
+        "ALLOCATION_SOURCE_TYPE()": "0x28a10ae4",
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "getPriority(uint256)": "0x763d0f62",
+        "getReward(uint256)": "0x1c4b774b",
+        "nextPriorityId()": "0x6d015bb8",
+        "nextRewardId()": "0xf064997c",
+        "priorityIdBySource(bytes32)": "0xc9a21814",
+        "recordAdministrativePriority((uint256,bytes32,bytes32,bytes32,uint256,bytes32,uint256,bytes32,string))": "0x273e7dc2",
+        "recordReward((uint256,bytes32,bytes32,bytes32,uint256,bytes32,uint256,bytes32,string))": "0x0b18bd08",
+        "rewardIdBySource(bytes32)": "0x02ce6b4b"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:DefaultAVAPenaltyPolicyModule": {
+      "abiSurfaceHash": "0x9bd8f2fa07fb95a17251c822d086cc8346dc18c55ad544a82ca6510105b9d99b",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b",
+        "validateStandingComputation((bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,bytes32,bytes32,bytes32,bytes32,address))": "0x1a8372fe",
+        "validateStandingCredential((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,uint64,bytes32,address))": "0x31a37d33"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:DefaultAVAPriorityPolicyModule": {
+      "abiSurfaceHash": "0x9bd8f2fa07fb95a17251c822d086cc8346dc18c55ad544a82ca6510105b9d99b",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b",
+        "validateStandingComputation((bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,bytes32,bytes32,bytes32,bytes32,address))": "0x1a8372fe",
+        "validateStandingCredential((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,uint64,bytes32,address))": "0x31a37d33"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:DefaultAVARestorationPolicyModule": {
+      "abiSurfaceHash": "0x9bd8f2fa07fb95a17251c822d086cc8346dc18c55ad544a82ca6510105b9d99b",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b",
+        "validateStandingComputation((bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,bytes32,bytes32,bytes32,bytes32,address))": "0x1a8372fe",
+        "validateStandingCredential((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,uint64,bytes32,address))": "0x31a37d33"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:DefaultAVARewardPolicyModule": {
+      "abiSurfaceHash": "0x9bd8f2fa07fb95a17251c822d086cc8346dc18c55ad544a82ca6510105b9d99b",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b",
+        "validateStandingComputation((bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,bytes32,bytes32,bytes32,bytes32,address))": "0x1a8372fe",
+        "validateStandingCredential((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,uint64,bytes32,address))": "0x31a37d33"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:IAVAPenaltyPolicyModule": {
+      "abiSurfaceHash": "0xa8cf7fc8f0917143d483a1b37a9d9957332fc11108a13fc7d83dfea8c2979611",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:IAVAPriorityPolicyModule": {
+      "abiSurfaceHash": "0xa8cf7fc8f0917143d483a1b37a9d9957332fc11108a13fc7d83dfea8c2979611",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:IAVARestorationPolicyModule": {
+      "abiSurfaceHash": "0xa8cf7fc8f0917143d483a1b37a9d9957332fc11108a13fc7d83dfea8c2979611",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b"
+      }
+    },
+    "src/extensions/governance/AVABoundedGovernanceExtensions.sol:IAVARewardPolicyModule": {
+      "abiSurfaceHash": "0xa8cf7fc8f0917143d483a1b37a9d9957332fc11108a13fc7d83dfea8c2979611",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b"
+      }
+    },
+    "src/extensions/package/AVARulePackageLifecycleExtension.sol:AVAPackageReadinessExtension": {
+      "abiSurfaceHash": "0xc29e9282f9a187ec92a84496081557a19130fafb606b78ffc27ad4ce60341907",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "DisclosureLifecycleReadinessRecorded(uint256,bytes32,uint256,uint256,bytes32,bytes32,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "signature": "ObjectMigrationReadinessRecorded(uint256,uint256,uint256,uint256,uint256,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "LIFECYCLE_EXTENSION()": "0x11e571b2",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "disclosureReadinessRecordIdByContext(bytes32)": "0xdfac756c",
+        "getDisclosureLifecycleReadinessRecord(uint256)": "0xc23d784f",
+        "getObjectMigrationReadinessRecord(uint256)": "0xd129286b",
+        "nextDisclosureLifecycleReadinessRecordId()": "0x55119be2",
+        "nextObjectMigrationReadinessRecordId()": "0x65239a28",
+        "objectMigrationRecordIdByContext(bytes32)": "0xdec1dbf8",
+        "recordDisclosureLifecycleReadiness((uint256,uint256,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,string))": "0xe8432543",
+        "recordObjectMigrationReadiness((uint256,uint256,uint256,bytes32,bytes32,uint256,bytes32,string))": "0xa33f126e"
+      }
+    },
+    "src/extensions/package/AVARulePackageLifecycleExtension.sol:AVARulePackageLifecycleExtension": {
+      "abiSurfaceHash": "0x54c5b87805b8299979d4010cfe76e645c2bf25b0062a8db59f745ce9f368cf21",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "PackageLifecycleRecorded(uint256,bytes32,bytes32,uint256,uint256,uint8,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "getPackageLifecycleRecord(uint256)": "0xac77762e",
+        "lifecycleRecordIdByContext(bytes32)": "0x0252afb7",
+        "nextLifecycleRecordId()": "0x28257da5",
+        "recordPackageLifecycle((uint256,uint256,bytes32,bytes32,uint8,bytes32,string))": "0xfb7cc3f9"
+      }
+    },
+    "src/extensions/package/AVARulePackageLifecycleExtension.sol:DefaultAVAPackageLifecyclePolicyModule": {
+      "abiSurfaceHash": "0x702bc7934dddcc1de331823c1a28992f9c48910e9f3c25320bbb6ed50a4c3357",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateDisclosureLifecycleReadiness((bytes32,bytes32,uint256,uint256,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,address))": "0xb014ca92",
+        "validateObjectMigrationReadiness((bytes32,bytes32,uint256,uint256,uint256,uint256,uint256,bytes32,uint256,bytes32,bytes32,bytes32,address))": "0x1801d6e8",
+        "validatePackageLifecycle((bytes32,bytes32,uint256,uint256,bytes32,uint64,uint64,bytes32,bytes32,bytes32,bytes32,address))": "0x8a89fd9c"
+      }
+    },
+    "src/extensions/package/AVARulePackageLifecycleExtension.sol:IAVAPackageLifecyclePolicyModule": {
+      "abiSurfaceHash": "0x451ded719445175bce17aa34e6f4b946c39f8a4d8d4aadfe82f4ee702d939b10",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateDisclosureLifecycleReadiness((bytes32,bytes32,uint256,uint256,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,address))": "0xb014ca92",
+        "validateObjectMigrationReadiness((bytes32,bytes32,uint256,uint256,uint256,uint256,uint256,bytes32,uint256,bytes32,bytes32,bytes32,address))": "0x1801d6e8",
+        "validatePackageLifecycle((bytes32,bytes32,uint256,uint256,bytes32,uint64,uint64,bytes32,bytes32,bytes32,bytes32,address))": "0x8a89fd9c"
+      }
+    },
+    "src/extensions/privacy/AVAChallengePrivacyExtensions.sol:AVAChallengeProofUseExtension": {
+      "abiSurfaceHash": "0x777b9da7141bafafac5cd3c531d283837e84804da44233a49a932cc4d23a8113",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "signature": "ChallengeProofUseRecorded(uint256,uint256,uint256,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "CHALLENGE_EXTENSION()": "0x64da6aaa",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "PROOF_REGISTRY()": "0x7585fa87",
+        "PROOF_USE_CONTEXT_DOMAIN()": "0xd02d8690",
+        "PROOF_USE_NULLIFIER_DOMAIN()": "0x2a8efbc3",
+        "PROOF_USE_TYPE()": "0xbb024027",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "getProofUseRecord(uint256)": "0xef11fab6",
+        "nextProofUseRecordId()": "0xe4e1bcfc",
+        "proofUseRecordIdByNullifier(bytes32)": "0xcfaa665b",
+        "recordProofUse((uint256,uint256,bytes32,bytes32,bytes32,string))": "0xc08b0941"
+      }
+    },
+    "src/extensions/privacy/AVAChallengePrivacyExtensions.sol:ChallengeProofDisclosurePolicyModule": {
+      "abiSurfaceHash": "0x6025aa91b87825603629df9028edafb2ad93f08ebe45562c8b8cc4db67c1914e",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "CHALLENGER_ROLE_KEY()": "0x27948f1a",
+        "DISCLOSURE_POLICY_ID()": "0xa25b745f",
+        "PROOF_REGISTRY()": "0x7585fa87",
+        "moduleIdentityHash()": "0xa7092996",
+        "validateDisclosure((bytes32,bytes32,uint256,bytes32,bytes32,uint8,bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,address))": "0xe4fc6394"
+      }
+    },
+    "src/extensions/privacy/AVADisclosureReceiptExtension.sol:AVADisclosureReceiptExtension": {
+      "abiSurfaceHash": "0x66bb2fe7aa64a3a875814060058da8a5feedb99dc8c2027a8d2243b23ce863e3",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "DisclosureReceiptRecorded(uint256,bytes32,bytes32,uint256,uint256,uint8,bytes32,uint256,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "DISCLOSURE_CONTEXT_DOMAIN()": "0x09c37459",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "PROOF_REGISTRY()": "0x7585fa87",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "activeGrantIdByScope(bytes32)": "0xaf46a65a",
+        "getDisclosureReceipt(uint256)": "0x8646fb90",
+        "isAccessGrantActive(uint256)": "0x066702b7",
+        "nextDisclosureReceiptId()": "0x9cad83dc",
+        "proofUseReceiptIdByProofReceipt(uint256)": "0x54356425",
+        "recordDisclosure((uint256,bytes32,bytes32,bytes32,uint256,uint8,bytes32,uint256,uint256,uint64,bytes32,string))": "0x28de31a9"
+      }
+    },
+    "src/extensions/privacy/AVAPrivacyProofExtension.sol:AVAPrivacyProofExtension": {
+      "abiSurfaceHash": "0xf819a7b240ee846b30e729eb8b5328ac82539de705b7d0dd7943b1c11cec61ef",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "PrivacyProofReceiptRecorded(uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "CHALLENGE_PROOF_CONTEXT_DOMAIN()": "0x9b880e6c",
+        "CHALLENGE_PROOF_SCOPE()": "0xc40b31ef",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "NULLIFIER_DOMAIN()": "0x72e9f8d3",
+        "PROOF_CONTEXT_DOMAIN()": "0xe6dcb799",
+        "PROOF_DOMAIN_HASH()": "0xe2891405",
+        "PROOF_RECORD_TYPE()": "0xa66046d1",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "VERIFIER()": "0x08c84e70",
+        "VERIFIER_CODE_HASH()": "0xe31a3cb6",
+        "challengeProofMatches((uint256,uint256,uint256,bytes32,uint256,uint256,bytes32))": "0x97d6c1aa",
+        "challengeProofReceiptIdByGateKey(bytes32)": "0xd85d4ea6",
+        "computeSubjectCommitment((uint256,uint256))": "0xf7fb9d80",
+        "getProofReceipt(uint256)": "0x7017043b",
+        "hasChallengeFilingProof(uint256,uint256,bytes32,uint256,uint256,bytes32,bytes32)": "0xcae9a46a",
+        "isChallengeFilingProof(uint256)": "0x118fdee4",
+        "isProofUsable(uint256)": "0x6727d105",
+        "nextProofReceiptId()": "0xe12728c5",
+        "proofMatches(uint256,uint256,uint256,bytes32,uint256,bytes32)": "0x538d35fa",
+        "proofReceiptIdByContextHash(bytes32)": "0x235a0e92",
+        "proofReceiptIdByNullifierHash(bytes32)": "0xa97ae86c",
+        "registerChallengeProof((uint256,uint256,bytes32,bytes32,uint256,uint256,((uint256,uint256),(uint256,uint256),uint256),string))": "0x34dd8f37",
+        "registerProof((uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,((uint256,uint256),(uint256,uint256),uint256),string))": "0x96785de7",
+        "targetPackageIdByProofReceipt(uint256)": "0x0474bb86"
+      }
+    },
+    "src/extensions/settlement/AVASettlementReceiptExtension.sol:AVASettlementReceiptExtension": {
+      "abiSurfaceHash": "0x17001327b9a54d681efdfb58c580295134d81f3c50b0ba67974584e89b3c07c8",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "SettlementReceiptRecorded(uint256,bytes32,bytes32,uint256,address,uint256,bytes32,uint256,address)"
+        }
+      ],
+      "selectors": {
+        "ALLOCATION_SOURCE()": "0x63338e66",
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "CONSEQUENCE_SOURCE()": "0x4d7f6521",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "SETTLEMENT_CONTEXT_DOMAIN()": "0xf38e1e5f",
+        "getSettlement(uint256)": "0x4c582380",
+        "getSettlementSource(uint256)": "0xe83a0257",
+        "nextSettlementId()": "0xa16c2cfb",
+        "recordSettlement((address,uint256,bytes32,bytes32,bytes32,uint256,bytes32,uint256,bytes32,string))": "0xceee087b",
+        "settlementIdBySource(bytes32)": "0x0529301c"
+      }
+    },
+    "src/extensions/settlement/AVAValueLifecycleExtension.sol:AVAValueLifecycleExtension": {
+      "abiSurfaceHash": "0x3d89717c2e35da75ddfc13666da7b73453ea9546742646d7e89b27c8936d6b16",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "signature": "RecoveryOutcomeRecorded(uint256,uint256,uint8,bytes32,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "signature": "RepaymentObligationRecorded(uint256,uint256,uint256,bytes32,uint256,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "signature": "RewardLifecycleRecorded(uint256,uint256,uint8,uint8,uint8,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "ValueSettlementRecorded(uint256,uint8,uint256,bytes32,uint256,uint256,address)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "PENALTY_EXTENSION()": "0x25c770bd",
+        "PENALTY_EXTENSION_SOURCE_TYPE()": "0xbf19809f",
+        "REVISION_REGISTRY()": "0xce4298db",
+        "REWARD_PRIORITY_EXTENSION()": "0x52e4ceac",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "getRecoveryOutcome(uint256)": "0xae8b0259",
+        "getRepaymentObligation(uint256)": "0x6aa94968",
+        "getRewardLifecycleRecord(uint256)": "0x3cb1b4c0",
+        "getValueSettlement(uint256)": "0x92c8bace",
+        "nextObligationId()": "0x2447e4ac",
+        "nextRecoveryOutcomeId()": "0x6b7b5387",
+        "nextRewardLifecycleRecordId()": "0x685bfdfe",
+        "nextSettlementId()": "0xa16c2cfb",
+        "obligationIdByOriginSettlement(uint256)": "0xdc9870a2",
+        "recordRecoveryOutcome((uint256,bytes32,bytes32,uint8,bytes32,string))": "0x3467a34e",
+        "recordRepaymentObligation((uint256,uint256,bytes32,bytes32,uint256,bytes32,string))": "0xd50804f5",
+        "recordRewardLifecycle((uint256,bytes32,bytes32,uint8,bytes32,string))": "0xc10a88bb",
+        "recordValueSettlement((uint8,uint256,bytes32,bytes32,bytes32,uint256,bytes32,string))": "0xdb545942",
+        "recoveryOutcomeIdByObligation(uint256)": "0x0620165e",
+        "rewardLifecycleStatus(uint256)": "0x6bcdb467",
+        "settlementIdBySource(bytes32)": "0x0529301c"
+      }
+    },
+    "src/extensions/settlement/AVAValueLifecycleExtension.sol:DefaultAVAValueExecutionPolicyModule": {
+      "abiSurfaceHash": "0x9bd8f2fa07fb95a17251c822d086cc8346dc18c55ad544a82ca6510105b9d99b",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b",
+        "validateStandingComputation((bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,bytes32,bytes32,bytes32,bytes32,address))": "0x1a8372fe",
+        "validateStandingCredential((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,uint64,bytes32,address))": "0x31a37d33"
+      }
+    },
+    "src/extensions/settlement/IAVASettlementReceiptSource.sol:IAVASettlementReceiptSource": {
+      "abiSurfaceHash": "0x26aec6a7cade52320e1fabfc80d4414d53f3ff343488b0a13a0652e3f43affaf",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "getSettlementSource(uint256)": "0xe83a0257"
+      }
+    },
+    "src/extensions/shared/AVAExtensionRecordBase.sol:AVAExtensionRecordBase": {
+      "abiSurfaceHash": "0x44bb2576edf72b6d518308e3dc6086d760ab839b25e5f90b9cc46fa9b01b7982",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)"
+      ],
+      "events": [],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255"
+      }
+    },
+    "src/extensions/shared/DefaultAVAExtensionPolicyModule.sol:DefaultAVAExtensionPolicyModule": {
+      "abiSurfaceHash": "0x9bd8f2fa07fb95a17251c822d086cc8346dc18c55ad544a82ca6510105b9d99b",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b",
+        "validateStandingComputation((bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,bytes32,bytes32,bytes32,bytes32,address))": "0x1a8372fe",
+        "validateStandingCredential((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,uint64,bytes32,address))": "0x31a37d33"
+      }
+    },
+    "src/extensions/shared/IAVAExtensionPolicyModule.sol:IAVAExtensionPolicyModule": {
+      "abiSurfaceHash": "0xa8cf7fc8f0917143d483a1b37a9d9957332fc11108a13fc7d83dfea8c2979611",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateExtensionRecord((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint64,bytes32,bytes32,bytes32,address))": "0x8169552b"
+      }
+    },
+    "src/extensions/standing/AVAStandingCredentialExtensions.sol:AVAStandingComputationExtension": {
+      "abiSurfaceHash": "0x729837d4348b287eca51c546c8ea5043220e07876026b935308d7c8d93d484bc",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "StandingComputationRecorded(uint256,bytes32,bytes32,uint256,uint256,bytes32,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true
+          ],
+          "signature": "StandingComputationSuperseded(uint256,uint256)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "REVISION_REGISTRY()": "0xce4298db",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "activeComputationId(bytes32)": "0x4743966f",
+        "getComputation(uint256)": "0x1a3fc4a8",
+        "isComputationCurrent(uint256)": "0x872c840e",
+        "nextComputationId()": "0x5361adde",
+        "recordComputation((uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,int256,int256,bytes32,bytes32,bytes32,bytes32,uint64,string))": "0x3016687f"
+      }
+    },
+    "src/extensions/standing/AVAStandingCredentialExtensions.sol:AVAStandingCredentialExtension": {
+      "abiSurfaceHash": "0x8ca33c0110032959d0e01bf7e72ae3d055f7cb94e9c119462a11588cb6bac997",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "StandingCredentialIssued(uint256,bytes32,bytes32,uint256,uint256,uint64,address)"
+        },
+        {
+          "indexed": [
+            true,
+            false,
+            false
+          ],
+          "signature": "StandingCredentialRevoked(uint256,bytes32,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            false
+          ],
+          "signature": "StandingCredentialSuperseded(uint256,uint256,bytes32)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "COMPUTATION_REGISTRY()": "0x8fd96ea7",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "MAX_CREDENTIAL_VALIDITY()": "0x2c995f06",
+        "REVISION_REGISTRY()": "0xce4298db",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "activeCredentialId(bytes32)": "0x249ec454",
+        "credentialProves(uint256,uint256,bytes32,bytes32,bytes32,int256)": "0x0c950629",
+        "getCredential(uint256)": "0x8dd18d2d",
+        "isCredentialActive(uint256)": "0x459bdfd9",
+        "issueCredential((uint256,bytes32,bytes32,uint64,string))": "0x716bff72",
+        "nextCredentialId()": "0x341f02ec",
+        "revokeCredential(uint256,bytes32,bytes32)": "0x7b280c88",
+        "supersedeCredential(uint256,(uint256,bytes32,bytes32,uint64,string))": "0x1f14dbbc"
+      }
+    },
+    "src/extensions/standing/AVAStandingProvenanceExtensions.sol:AVAStandingProvenanceExtension": {
+      "abiSurfaceHash": "0x608ed56c4b3a496e103f171d19cdd2c673444249107dad54dc96c6364451fa26",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "SubjectMismatch(bytes32,bytes32)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true
+          ],
+          "signature": "StandingComputationStatementInvalidated(uint256,uint256)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false
+          ],
+          "signature": "StandingComputationStatementRecorded(uint256,uint256,bytes32,uint256)"
+        },
+        {
+          "indexed": [
+            true,
+            true
+          ],
+          "signature": "StandingComputationStatementSuperseded(uint256,uint256)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true
+          ],
+          "signature": "StandingFormulaRegistered(uint256,uint256,bytes32)"
+        },
+        {
+          "indexed": [
+            true,
+            true
+          ],
+          "signature": "StandingSourceSetCompletenessRecorded(uint256,uint256)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false
+          ],
+          "signature": "StandingSourceSetRegistered(uint256,uint256,bytes32,uint256)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "DISCLOSURE_REGISTRY()": "0x20de7915",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "REVISION_REGISTRY()": "0xce4298db",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "activeStatementIdBySourceSet(uint256)": "0xd08898d1",
+        "completenessIdBySourceSet(uint256)": "0x27afbe29",
+        "formulaIdByVersion(bytes32)": "0xcc68dccb",
+        "getCompletenessAttestation(uint256)": "0x936f3a77",
+        "getComputationStatement(uint256)": "0x250c8e8e",
+        "getFormula(uint256)": "0xa8bbd93d",
+        "getSourceSet(uint256)": "0xa386f99b",
+        "invalidateComputationStatement(uint256,uint256,bytes32,bytes32)": "0x85960512",
+        "isComputationStatementActive(uint256)": "0x585f9616",
+        "nextCompletenessId()": "0x037dd11a",
+        "nextFormulaId()": "0x5acf93c9",
+        "nextSourceSetId()": "0x27541b29",
+        "nextStatementId()": "0x602c068f",
+        "recordCompletenessAttestation((uint256,bytes32,bytes32,uint256,bytes32,bytes32,bytes32,string))": "0x52713cc2",
+        "recordComputationStatement((uint256,uint256,bytes32,bytes32,uint256,int256,int256,int256,bytes32,string))": "0xb5f55427",
+        "registerFormula((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint64,bytes32,bytes32,bytes32,bytes32,bytes32,address,bytes32,string))": "0x12636030",
+        "registerSourceSet((uint256,uint256,bytes32,bytes32,bytes32,bytes32,bytes32,uint256,bytes32,uint256,bytes32,string))": "0xe12446a8",
+        "sourceSetIdByCommitment(bytes32)": "0xe7a5bcb7",
+        "supersedeComputationStatement(uint256,(uint256,uint256,bytes32,bytes32,uint256,int256,int256,int256,bytes32,string))": "0x08ec6dbf"
+      }
+    },
+    "src/extensions/standing/AVAStandingProvenanceExtensions.sol:AVAStandingZKCredentialExtension": {
+      "abiSurfaceHash": "0x80c464affd351c2608930cd404ab7dc232ce629c2d0ebcdee90df107d91e5935",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false
+          ],
+          "signature": "StandingZKCredentialIssued(uint256,uint256,bytes32,uint64)"
+        },
+        {
+          "indexed": [
+            true,
+            true
+          ],
+          "signature": "StandingZKCredentialRevoked(uint256,bytes32)"
+        },
+        {
+          "indexed": [
+            true,
+            true
+          ],
+          "signature": "StandingZKCredentialSuperseded(uint256,uint256)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false
+          ],
+          "signature": "StandingZKCredentialUsed(uint256,uint256,bytes32,bytes32)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "CREDENTIAL_TYPE()": "0x7f8e1bc4",
+        "CREDENTIAL_USE_TYPE()": "0x416991fb",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "MAX_CREDENTIAL_VALIDITY()": "0x2c995f06",
+        "PROOF_REGISTRY()": "0x7585fa87",
+        "PROVENANCE_REGISTRY()": "0xb344fd3b",
+        "REVISION_REGISTRY()": "0xce4298db",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "USE_CONTEXT_DOMAIN()": "0xedcbd75b",
+        "USE_NULLIFIER_DOMAIN()": "0x8c4f64e0",
+        "VERIFIER()": "0x08c84e70",
+        "activeCredentialId(bytes32)": "0x249ec454",
+        "credentialIdByCommitment(bytes32)": "0xf9108905",
+        "credentialProves(uint256,uint256,bytes32,bytes32,bytes32,int256)": "0x0c950629",
+        "getCredential(uint256)": "0x8dd18d2d",
+        "getCredentialUse(uint256)": "0xd70d6280",
+        "isCredentialActive(uint256)": "0x459bdfd9",
+        "issueCredential((uint256,bytes32,bytes32,bytes32,uint64,string))": "0x9752b8a0",
+        "nextCredentialId()": "0x341f02ec",
+        "nextUseRecordId()": "0x73006125",
+        "recordCredentialUse((uint256,uint256,address,bytes32,bytes32,bytes32,int256,bytes32,bytes32,string),((uint256,uint256),(uint256,uint256),uint256))": "0xad10bff6",
+        "revokeCredential(uint256,bytes32,bytes32)": "0x7b280c88",
+        "supersedeCredential(uint256,(uint256,bytes32,bytes32,bytes32,uint64,string))": "0x55ce410f",
+        "useRecordIdByNullifier(bytes32)": "0xb0a886b5"
+      }
+    },
+    "src/extensions/standing/AVAStandingProvenanceExtensions.sol:AVAStandingZKProofExtension": {
+      "abiSurfaceHash": "0x104c79b63c13be03af1f946be00021a2b6e2af3dcfd21cadb888034c07a5ea39",
+      "errors": [
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "UnknownReference(uint256)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false
+          ],
+          "signature": "StandingZKProofRecorded(uint256,uint256,bytes32,bytes32)"
+        }
+      ],
+      "selectors": {
+        "AUTHORITY_MATRIX()": "0x45dc0ea5",
+        "EVIDENCE_REGISTRY()": "0x287605f3",
+        "IDENTITY_REGISTRY()": "0x65fad027",
+        "PROOF_CONTEXT_DOMAIN()": "0xe6dcb799",
+        "PROOF_DOMAIN_HASH()": "0xe2891405",
+        "PROOF_NULLIFIER_DOMAIN()": "0x05c5f139",
+        "PROVENANCE_REGISTRY()": "0xb344fd3b",
+        "REVISION_REGISTRY()": "0xce4298db",
+        "RULE_PACKAGE_REGISTRY()": "0xe7b56255",
+        "VERIFIER()": "0x08c84e70",
+        "VERIFIER_CODE_HASH()": "0xe31a3cb6",
+        "getProofReceipt(uint256)": "0x7017043b",
+        "isProofUsable(uint256)": "0x6727d105",
+        "nextProofReceiptId()": "0xe12728c5",
+        "proofSupports(uint256,uint256,bytes32,bytes32,bytes32,int256)": "0x1e0fd4fb",
+        "receiptIdByContextHash(bytes32)": "0x76afd865",
+        "receiptIdByNullifierHash(bytes32)": "0xc5ab81e5",
+        "registerProof((uint256,bytes32,bytes32,((uint256,uint256),(uint256,uint256),uint256),string))": "0x79a13356"
+      }
+    },
+    "src/extensions/standing/AVAStandingRevisionExtension.sol:AVAStandingRevisionExtension": {
+      "abiSurfaceHash": "0x0bcbbd96f99f817f501f1eb440645851d162ecbf8b7b662e29319583789b1eac",
+      "errors": [
+        "CrossApplicationReference(bytes32,bytes32)",
+        "EmptyValue()",
+        "InvalidState(uint256)",
+        "NotAdmin(address)",
+        "NotAuthorised(address,bytes32)"
+      ],
+      "events": [
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "StandingRevisionAdvanced(bytes32,uint256,bytes32,uint256,uint256,uint256,uint8)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "signature": "StandingRevisionAdvancedFromRecord(bytes32,uint256,bytes32,uint256,bytes32,uint256,address)"
+        },
+        {
+          "indexed": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "signature": "StandingRevisionWriterBound(uint256,address,bytes32,address)"
+        }
+      ],
+      "selectors": {
+        "ADMIN()": "0x2a0acc6a",
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "advanceRevision(bytes32,uint256,bytes32,bytes32,uint256)": "0xef291c35",
+        "bindRevisionWriter(uint256,address)": "0xb53c6ab4",
+        "currentRevision(uint256,bytes32)": "0x70e43188",
+        "moduleIdentityHash()": "0xa7092996",
+        "onRecognisedStateTransition((bytes32,bytes32,uint256,uint256,uint256,uint256,bytes32,uint8,uint8,uint8))": "0xdb1db6c8",
+        "revisionUseStarted()": "0x6e8c3c8c",
+        "revisionUseStartedByPackage(uint256)": "0x164434d5",
+        "revisionWriterByPackage(uint256,address)": "0x06aec090"
+      }
+    },
+    "src/extensions/standing/DefaultStandingCredentialModules.sol:DefaultStandingComputationPolicyModule": {
+      "abiSurfaceHash": "0x90d781c4c87bdaf0f68a5642fb6664031853ea83dbbb6507716f80f50b60c6c6",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateStandingComputation((bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,bytes32,bytes32,bytes32,bytes32,address))": "0x1a8372fe"
+      }
+    },
+    "src/extensions/standing/DefaultStandingCredentialModules.sol:DefaultStandingCredentialPolicyModule": {
+      "abiSurfaceHash": "0x31b24394bed05519fffc32cbb55f844bb1441efb264b62008df035b3651ff0e8",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateStandingCredential((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,uint64,bytes32,address))": "0x31a37d33"
+      }
+    },
+    "src/extensions/standing/IAVAStandingCredentialModules.sol:IAVAStandingComputationPolicyModule": {
+      "abiSurfaceHash": "0x440ca91d9b1456365d9f603150aa9b25bbd1f39fb305f4e7fbe9b69ef1a14603",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateStandingComputation((bytes32,bytes32,uint256,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,bytes32,bytes32,bytes32,bytes32,address))": "0x1a8372fe"
+      }
+    },
+    "src/extensions/standing/IAVAStandingCredentialModules.sol:IAVAStandingCredentialPolicyModule": {
+      "abiSurfaceHash": "0x1b15c3dc3d0e8c6b98b6d842ff187c19edb231d960af096b54aeb964cc7e637d",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996",
+        "validateStandingCredential((bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,int256,int256,bytes32,uint64,bytes32,address))": "0x31a37d33"
+      }
+    },
+    "src/extensions/standing/IAVAStandingRevision.sol:IAVAStandingRevision": {
+      "abiSurfaceHash": "0xd7cc223c023fef9f90fd97e8385821ca25cdbd7af8ed491c440f5500cc48bafd",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "GOVERNANCE_KERNEL()": "0xacdc9508",
+        "advanceRevision(bytes32,uint256,bytes32,bytes32,uint256)": "0xef291c35",
+        "currentRevision(uint256,bytes32)": "0x70e43188"
+      }
+    },
+    "src/interfaces/IAVAApplicationModule.sol:IAVAApplicationModule": {
+      "abiSurfaceHash": "0x1f939f3e52daeda9632f97522b5678e7b2daa9538add37d58a759bb0c8eb82cf",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "applicationId()": "0x8ad10419",
+        "moduleIdentityHash()": "0xa7092996",
+        "validateDownstreamRecord((bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,uint256,bytes32,bytes32,address))": "0x22e66cc0",
+        "validateEvidence((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,address))": "0xfd5c7a6a",
+        "validateGovernedObject((bytes32,bytes32,uint256,bytes32,bytes32,bytes32,uint256,bytes32,bytes32,uint256,bytes32,bytes32,uint256,uint256,bytes32,bytes32,address))": "0x1eb54345",
+        "validateRecognisedStateFormation((bytes32,bytes32,uint256,bytes32,uint256,bytes32,bytes32,uint8,uint8,bytes32,address))": "0xd52ca8f0",
+        "validateRecognisedStateTransition((bytes32,bytes32,uint256,bytes32,uint256,uint256,bytes32,bytes32,uint8,uint8,uint8,uint8,bytes32,uint256,bytes32,address))": "0x00a7f3fc"
+      }
+    },
+    "src/interfaces/IRuleModuleIdentity.sol:IRuleModuleIdentity": {
+      "abiSurfaceHash": "0x495642574134788cf991e5c7d0db025c4c3088b971feab1e032069ad965aef53",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996"
+      }
+    },
+    "src/interfaces/IRuleModuleIdentity.sol:RuleModuleIdentity": {
+      "abiSurfaceHash": "0x495642574134788cf991e5c7d0db025c4c3088b971feab1e032069ad965aef53",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "moduleIdentityHash()": "0xa7092996"
+      }
+    },
+    "src/interfaces/IZKProofVerifier.sol:IZKProofVerifier": {
+      "abiSurfaceHash": "0x7b11291c1549f8493ff3f6f5fc7224d7c523deed2f3a759822fd0021249e68f1",
+      "errors": [],
+      "events": [],
+      "selectors": {
+        "proofDomain()": "0x136af288",
+        "verify(bytes32,((uint256,uint256),(uint256,uint256),uint256))": "0x76396106"
+      }
+    }
+  },
+  "schema": "ava-canonical-abi-manifest-v1",
+  "surface": "src/canonical/AVAProductionSurface.sol"
+}

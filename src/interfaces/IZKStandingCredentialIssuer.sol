@@ -36,6 +36,7 @@ interface IZKStandingCredentialIssuer {
         uint256 standingComputationStatementId;
         bytes32 workflowKey;
         uint256 packageId;
+        uint256 standingRevision;
         bytes32 subjectCommitment;
         bytes32 credentialCommitment;
         bytes32 credentialNullifierHash;
@@ -81,6 +82,7 @@ interface IZKStandingCredentialIssuer {
         int256 requiredThreshold;
         bytes32 targetContextHash;
         bytes32 proofUseNullifierHash;
+        address beneficiary;
     }
 
     struct ZKStandingCredentialSuspensionRecord {
@@ -101,10 +103,9 @@ interface IZKStandingCredentialIssuer {
         address recordedBy;
     }
 
-    function issueCredential(
-        AVADataTypes.Role actingRole,
-        ZKStandingCredentialInput calldata input
-    ) external returns (uint256 id);
+    function issueCredential(AVADataTypes.Role actingRole, ZKStandingCredentialInput calldata input)
+        external
+        returns (uint256 id);
 
     function revokeCredential(
         AVADataTypes.Role actingRole,
@@ -148,9 +149,10 @@ interface IZKStandingCredentialIssuer {
         int256 requiredThreshold
     ) external view returns (bool);
 
-    function recordCredentialUse(ZKStandingCredentialUseInput calldata input, IZKProofVerifier.SchnorrProof calldata proof)
-        external
-        returns (uint256 id);
+    function recordCredentialUse(
+        ZKStandingCredentialUseInput calldata input,
+        IZKProofVerifier.SchnorrProof calldata proof
+    ) external returns (uint256 id);
 
     function computeCredentialCommitment(IZKProofVerifier.G1Point calldata publicKey) external pure returns (bytes32);
 
@@ -161,19 +163,14 @@ interface IZKStandingCredentialIssuer {
         bytes32 vectorKey,
         bytes32 categoryHash,
         int256 requiredThreshold,
-        bytes32 targetContextHash
-    ) external pure returns (bytes32);
+        bytes32 targetContextHash,
+        address beneficiary
+    ) external view returns (bytes32);
 
     function computeCredentialUseNullifierHash(bytes32 useContextHash, bytes32 credentialCommitment)
         external
         pure
         returns (bytes32);
-
-    /// @notice Returns only the credential carrier's local status/expiry state.
-    /// @dev Consumers that need a standing proof must call `credentialProves`
-    /// or record a target-bound credential-use receipt, because those paths also
-    /// re-check the source standing proof and computation statement.
-    function isCredentialActive(uint256 credentialId) external view returns (bool);
 
     function getCredential(uint256 id) external view returns (ZKStandingCredentialRecord memory);
 

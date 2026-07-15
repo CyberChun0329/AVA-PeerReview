@@ -4,16 +4,19 @@ pragma solidity ^0.8.24;
 import {AVADataTypes} from "./AVADataTypes.sol";
 import {AuthorityMatrix} from "./AuthorityMatrix.sol";
 import {AVAStateMachine} from "./AVAStateMachine.sol";
+import {AVAChallengeWorkflow} from "./AVAChallengeWorkflow.sol";
 import {EvidenceCommitmentRegistry} from "./EvidenceCommitmentRegistry.sol";
 import {AllocationExecutor} from "./AllocationExecutor.sol";
 import {ConsequenceExecutor} from "./ConsequenceExecutor.sol";
 import {IExternalOperationRegistry} from "./interfaces/IExternalOperationRegistry.sol";
+import {AVARulePackageRegistry} from "./AVARulePackageRegistry.sol";
 
 contract ExternalOperationRegistry is IExternalOperationRegistry {
     bytes32 public constant EXTERNAL_OPERATION_CONTEXT_DOMAIN = keccak256("AVA_EXTERNAL_OPERATION_CONTEXT_V1");
 
     AuthorityMatrix public immutable authorityMatrix;
     AVAStateMachine public immutable stateMachine;
+    AVAChallengeWorkflow public immutable challengeWorkflow;
     EvidenceCommitmentRegistry public immutable evidenceRegistry;
     AllocationExecutor public immutable allocationExecutor;
     ConsequenceExecutor public immutable consequenceExecutor;
@@ -34,12 +37,14 @@ contract ExternalOperationRegistry is IExternalOperationRegistry {
     constructor(
         AuthorityMatrix authorityMatrix_,
         AVAStateMachine stateMachine_,
+        AVAChallengeWorkflow challengeWorkflow_,
         EvidenceCommitmentRegistry evidenceRegistry_,
         AllocationExecutor allocationExecutor_,
         ConsequenceExecutor consequenceExecutor_
     ) {
         authorityMatrix = authorityMatrix_;
         stateMachine = stateMachine_;
+        challengeWorkflow = challengeWorkflow_;
         evidenceRegistry = evidenceRegistry_;
         allocationExecutor = allocationExecutor_;
         consequenceExecutor = consequenceExecutor_;
@@ -118,7 +123,8 @@ contract ExternalOperationRegistry is IExternalOperationRegistry {
     ) public pure returns (bytes32) {
         if (
             workflowKey == bytes32(0) || packageId == 0 || kind == AVADataTypes.ExternalOperationKind.None
-                || targetKind == AVADataTypes.ExternalOperationTargetKind.None || targetId == 0 || evidenceReceiptId == 0
+                || targetKind == AVADataTypes.ExternalOperationTargetKind.None || targetId == 0
+                || evidenceReceiptId == 0
         ) {
             return bytes32(0);
         }
@@ -177,14 +183,14 @@ contract ExternalOperationRegistry is IExternalOperationRegistry {
         if (
             workflowKey == bytes32(0) || kind == AVADataTypes.ExternalOperationKind.None
                 || status == AVADataTypes.ExternalOperationStatus.None
-                || targetKind == AVADataTypes.ExternalOperationTargetKind.None || targetId == 0 || evidenceReceiptId == 0
-                || authorityId == bytes32(0) || bytes(referenceURI).length == 0
+                || targetKind == AVADataTypes.ExternalOperationTargetKind.None || targetId == 0
+                || evidenceReceiptId == 0 || authorityId == bytes32(0) || bytes(referenceURI).length == 0
         ) {
             revert AVADataTypes.EmptyValue();
         }
 
         uint256 packageId = _requireTarget(workflowKey, targetKind, targetId);
-        _requireEvidenceForPackage(evidenceReceiptId, workflowKey, packageId);
+        _validateOperationUse(workflowKey, packageId, evidenceReceiptId, status);
         bytes32 operationContextHash =
             computeOperationContextHash(workflowKey, packageId, kind, targetKind, targetId, evidenceReceiptId);
         if (operationContextHash == bytes32(0)) revert AVADataTypes.EmptyValue();
@@ -209,17 +215,17 @@ contract ExternalOperationRegistry is IExternalOperationRegistry {
         _emitExternalOperationRecorded(id);
     }
 
-    function _requireTarget(
-        bytes32 workflowKey,
-        AVADataTypes.ExternalOperationTargetKind targetKind,
-        uint256 targetId
-    ) internal view returns (uint256 packageId) {
+    function _requireTarget(bytes32 workflowKey, AVADataTypes.ExternalOperationTargetKind targetKind, uint256 targetId)
+        internal
+        view
+        returns (uint256 packageId)
+    {
         if (targetKind == AVADataTypes.ExternalOperationTargetKind.RecognisedState) {
             AVADataTypes.RecognisedStateRecord memory state = stateMachine.getRecognisedState(targetId);
             if (state.workflowKey != workflowKey) revert AVADataTypes.InvalidState(targetId);
             packageId = state.packageId;
         } else if (targetKind == AVADataTypes.ExternalOperationTargetKind.Challenge) {
-            AVADataTypes.ChallengeRecord memory challenge = stateMachine.getChallenge(targetId);
+            AVADataTypes.ChallengeRecord memory challenge = challengeWorkflow.getChallenge(targetId);
             if (challenge.workflowKey != workflowKey) revert AVADataTypes.InvalidState(targetId);
             packageId = challenge.packageId;
         } else if (targetKind == AVADataTypes.ExternalOperationTargetKind.EvidenceReceipt) {
@@ -229,24 +235,91 @@ contract ExternalOperationRegistry is IExternalOperationRegistry {
         } else if (targetKind == AVADataTypes.ExternalOperationTargetKind.AllocationRecord) {
             AVADataTypes.AllocationExecutionRecord memory allocation =
                 allocationExecutor.getAllocationExecution(targetId);
-            AVADataTypes.RecognisedStateRecord memory state = stateMachine.getRecognisedState(allocation.recognisedStateId);
+            AVADataTypes.RecognisedStateRecord memory state =
+                stateMachine.getRecognisedState(allocation.recognisedStateId);
             if (state.workflowKey != workflowKey) revert AVADataTypes.InvalidState(targetId);
             packageId = allocation.packageId;
         } else if (targetKind == AVADataTypes.ExternalOperationTargetKind.ConsequenceRecord) {
             AVADataTypes.ConsequenceRecord memory consequence = consequenceExecutor.getConsequence(targetId);
-            AVADataTypes.RecognisedStateRecord memory state = stateMachine.getRecognisedState(consequence.recognisedStateId);
-            if (state.workflowKey != workflowKey) revert AVADataTypes.InvalidState(targetId);
+            AVADataTypes.RecognisedStateRecord memory state =
+                stateMachine.getRecognisedState(consequence.recognisedStateId);
             packageId = consequence.packageId;
+            if (packageId == state.packageId) {
+                if (state.workflowKey != workflowKey) revert AVADataTypes.InvalidState(targetId);
+            } else {
+                bool challengerFinding = consequence.findingKind
+                        == AVADataTypes.GovernanceFindingKind.NegligentChallenge
+                    || consequence.findingKind == AVADataTypes.GovernanceFindingKind.MaliciousOrFabricatedChallenge;
+                if (
+                    consequence.kind != AVADataTypes.ConsequenceKind.PenaltyRecord || !challengerFinding
+                        || consequence.challengeId == 0
+                ) {
+                    revert AVADataTypes.InvalidState(targetId);
+                }
+                AVADataTypes.ChallengeRecord memory challenge = challengeWorkflow.getChallenge(consequence.challengeId);
+                if (
+                    challenge.challengedRecognisedStateId != state.id || challenge.targetPackageId != state.packageId
+                        || challenge.packageId != packageId || challenge.workflowKey != workflowKey
+                        || consequence.subjectId != challenge.challengerSubjectId
+                ) {
+                    revert AVADataTypes.InvalidState(targetId);
+                }
+            }
         } else {
             revert AVADataTypes.InvalidState(uint256(targetKind));
         }
         if (packageId == 0) revert AVADataTypes.InvalidState(targetId);
     }
 
-    function _requireEvidenceForPackage(uint256 evidenceReceiptId, bytes32 workflowKey, uint256 packageId) internal view {
+    function _requireEvidenceForPackage(uint256 evidenceReceiptId, bytes32 workflowKey, uint256 packageId)
+        internal
+        view
+    {
+        AVARulePackageRegistry.RulePackage memory rulePackage =
+            evidenceRegistry.rulePackageRegistry().getRulePackageById(packageId);
         AVADataTypes.EvidenceReceipt memory evidence =
-            evidenceRegistry.requireUsableEvidenceReceipt(evidenceReceiptId, workflowKey);
+            evidenceRegistry.requireUsableEvidenceReceipt(evidenceReceiptId, rulePackage.appId, workflowKey);
         if (evidence.packageId != packageId) revert AVADataTypes.InvalidState(evidenceReceiptId);
+    }
+
+    function _requirePinnedEvidenceForPackage(uint256 evidenceReceiptId, bytes32 workflowKey, uint256 packageId)
+        internal
+        view
+    {
+        AVADataTypes.EvidenceReceipt memory evidence = evidenceRegistry.getEvidenceReceipt(evidenceReceiptId);
+        // packageId is globally unique and already pins the application without revalidating mutable module identity.
+        if (evidence.workflowKey != workflowKey || evidence.packageId != packageId) {
+            revert AVADataTypes.InvalidState(evidenceReceiptId);
+        }
+    }
+
+    function _validateOperationUse(
+        bytes32 workflowKey,
+        uint256 packageId,
+        uint256 evidenceReceiptId,
+        AVADataTypes.ExternalOperationStatus status
+    ) internal view {
+        if (
+            status == AVADataTypes.ExternalOperationStatus.Cancelled
+                || status == AVADataTypes.ExternalOperationStatus.Superseded
+        ) {
+            _requirePinnedEvidenceForPackage(evidenceReceiptId, workflowKey, packageId);
+            return;
+        }
+        _requireEvidenceForPackage(evidenceReceiptId, workflowKey, packageId);
+        AVARulePackageRegistry.RulePackage memory rulePackage =
+            evidenceRegistry.rulePackageRegistry().getRulePackageById(packageId);
+        if (rulePackage.workflowKey != workflowKey) revert AVADataTypes.InvalidState(packageId);
+        rulePackage.evidenceLifecycleModule
+            .validateEvidenceLifecycle(
+                workflowKey,
+                AVADataTypes.Action.RecordExternalOperation,
+                evidenceReceiptId,
+                AVADataTypes.EvidenceLifecycleKind.None,
+                0,
+                bytes32(0),
+                msg.sender
+            );
     }
 
     function _emitExternalOperationRecorded(uint256 id) internal {

@@ -2,8 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "../AVADataTypes.sol";
+import {IRuleModuleIdentity} from "./IRuleModuleIdentity.sol";
 
-interface IEvidencePolicyModule {
+interface IEvidencePolicyModule is IRuleModuleIdentity {
     function validateEvidencePolicy(
         bytes32 workflowKey,
         AVADataTypes.Role actingRole,

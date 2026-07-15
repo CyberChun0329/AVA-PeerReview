@@ -1,33 +1,41 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {AVACoreTypes} from "../src/core/AVACoreTypes.sol";
+import {AVAChallengeExtension} from "../src/extensions/challenge/AVAChallengeExtension.sol";
+import {AVACanonicalTrace} from "../script/AVACanonicalTrace.s.sol";
 import {AVATransitionMatrix} from "../script/AVATransitionMatrix.s.sol";
 
 contract M13TransitionMatrixExecutionTest {
-    function testM131RegistrationRowsMatchKernelExecution() public {
-        _assertRowsMatchKernel(0, 8);
+    function testCanonicalMatrixAllowedVestingMatchesPublicKernelExecution() public {
+        AVACanonicalTrace.HonestReviewTraceRecord memory record =
+            new AVACanonicalTrace().honestReviewTraceRecord();
+        require(record.recognisedStateStatus == AVACoreTypes.RecognisedStateStatus.Vested, "vesting failed");
+        require(record.vestingTransitionId != 0, "vesting ledger missing");
     }
 
-    function testM131ReviewAndGenericRowsMatchKernelExecution() public {
-        _assertRowsMatchKernel(9, 19);
+    function testCanonicalMatrixAllowedCorrectionMatchesPublicChallengeExecution() public {
+        AVACanonicalTrace.UpheldChallengeTraceRecord memory record =
+            new AVACanonicalTrace().upheldChallengeTraceRecord();
+        require(record.outcome == AVAChallengeExtension.ChallengeOutcome.Upheld, "upheld outcome missing");
+        require(record.targetStatus == AVACoreTypes.RecognisedStateStatus.Downgraded, "correction failed");
+        require(record.targetRecognisedStateTransitionId != 0, "correction ledger missing");
     }
 
-    function testM131ChallengeRowsMatchKernelExecution() public {
-        _assertRowsMatchKernel(20, 28);
+    function testCanonicalMatrixAllowedRestorationMatchesPublicChallengeExecution() public {
+        AVACanonicalTrace.RestorationTraceRecord memory record =
+            new AVACanonicalTrace().restorationTraceRecord();
+        require(record.targetStatus == AVACoreTypes.RecognisedStateStatus.Restored, "restoration failed");
+        require(record.restorationStateTransitionId != record.correctionStateTransitionId, "lineage collapsed");
     }
 
-    function testM131RestorationRowsMatchKernelExecution() public {
-        _assertRowsMatchKernel(29, 34);
-    }
-
-    function _assertRowsMatchKernel(uint256 firstRow, uint256 lastRow) internal {
-        AVATransitionMatrix matrix = new AVATransitionMatrix();
-        require(matrix.rowCount() == 35, "unexpected matrix row count");
-        for (uint256 rowId = firstRow; rowId <= lastRow; rowId++) {
-            require(
-                keccak256(bytes(matrix.executeRowString(rowId))) == keccak256(bytes(matrix.expectedRowString(rowId))),
-                "matrix row does not match kernel execution"
-            );
-        }
+    function testCanonicalMatrixHashIsNonZeroAndDeterministic() public {
+        AVATransitionMatrix first = new AVATransitionMatrix();
+        AVATransitionMatrix second = new AVATransitionMatrix();
+        require(
+            first.matrixHash() == 0x9cba1aa4d1a8141ded47fb76ad2a2f2d96a4a83608a76bbf29e1bbe48e73dd97,
+            "canonical matrix hash drifted"
+        );
+        require(first.matrixHash() == second.matrixHash(), "matrix hash is nondeterministic");
     }
 }

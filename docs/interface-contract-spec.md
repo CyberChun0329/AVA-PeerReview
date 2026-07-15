@@ -12,9 +12,9 @@ They describe the current local Foundry implementation and its module
 compatibility rules; they do not describe a live Base deployment or production
 deployment policy.
 
-For the package-author workflow, `RulePackageModules` field map,
-historical-package binding rules, and package test checklist, see
-`docs/rule-package-integration-guide.md`.
+For the canonical capability-key package workflow, historical-package binding
+rules, package test checklist, and retained pre-separation
+`RulePackageModules` field map, see `docs/rule-package-integration-guide.md`.
 
 ## How To Use This Spec
 
@@ -36,10 +36,79 @@ Quick index:
 | Need | Section |
 | --- | --- |
 | Shared validator semantics | `Global Contract` |
+| Re-verifiable module behaviour identity | `IRuleModuleIdentity` |
 | AVA core stage interfaces | `IAttributionModule`, `IVerificationModule`, `IAllocationAdapter` / `IAVAAllocationModule` |
 | Recognised-state support | transition, challenge, disclosure, evidence, audit, field, anti-abuse, residual authority |
 | Downstream / proof / execution support | standing, credentials, reward, priority, consequence, penalty, restoration, settlement, external operation, package lifecycle, ZK |
 | Forbidden boundary check | each interface's `Must not do` clause |
+
+## Canonical Multi-Application Interface Surface
+
+New applications integrate through the domain-neutral contracts under
+`src/core/`, `src/extensions/`, and `src/apps/`.
+
+| Interface family | Responsibility |
+| --- | --- |
+| `IAVAApplicationModule` | Declares one immutable `applicationId()` and validates app-specific governed objects, state formation, transitions, evidence, and downstream vocabulary. It is validator-only and owns no Core storage. |
+| `IAVACoreRuleModules` | Defines package-selected Attribution, Verification, transition, evidence, disclosure, challenge, authority, field, anti-abuse, standing, Allocation, and consequence policy contexts over generic ids and keys. `AVAWorkflowPolicyRouter` dispatches the formation, transition, and challenge-policy subsets without owning storage. |
+| `IAVATransitionGuard` | Lets a package-bound extension veto a transition, but never widen Core's nondelegable transition graph. |
+| `IAVAPostTransitionHook` | Receives an already-authorised transition after Core state is written; a revert rolls back atomically. The hook cannot decide transition legality. |
+| `IAVAExtensionPolicyModule` | Validates optional proof, disclosure, audit, settlement, and external-operation records with app, workflow, package, state-version, subject, evidence, source, scope, payload, expiry, and authority context. |
+| `IAVAStandingComputationPolicyModule`, `IAVAStandingCredentialPolicyModule` | Validate an authorised standing output or proof carrier. They do not compute truth, mint assets, or turn standing into a balance. |
+| `IAVADownstreamRecordSource`, `IAVASettlementReceiptSource` | Narrow read interfaces for immutable source-bound receipt chains. Consumers must require the returned id to equal the queried id. |
+
+The canonical `AVAStandingZKCredentialExtension` stores both the role-scoped
+`subjectId` and a subject commitment. Its issuance key and supersession lineage
+bind both values. This reduces disclosure of standing history but remains
+role-subject-linkable; it is not an unlinkable-anonymity claim. The retained
+commitment-only interface documented later has a different subject namespace.
+
+`IAVAApplicationModule.GovernedObjectContext` includes the proposed object's
+application, workflow, package, role, type, parent id, subject, evidence,
+disclosure policy, authority, and actor. When a parent exists, Core also passes
+the parent's workflow, package, object type, and responsible subject. Before
+the module runs, Core requires the parent to share the application and package
+compatibility key. The module may narrow that relationship but cannot widen
+it. In the current Peer Review app, a review contribution requires a
+same-workflow manuscript parent, while a challenge may use a different but
+compatible workflow/package.
+
+Canonical active-package lookup is keyed by `(appId, workflowKey)`. Every
+historical object, evidence receipt, recognised state, transition, challenge,
+credential, proof, or downstream receipt uses its stored `packageId`.
+Capability absence fails closed. A package may bind at most 64 capabilities, so
+every full-package unique-module identity revalidation has a fixed upper bound.
+
+Contract-to-contract hot paths use fixed-size reference readers and compact
+verified package dispatch. `getActiveVerifiedModulesCompact` combines active
+pointer validation with the same full-package unique-module identity recheck
+used by historical package reads; `getVerifiedModulesCompact` applies that
+recheck to an already pinned `packageId`. `SubjectContext`,
+`GovernedObjectReference`, `RecognisedStateReference`, and
+`RecognisedStateTransitionReference` omit dynamic metadata or provenance fields
+that policy calls do not consume. The full package, subject, governed-object,
+recognised-state, and transition getters remain the canonical audit and
+reconstruction surface.
+No compact reader skips package identity, authority, subject, evidence,
+disclosure, or transition checks, and no result is cached across transactions.
+
+Challenge is recursive on this surface. A challenge begins as a governed object
+and recognised state under its own workflow/package. `AVAChallengeExtension`
+then records lifecycle transitions against a target recognised state. The
+challenge package validates intake and decision context; a target mutation must
+also pass the target state's historical package and `AVACoreTransitionRules`.
+No module can turn a raw challenge into a target mutation or downstream effect.
+`RecognisedStateTransitionContext` includes the substrate `actionKey` and
+`sourceRecordId`. The Peer Review application accepts a challenge-state
+`Registered -> Challengeable` transition only for `FileChallenge` with a
+nonzero lifecycle source, and accepts challenge-state vesting only for a
+source-bound resolution. Granting generic-transition permission alone therefore
+cannot create an unfiled downstream-eligible challenge state.
+
+The detailed interface catalogue below also documents the retained root-level
+pre-separation implementation. Those interfaces remain regression evidence,
+but a new application should not add domain vocabulary to Core or extend the
+root-level Peer Review state machine.
 
 ## Global Contract
 
@@ -61,11 +130,27 @@ All rule-package modules and adapters are validator-only seams.
 - `workflowKey` selects the active or target rule-package context. Where the
   substrate dispatches by stored `packageId`, modules must treat that package
   identity as fixed for the call.
-- `modulesHash`, `modulesCodeHash`, and `compatibilityKey` are package
-  compatibility inputs. They are not module-owned authority and cannot override
-  substrate checks.
+- `modulesHash`, `modulesIdentityHash`, `modulesIdentityFingerprint`, and
+  `compatibilityKey` are package identity or compatibility inputs. They are not
+  module-owned authority and cannot override substrate checks.
 - Evidence ids and disclosure-policy ids are references. Modules do not inspect
   confidential content or judge truth.
+
+Every rule-package module implements `IRuleModuleIdentity`. Registration keeps
+the immutable capability layout in `modulesHash` and the per-capability audit
+mapping in `modulesIdentityHash`. A package read recomputes
+`modulesIdentityFingerprint` across every unique module in the full package and
+fails closed if runtime code or declared immutable configuration no longer
+matches. A module shared by several capability keys is therefore checked once,
+without reducing the set of capabilities or modules covered. This demo does not
+support proxy modules whose behaviour identity cannot be stably re-verified.
+Registration also rejects a zero `moduleIdentityHash`; a module cannot enter a
+package by declining to provide a re-verifiable identity.
+
+When a canonical extension derives a record from a recognised state, any
+alternate evidence receipt must match that state's application, workflow,
+package, responsible subject, and disclosure policy. Evidence existence or
+same-package membership alone is not sufficient.
 
 The narrow execution-layer interfaces are not rule-package validator modules.
 They consume already-authorised allocation, consequence, evidence, challenge,
@@ -78,7 +163,12 @@ append-only recovery receipt, standing-penalty, and eligibility-restriction
 surfaces are also not rule-package validator modules. They are not token,
 reward, payment, or publication surfaces.
 
-## Interface Taxonomy
+The canonical standing-revision extension authorises record writers per
+`packageId` before revision use begins. `advanceRevision` revalidates both the
+package's application and the subject's application. A writer bound to one
+package has no cross-package or cross-application revision authority.
+
+## Retained Research Taxonomy
 
 The technical framework reads the current interfaces through three layers. Only
 Layer A corresponds directly to the AVA macro stages:
@@ -140,22 +230,51 @@ reputation remain computed governance memory and procedural weight. They are
 not tokens, rewards, balances, priority tokens, public prestige, manuscript
 merit, or publication signals.
 
-## Interface Contracts
+## Retained Interface Contracts
+
+The detailed contracts below describe the root-level pre-separation interface
+catalogue. They preserve research and regression compatibility. A new canonical
+application should first use `IAVAApplicationModule`, the interfaces in
+`src/core/interfaces/IAVACoreRuleModules.sol`, and
+`IAVAExtensionPolicyModule`; it should not add app vocabulary to Core merely to
+reuse one of the retained names below.
+
+### Shared Rule-Module Identity
+
+### `IRuleModuleIdentity`
+
+Function: `moduleIdentityHash() returns (bytes32)`
+
+Output: a deterministic hash over the module runtime code hash and all
+behaviour-affecting immutable configuration, including dependency addresses,
+thresholds, durations, policy ids, or other constructor-bound rules where
+applicable.
+
+Success semantics: the registry can re-verify the module behaviour identity
+captured by an immutable package. It is not an authority, compatibility, or
+truth claim.
+
+Must not do: hide mutable behaviour behind an unchanged identity, grant
+authority, or mutate substrate records.
 
 ### Layer A: AVA Core Stage Interfaces
 
 ### `IAttributionModule`
 
-Function: `validateAttribution(...) returns (bytes32 attributedObjectId)`
+Function:
+`validateAttribution(AttributionContext context) returns (bytes32 attributedObjectId)`
 
 Inputs:
-- `workflowKey`: AVA workflow package key for this validation.
+- `workflowKey`, `packageId`: workflow and stable package identity.
 - `actingRole`: caller role already supplied to the substrate path.
+- `action`: substrate action being validated.
 - `stage`: AVA stage for the proposed recognised-state object.
 - `objectId`: path-scoped object reference; the module must not reinterpret it
   as another substrate object type.
 - `subjectId`: role-scoped subject connected to the attributed object.
 - `evidenceReceiptId`: evidence receipt reference already expected by the path.
+- `disclosurePolicyId`: policy reference attached to the path.
+- `actor`: current caller.
 
 Output:
 - `attributedObjectId`: deterministic governance object reference used by the
@@ -177,10 +296,11 @@ Assumptions and gates:
 
 ### `IVerificationModule`
 
-Function: `validateVerification(...)`
+Function: `validateVerification(VerificationContext context)`
 
-Inputs: `workflowKey`, `actingRole`, `stage`, path-scoped `objectId`, and
-`evidenceReceiptId`.
+Inputs: `workflowKey`, stable `packageId`, `actingRole`, `action`, `stage`,
+path-scoped `objectId`, role-scoped `subjectId`, `evidenceReceiptId`,
+`disclosurePolicyId`, and `actor`.
 
 Output: none.
 
@@ -245,7 +365,10 @@ Must not do: mutate status, write transition record, permit substrate-forbidden
 high-impact paths, or override challenge outcome rules.
 
 Gates:
-- Before: target recognised state and package identity are substrate-owned.
+- Before: target recognised state and its fixed package identity are
+  substrate-owned. A challenge may use a different decision package, but it
+  cannot substitute that package's transition rule for the target package's
+  rule.
 - After: substrate hard gates still control generic transition limits,
   challenge mutation rules, restoration rules, and transition-ledger writes.
 
@@ -312,7 +435,7 @@ Must not do: reveal/decrypt identity or evidence, implement ACL, or mutate
 policy/readiness storage.
 
 Gates:
-- Before: `AVARulePackageRegistry.recordDisclosureLifecycleReadiness` checks
+- Before: `AVARulePackageLifecycleRegistry.recordDisclosureLifecycleReadiness` checks
   role authority, nonzero fields, active workflow package, and disclosure
   policy existence.
 - After: substrate writes only a disclosure lifecycle readiness record.
@@ -341,8 +464,15 @@ Must not do: mutate challenge or recognised-state records, sanction anyone,
 update standing, allocate value, reveal identity, or erase history.
 
 Gates:
-- Before: target recognised state, package identity, subject binding, evidence
-  existence, and authority checks are substrate-owned.
+- Before: the challenge workflow/package, target workflow/package, attributed
+  challenge object, subject binding, evidence existence, and authority checks
+  are substrate-owned. Filing targets are limited to `Challengeable`, `Vested`,
+  or `Restored` recognised states. Both challenger subject and filing account
+  are capped at one open challenge per target and one filing per target
+  transition version, so canonical subject rotation cannot reset the cap.
+- Decision conflict: resolution and restoration reject both subject-id and
+  account-level conflicts with the challenger and responsible target subject,
+  including an actor attempting the decision through another role.
 - After: transition rule, residual authority, challenge transition record,
   recognised-state transition record, and mutation rules may still veto.
 
@@ -387,10 +517,20 @@ Must not do: delete, reveal, decrypt, judge, or adjudicate evidence.
 Gates:
 - Before: `recordEvidenceLifecycleHook` requires independent
   `RecordEvidenceLifecycle` authority; target evidence must be active and
-  workflow/package-bound; replacement receipt existence, active status, and
-  workflow/package binding are substrate checks where replacement is supplied.
+  workflow/package-bound. A subject may manage its own receipt; cross-subject
+  lifecycle changes require a panel or institution authority. Replacement
+  receipts must remain active and match workflow, historical package,
+  responsible subject, disclosure policy, and evidence type. A receipt cannot
+  supersede itself.
 - After: substrate may record an evidence lifecycle record and update the
   receipt to a terminal non-active status.
+- Later use: review-window, vesting, generic transition, challenge
+  screening/resolution, and restoration paths recheck that the pinned receipt
+  is still active and bound to the original workflow/package before writing
+  their next record. A source-bound upheld correction is the safety-reducing
+  exception: target evidence may already be inactive, while challenge evidence
+  must remain active. The historical package's evidence-lifecycle module is
+  called again for the current action.
 
 ### `IAuditAdapter`
 
@@ -410,8 +550,13 @@ evidence, grant authority, or judge truth.
 
 Gates:
 - Before: `AttestationAuditModule` checks authorityId binding, target package,
-  usable active evidence/workflow, object reference, and nonzero hash/type.
-- After: substrate writes the attestation record.
+  usable active evidence/workflow, object reference, and nonzero hash/type. The
+  generic entry is fixed to target kind `EvidenceReceipt` and requires
+  `objectId == bytes32(evidenceReceiptId)`. Target-specific entries resolve
+  recognised states or transition records and derive their package and action
+  from those records.
+- After: substrate writes the attestation record with explicit `targetKind` and
+  `action` provenance.
 
 ### `IEditorialSystemAdapter`
 
@@ -443,23 +588,49 @@ Gates:
 
 Function: `validateResidualEditorialAuthority(ResidualEditorialAuthorityContext context)`
 
-Inputs: `workflowKey`, `actingRole`, `action`, `recognisedStateId`, path-scoped
-`objectId`, `evidenceReceiptId`, `authorityId`, and `actor`.
+Inputs: `workflowKey`, decision `packageId`, target `targetPackageId`,
+`actingRole`, `action`, `recognisedStateId`, `challengeId`, path-scoped
+`objectId`, `evidenceReceiptId`, `authorityId`, canonical `decisionHash`, and
+`actor`.
 
 Output: none.
 
 Success semantics: no procedural-authority veto only.
 
 Current example modules include `ProceduralEditorialAuthorityModule` for a
-single allowed action and `StructuredResidualEditorialAuthorityModule` for
-validator-only single-role, threshold-panel, multisig,
-institutional-co-signature, conflict-excluded-panel, and emergency-pause
-formats. The receipt-backed example pairs `AuthorityApprovalRegistry` with
+single allowed action and `IllustrativeStaticAuthorityShapeModule` for a
+single authority or emergency gate. Static constructor values do not simulate
+approval counts. The receipt-backed example pairs `AuthorityApprovalRegistry` with
 `ApprovalReceiptAuthorityModule`: panel subjects record package/action/object
 approval receipts, and the residual authority module checks m-of-n active
-receipts plus optional conflict exclusion. These examples express authority
-predicates only; they do not mutate substrate state or execute publication,
-reveal, sanction, reward, or payment effects.
+receipts for the exact package/action/object/role/decision hash plus optional
+conflict exclusion. Distinct canonical authority subjects are counted once;
+an excluded subject cannot execute the decision or contribute to its threshold,
+and future or unknown target ids cannot be pre-approved. For a recursive
+challenge, the authority package may be the challenge package or the linked
+target-state package; the receipt key uses that authority package while the
+evidence reference must still match the challenge package. A `CloseChallenge`
+receipt may be recorded for filed or screened challenges after evidence becomes
+terminal, but only for the exact challenge target and close decision hash.
+Resolution, restoration, and close validate the challenge package and target
+package independently. The canonical decision hash binds the current challenge
+lifecycle status, latest challenge-transition id, and target recognised-state
+transition id, preventing an approval from replaying after either lifecycle
+advances.
+Generic multisig and cross-role institutional co-signature are not implemented
+by these examples; they would require separate receipt-backed validators.
+The canonical `AVAApprovalReceiptExtension` keeps receipts append-only while
+counting at most 64 unique authority subjects per decision. Reissuing an expired
+approval updates that authority's latest receipt without extending the set that
+`approvalCount` traverses; policy thresholds above the same bound are rejected.
+`approvalCount` remains the complete audit getter. Authority-policy evaluation
+uses `hasApprovalThreshold`, which applies the same package, target-version,
+subject-activity, and evidence-lifecycle checks but returns as soon as the
+required number of distinct active approvals is reached. No approval count is
+cached across transactions.
+These examples express
+authority predicates only; they do not mutate substrate state or execute
+publication, reveal, sanction, reward, or payment effects.
 
 Allowed failure: revert for incompatible procedural authority context.
 
@@ -468,7 +639,7 @@ authority, mutate records, or override authorityId binding.
 
 Gates:
 - Before: substrate has already checked `authorityId` against the caller for
-  authority-bearing paths and resolved target package.
+  authority-bearing paths and resolved decision and target package identities.
 - After: transition/storage gates still run.
 
 ### `IFieldPolicyModule`
@@ -523,6 +694,10 @@ recognised state. The substrate calls the filing validator only when
 including a bare revert, is a veto. The bundled example treats any prior filing
 on the same package / recognised state / challenger subject path as enough to
 reject the next one; other packages may bind a different module.
+This module hook is additive: the substrate independently prevents two
+simultaneously open challenges for the same challenger subject and target and
+prevents that subject from filing again against the same target transition
+version, including through another challenge package.
 
 Must not do: execute sanctions, update standing, block good-faith challenge
 resolution, or create public consequences.
@@ -565,7 +740,8 @@ Function: `validateStandingComputation(StandingComputationContext context)`
 Inputs: `recognisedStateId`, `subjectId`, `dimension`, `vectorKey`,
 `currentValue`, `delta`, `effectiveAt`, `reversible`, `fieldKey`,
 `epoch`, `sourceRecordSetHash`, `computationRuleHash`, `evidenceReceiptId`,
-`authorityId`, and `actor`.
+`authorityId`, and `actor`. The stored computation also binds the current
+package/subject `standingRevision` supplied by `StandingRevisionRegistry`.
 
 Output: none.
 
@@ -595,10 +771,28 @@ Credential boundary: an authorised active standing-computation record may later
 be used by `StandingCredentialRegistry` to issue a non-transferable and expiring
 proof carrier. The credential must match the source computation's epoch and
 computation-rule hash, and the source computation must remain active for proof
-checks. The credential must not be transferable, approvable, consumable,
+checks. Its stored standing revision must also equal the current package/subject
+revision; a stale computation cannot issue a new credential under a later
+revision. The credential must not be transferable, approvable, consumable,
 stakeable, or treated as standing itself. It is not reputation, not a reward,
 not an administrative-priority artifact, not a public-prestige NFT, and not a
 balance.
+The substrate limits ordinary and ZK credential validity to 365 days from
+issuance. A package module may impose a shorter duration but cannot authorise a
+longer carrier.
+An ordinary computation stops being active when its role-scoped subject is
+deactivated or its source evidence receipt becomes non-active; credentials
+derived from it then fail closed without deleting history.
+A ZK credential whose subject commitment is already a known role-scoped subject
+also fails closed after that subject is deactivated. An unknown commitment
+remains an anonymous proof subject and is not treated as a public identity.
+When governance memory for such an anonymous commitment changes, an authorised
+panel can call `StandingRevisionRegistry.recordStandingCommitmentRevision` with
+the historical workflow/package, active pinned evidence, canonical
+`authorityId`, and an off-chain reason reference. The append-only receipt
+advances the same package/commitment revision used by ZK proof and credential
+checks. It does not link the commitment to an account, compute standing, or
+issue a credential.
 
 ### `IStandingCredentialIssuer`
 
@@ -617,13 +811,6 @@ recordStandingRelevantSettlement(
     uint256 settlementId,
     bytes32 authorityId,
     string uri
-)
-credentialProves(
-    uint256 credentialId,
-    bytes32 subjectId,
-    bytes32 vectorKey,
-    bytes32 categoryHash,
-    int256 requiredThreshold
 )
 credentialProvesSubjectStanding(
     uint256 credentialId,
@@ -651,22 +838,23 @@ Success semantics: `issueCredential` records a proof carrier that binds the
 source active standing computation, recognised state, workflow key, stable
 `packageId`, role-scoped subject, holder account, dimension/vector/category,
 standing value, threshold/range, epoch, issue time, expiry time, evidence
-receipt id, computation-rule hash, and authority subject. `credentialProves`
-returns true only for an active, unexpired, non-revoked, non-superseded
-credential whose source computation remains active and that matches the
-requested subject, vector, category, and threshold.
-`credentialProvesSubjectStanding` adds a stable `packageId` check and uses only
+receipt id, computation-rule hash, and authority subject.
+`credentialProvesSubjectStanding` requires the stable `packageId` and uses only
 the role-scoped subject identifier or subject commitment; it does not require
-the holder account or public identity in the proof call. Both proof helpers
-fail closed for wrong package, subject, vector, category, threshold, or range
-requests. `activeStandingCredentialId` is a bounded lookup for validator
+the holder account or public identity in the proof call. It fails closed for a
+wrong package, subject, vector, category, threshold, or range. No
+package-unbound ordinary credential proof selector is exposed.
+`activeStandingCredentialId` is a bounded lookup for validator
 modules that need the current active credential for a package/subject/vector
-and category. The active index is latest-issued-wins for that key: older
-credential ids remain inspectable through explicit id lookup, but validator
-gates that use the active index follow the most recent indexed credential and
-fail closed when it is unusable. It returns zero if no matching credential
+and category. The index identifies the single canonical active carrier for
+that key. A second direct issuance is rejected while the indexed credential is
+active; replacement must use the explicit supersession path. A revoked,
+expired, suspended, stale-revision, or otherwise inactive carrier may be
+replaced by a new authorised direct issuance. Older credential ids remain
+inspectable through explicit id lookup but cannot prove once they are no longer
+canonical. The lookup returns zero if no matching credential
 exists or if the indexed credential is expired, revoked, superseded, suspended,
-or backed by an inactive computation.
+backed by an inactive computation, or bound to a stale standing revision.
 `supersedeCredential` requires the replacement credential to stay within the
 same stable `packageId`, subject, dimension/vector, category, and computation
 rule, and to use a strictly higher epoch.
@@ -695,12 +883,15 @@ publication.
 
 Gates:
 - Before: `StandingRegistry` has already recorded an authorised
-  standing-computation readiness record over an allowed recognised state.
+  standing-computation readiness record over an allowed recognised state and
+  the current package/subject standing revision.
 - During: `StandingCredentialRegistry` checks `IssueStandingCredential`,
   `RevokeStandingCredential`, or `SupersedeStandingCredential` authority with a
   bound authority subject; validates source computation, target recognised
   state, stable package identity, evidence receipt workflow, active role-scoped
-  subject, expiry, and threshold/range metadata.
+  subject, expiry, and threshold/range metadata. Issuance and supersession also
+  invoke the historical package's evidence-lifecycle module for every distinct
+  evidence receipt supporting the computation.
 - After: only the credential record or credential-settlement record changes.
   Transfer and approval functions revert, `getApproved` returns no approval,
   and `isApprovedForAll` returns false.
@@ -764,6 +955,11 @@ reward, affect publication, or write records.
 Gates:
 - Before: allowed recognised-state status, responsible recognised-state
   subject, evidence, authority, anti-abuse, and value-readiness checks run.
+- `ConsequenceBoundaryValidator` applies the non-replaceable execution-shape,
+  finding-subject, role, outcome, and eligibility compatibility rules before
+  any package-selected consequence or penalty adapter can approve the record.
+  `ConsequenceExecutor` deploys and binds this pure validator itself; rule
+  packages cannot replace it.
 - Subject boundary: the named consequence subject must match the responsible
   subject recorded on the source recognised state in this demo. A future
   cross-subject consequence needs a separate explicit record design.
@@ -792,9 +988,11 @@ next standing computation.
 
 Gates:
 - Before: consequence substrate and value-readiness gates run.
-- Subject boundary: penalty and eligibility records inherit the source
-  consequence's recognised-state subject binding; they are not a generic
-  cross-subject sanction path.
+- Subject boundary: target-side penalty and eligibility records inherit the
+  source recognised-state subject. The only explicit cross-subject form is a
+  challenge-linked negligent or malicious/fabricated challenger finding; it
+  binds the challenge package, challenge evidence, and recorded challenger
+  subject. It is not a generic cross-subject sanction path.
 - After: substrate writes a `ConsequenceKind.PenaltyRecord` only.
 
 ### Consequence penalty input / eligibility records
@@ -805,8 +1003,6 @@ Functions:
 recordStandingPenaltyInput(
     Role actingRole,
     uint256 penaltyConsequenceId,
-    uint256 challengeId,
-    StandingPenaltyKind penaltyKind,
     string dimension,
     int256 delta,
     uint256 evidenceReceiptId,
@@ -816,7 +1012,6 @@ recordStandingPenaltyInput(
 recordEligibilityRestriction(
     Role actingRole,
     uint256 penaltyConsequenceId,
-    uint256 challengeId,
     EligibilityRestrictionKind restrictionKind,
     uint256 expiresAt,
     uint256 evidenceReceiptId,
@@ -830,11 +1025,6 @@ activeEligibilityRestrictionId(
     bytes32 subjectId,
     EligibilityRestrictionKind restrictionKind
 )
-hasActiveEligibilityRestriction(
-    uint256 packageId,
-    bytes32 subjectId,
-    EligibilityRestrictionKind restrictionKind
-)
 ```
 
 Success semantics: append a record tied to an existing
@@ -843,16 +1033,37 @@ inputs for later standing computation only. Eligibility restrictions are
 separate bounded procedural records. Standing penalty input requires a nonzero
 challenge id with a compatible outcome. `AcademicFraud` and
 `IrresponsibleReview` require an upheld challenge linked to the target
-recognised state. `NegligentChallenge` and `MaliciousOrFabricatedChallenge`
+recognised state and its current correction transition. Because the correction
+is already an authorised safety-reducing decision, its target finding and
+derived standing/eligibility inputs may preserve the corrected state's
+historical evidence and subject references after deactivation. This exception
+does not authorise reward, allocation, restoration, settlement, or value
+execution. `NegligentChallenge` and `MaliciousOrFabricatedChallenge`
 require the corresponding challenge-abuse outcome and challenger subject.
 `RejectedGoodFaith` challenges cannot become misconduct standing-penalty or
 eligibility-restriction records. Challenge-intake eligibility restrictions
 must be linked to a negligent or malicious/fabricated challenge outcome for the
-restricted challenger subject. The active lookup helpers are package-bound and
-return zero after expiry or when no matching active restriction exists. The
+restricted challenger subject. The package-bound
+`activeEligibilityRestrictionId` lookup returns zero after expiry or when no
+matching active restriction exists. The
 current demo has no early-lift function; a restriction remains active until
 `expiresAt` unless a later version adds an explicit restriction-supersession or
 restriction-lift record.
+Penalty source uniqueness is substrate-owned: the same challenge finding,
+subject, state, package, and origin settlement cannot be duplicated by changing
+metadata. Finding kinds are role- and outcome-bound, so a reviewer finding
+cannot be relabelled as academic fraud and an author finding cannot be
+relabelled as irresponsible review. The canonical Peer Review module enforces
+this through object vocabulary: review-contribution states accept only the
+irresponsible-review finding, while challenge states accept only negligent or
+malicious/fabricated-challenge findings. The canonical app currently forms no
+author/manuscript recognised state, so `AcademicFraud` has no valid canonical
+penalty target; a future author workflow must add that mapping in a new app
+module/package rather than reuse a reviewer state. For standing effects, the same challenge,
+subject, package, and dimension can be written once even if another consequence
+record is attempted; each eligibility-restriction kind remains unique per
+recorded penalty consequence. Later URI, delta, duration, evidence, or authority
+variants do not create another effect record.
 
 Must not do: update standing directly, transfer value, execute sanction, erase
 reward history, create public reputation score, create token balance, or affect
@@ -922,16 +1133,21 @@ and settlement URI.
 Success semantics: a settlement receipt is written and the mock asset operation
 is executed only for a source record that already passed recognised-state,
 evidence, package, subject, authority, and value-readiness gates. Recovery
-settlements must preserve the original grant / execution record and append the
-recovery, setoff, waiver, satisfaction, reversal, or restoration receipt. The
-stored receipt also carries the source execution mode, source settlement kind,
-source execution reference, and `settlementContextHash` for auditability.
+preserves the original execution and appends a causal chain: completed origin
+token transfer or escrow claim, compatible linked penalty consequence, one full
+repayment obligation, then exactly one clawback, setoff, waiver, or satisfaction
+terminal receipt. The stored receipt also carries the source execution mode,
+source settlement kind, source execution reference, `originSettlementId`,
+`penaltyConsequenceId`, `repaymentObligationId`, and
+`settlementContextHash` for auditability.
 
 Allowed failure: revert for unknown source records, record-only sources on
 active execution or recovery paths, wrong execution mode, wrong settlement kind,
 duplicate final settlement, missing authority, unknown subject, missing
 amount/reference, missing asset/payer where active execution needs them, or
-non-authorised caller.
+non-authorised caller. Recovery also rejects an unpaid or mismatched origin,
+duplicate obligation, partial or excess amount, wrong package/subject/asset/
+payer, terminal receipt without an obligation, or duplicate terminal result.
 
 Must not do: create allocation/consequence/standing records, compute
 reputation, decide publication, grant manuscript advantage, reveal evidence,
@@ -943,16 +1159,35 @@ Gates:
 - Before: allocation or consequence source records already exist and carry
   package id, evidence id, subject id, execution mode, settlement kind, and
   authority metadata.
-- During: `ValueSettlementExecutor` performs its own role/action authority gate
-  before calling token/priority external contracts, checks the requested
+- During: `ValueSettlementExecutor` performs its own role/action authority gate,
+  checks the requested
   settlement kind against the stored source kind, rejects duplicate final
-  settlement on active execution paths, rejects recovery receipts on open or
-  refunded escrow paths, and records source-bound recovery receipts only from
-  active value-settlement sources. Repayment obligation is non-terminal; future
-  setoff, waiver, and satisfaction are mutually exclusive terminal recovery
-  receipts for a source. `computeSettlementContextHash` is a read-only audit
-  helper over the source record, source execution fields, recipient, settlement
-  kind, and settlement status.
+  settlement on active execution paths, revalidates the current source state
+  and source evidence before a new allocation settlement, revalidates the
+  source package's module identity, and invokes its evidence-lifecycle module
+  with `ExecuteValueSettlement`. It rejects recovery receipts on open or
+  refunded escrow paths, revalidates penalty evidence before creating a
+  repayment obligation, and records source-bound recovery receipts only from
+  completed eligible origins bound to the same recognised state. Escrow refund deliberately remains a closeout
+  path when evidence or module identity later becomes non-active, or when the
+  intended recipient subject is later deactivated; the refund still returns
+  the existing deposit only to the original payer. Clawback
+  revalidates package identity and evidence lifecycle before moving the mock
+  asset; record-only setoff, waiver, and satisfaction remain available to close
+  an existing obligation after its historical subject or evidence becomes
+  inactive. Canonical reward `Freeze` and `Void` records use the same defensive
+  historical-reference rule. Reward `Vest` and `Restore`, new settlements,
+  repayment-obligation creation, and clawback remain effectful and require
+  active subject and evidence references. Settlement and standing-revision state is written
+  before any external mock token or priority-token call; reentrancy is rejected
+  and an external revert rolls back the transaction. Repayment obligation is
+  non-terminal; clawback, setoff, waiver, and satisfaction are mutually
+  exclusive terminal recovery receipts for an obligation. Only clawback moves
+  the configured mock asset. `computeSettlementContextHash` is a read-only audit
+  helper over the source record, recognised state, source execution fields,
+  recipient, settlement kind, and settlement status. The retained executor uses
+  the `AVA_VALUE_SETTLEMENT_CONTEXT_V2` domain after adding recognised-state
+  lineage to the commitment.
 
 ### `IDisclosureExecutionModule`
 
@@ -1007,9 +1242,11 @@ so the receipt itself remains linked to its request. Every operation receipt
 also carries `operationContextHash`, which binds workflow key, package id,
 operation kind, target kind/id, and evidence receipt id.
 
-Allowed failure: revert for unknown target, wrong workflow, unknown evidence
-receipt, missing authority, empty reference, unsupported kind/status, or
-non-authorised caller.
+Allowed failure: revert for unknown target, wrong workflow, unknown or
+misbound evidence receipt, missing authority, empty reference, unsupported kind/status, or
+non-authorised caller. Requests and acknowledgements also revert when the
+historical package identity no longer revalidates or its evidence-lifecycle
+module rejects `RecordExternalOperation`.
 
 Must not do: accept/reject manuscripts, score merit, execute publication
 priority, adjust real queues, transfer value, reveal identity/evidence, or
@@ -1019,6 +1256,15 @@ Gates:
 - Before: target recognised-state/challenge/evidence/allocation/consequence
   record exists and matches the workflow; evidence receipt exists and matches
   the workflow; caller has `RecordExternalOperation` authority.
+- Lifecycle: requests and acknowledgements require active evidence, revalidate
+  the target's historical package, and call its evidence-lifecycle module.
+  Cancellation and supersession retain the original workflow/package/evidence
+  binding but remain defensive closeouts after package drift or evidence
+  termination; they cannot acknowledge or execute an external operation.
+- Package routing: ordinary recognised-state/consequence targets use the target
+  state's package. A negligent or malicious/fabricated challenger consequence
+  instead requires its linked challenge target, challenge package, challenge
+  evidence, and challenger subject to match.
 - After: only the requested/acknowledged/cancelled/superseded receipt is stored.
   `computeOperationContextHash` is a read-only audit helper; it does not execute
   or schedule an external operation.
@@ -1027,25 +1273,27 @@ Gates:
 
 Function: `validateRulePackageLifecycle(RulePackageLifecycleContext context)`
 
-Inputs: `workflowKey`, source `modulesHash`, source `modulesCodeHash`, `kind`,
+Inputs: `workflowKey`, source `modulesHash`, source `modulesIdentityHash`, `kind`,
 `version`, `compatibilityKey`, `dependencyURI`, `deprecated`,
 `targetWorkflowKey`, `targetPackageId`, `targetModulesHash`,
-`targetModulesCodeHash`, `targetVersion`, `targetCompatibilityKey`,
+`targetModulesIdentityHash`, `targetVersion`, `targetCompatibilityKey`,
 `authorityRole`, and `actor`. `modulesHash` includes both module
-addresses/configuration and the registered module `extcodehash` aggregate; the
-separate `modulesCodeHash` exposes the code-identity aggregate directly.
+addresses/configuration and the registered aggregate behaviour identity; the
+separate `modulesIdentityHash` exposes the re-verifiable module-identity
+aggregate directly.
 
 Output: none.
 
 Success semantics: package-lifecycle veto only; not authority grant and not
-migration execution. Object-level migration readiness, when recorded through
-`AVARulePackageRegistry.recordObjectMigrationReadiness`, is a separate
-record-only receipt bound to an existing `MigrationReady` lifecycle record.
-The registry uses configured state/evidence readers to require that the named
-recognised state and evidence receipt belong to the lifecycle record's source
-workflow/package before the readiness receipt is stored.
-Those readers are configured once through `configureMigrationReferenceReaders`
-by an authority subject with rule-package registration permission.
+migration execution. `AVARulePackageLifecycleRegistry` owns lifecycle and
+readiness records. Object-level migration readiness is a separate record-only
+receipt bound to an existing `MigrationReady` lifecycle record. The registry's
+constructor immutably binds `AuthorityMatrix`, `AVARulePackageRegistry`,
+`DisclosurePolicyRegistry`, the recognised-state reader, and the evidence
+reader. It requires the named recognised state and evidence receipt to belong
+to the lifecycle record's source workflow/package before storing readiness and
+revalidates both the source and target package identities at use time.
+There is no runtime migration-reader configuration entry point.
 
 Allowed failure: revert for incompatible module composition, unsupported
 version, wrong compatibility key, deprecated package, missing target package
@@ -1057,15 +1305,21 @@ state, or override rule-package authority.
 Gates:
 - Before: `AVARulePackageRegistry` checks caller authority, nonzero module
   addresses, nonzero deployed module code, nonzero version/compatibility key,
-  computes `modulesCodeHash`, computes `modulesHash`, and resolves known target
+  computes `modulesIdentityHash`, computes `modulesHash`, and resolves known target
   package metadata for migration/supersession readiness records. The workflow-key
   path resolves the currently active package; the package-bound path accepts an
   explicit source `packageId` and target `packageId`.
+- Registration lifecycle: `registerRulePackage` is initial registration only.
+  `supersedeRulePackage` is an explicit compare-and-set replacement that must
+  name the current active package and use a strictly greater version. It writes
+  an append-only supersession record and advances the active pointer only for
+  new objects.
 - After: registry assigns a new immutable `packageId`, stores package metadata,
-  stores source and target module hash / code-hash / version / compatibility
-  metadata on readiness records, rechecks stored module code identity on package
-  reads, points `workflowKey` to the new active package, and may store
-  object-level migration readiness receipts without moving the object.
+  stores source and target module hash / identity-hash / version /
+  compatibility metadata on readiness records, rechecks the stored aggregate
+  module behaviour identity on package reads, points `workflowKey` to the new
+  active package only after valid supersession, and may store object-level
+  migration readiness receipts without moving the object.
 
 ### `IZKProofVerifier`
 
@@ -1180,9 +1434,13 @@ Standing computation statement inputs bind the authorised off-chain computation
 output to an active source-set commitment and active completeness attestation:
 workflow/package, subject commitment, vector/category/range, epoch, source root,
 computation-rule hash, output commitment, verifier/proof-domain, evidence
-receipt, authority subject, and URI. Statements can be superseded by a matching
+receipt, authority subject, URI, and the current package/subject standing
+revision. Statements can be superseded by a matching
 newer-epoch statement or invalidated with package-bound evidence. Superseded or
-invalidated statements cannot support active standing proof or credential use.
+invalidated statements, and statements whose standing revision is no longer
+current, cannot support active standing proof or credential use. The same is
+true when evidence bound to the source-set commitment, completeness attestation,
+or computation statement becomes expired, revoked, superseded, or replaced.
 
 Trust-boundary semantics: this interface is the chain-side registry for an
 off-chain or future-ZK standing computation result. It makes formula identity,
@@ -1195,6 +1453,11 @@ Success semantics: records audit-visible standing formula metadata, source-set
 commitments, completeness attestations, and computation statements only when
 the caller has the corresponding authority and all evidence receipts are usable
 receipts for the same workflow package as the formula/source-set/statement.
+Source-set commitments use the distinct
+`RegisterStandingSourceSetCommitment` action; source-set, completeness, normal
+statement, and superseding-statement writes also revalidate the historical
+package identity and invoke its evidence-lifecycle module with their exact
+action.
 
 Allowed failure: revert for unauthorised caller, unknown workflow package,
 zero vector/formula/rule/policy/verifier/authority/URI fields, duplicate
@@ -1228,15 +1491,24 @@ context is nonzero, the active workflow package exists, the proof public key
 matches the subject commitment, the verifier accepts the package-bound context,
 the input matches a registered source-set commitment and active computation
 statement whose formula binds the same verifier, and the context/nullifier has
-not already been registered. The receipt stores formula id, source-set
+not already been registered. Registration revalidates the statement's
+historical package identity and invokes its evidence-lifecycle module with
+`RegisterStandingProof` for each distinct source-set, completeness-attestation,
+and statement evidence receipt. The proof context includes the statement's current
+standing revision. The receipt stores formula id, source-set
 commitment id, standing-computation statement id, output commitment, formula
-version, source-set policy hash, verifier address, and proof-domain hash.
+version, source-set policy hash, standing revision, verifier address, and
+proof-domain hash. The canonical `AVAStandingZKProofExtension` also captures
+the verifier runtime codehash and proof-domain hash at deployment. A later
+runtime or proof-domain change rejects new registrations and makes existing
+proof receipts unusable. This detects direct-contract drift; mutable proxy
+implementations are not claimed as supported verifier identities.
 
 Allowed failure: revert for unknown workflow package, zero subject/vector/
 category/source root/rule/epoch fields, invalid threshold/range/value shape,
 missing formula/source-set commitment, verifier mismatch, subject-commitment
 mismatch, missing or inactive computation statement, output commitment mismatch,
-verifier rejection, or context/nullifier replay.
+verifier rejection, verifier runtime/domain drift, or context/nullifier replay.
 
 Must not do: reveal identity or evidence, compute complete historical standing,
 issue standing credentials directly, create standing/reputation, mint token or
@@ -1246,7 +1518,8 @@ Credential boundary: `standingProofSupportsCredential` is a read-only gate for
 future privacy-preserving credential issuance. It checks package, subject
 commitment, vector, category, threshold, and range against a stored proof
 receipt and also requires the referenced computation statement to remain
-active. It does not create or transfer any credential by itself.
+active and its standing revision to remain current. It does not create or
+transfer any credential by itself.
 
 ### `IZKStandingCredentialIssuer`
 
@@ -1296,11 +1569,11 @@ computeCredentialUseContextHash(
     bytes32 vectorKey,
     bytes32 categoryHash,
     int256 requiredThreshold,
-    bytes32 targetContextHash
+    bytes32 targetContextHash,
+    address beneficiary
 )
 ```
 - `computeCredentialUseNullifierHash(bytes32 useContextHash, bytes32 credentialCommitment)`
-- `isCredentialActive(uint256 credentialId)`
 - `getCredential(uint256 id)`
 - `getCredentialUseRecord(uint256 id)`
 - `getCredentialSuspensionRecord(uint256 id)`
@@ -1311,21 +1584,29 @@ suspension must use one of the source-bound paths.
 Inputs bind a ZK standing proof receipt to package id, subject commitment,
 credential commitment, credential nullifier, vector/category, threshold/range,
 epoch, source-record-set root, computation-rule hash, source computation
-statement id, expiry, and authority.
+statement id, expiry, authority, and the source proof's standing revision.
 
-Namespace note: when a ZK standing credential is suspended by a source-bound
-value settlement or challenge-transition record, the credential's
-`subjectCommitment` is treated as the same pseudonymous role-scoped subject
-identifier used by the source record. It is not a real-name identity and it is
-not an account owner field.
+Namespace note: on this retained surface, `subjectCommitment` is treated as the same
+pseudonymous subject identifier used by the source record. It is not a
+real-name identity and it is not an account owner field. This differs from the
+canonical extension described above, which stores a role-scoped `subjectId`
+alongside the commitment.
 
 Success semantics: records a commitment-bound standing credential proof carrier
 only when the caller has `IssueStandingCredential` authority and the supplied
 fields match the source ZK standing proof receipt and its active computation
-statement. Credential use records are target/nullifier-bound, require a verifier
-proof whose public key matches the stored credential commitment, and reject
-replay. Credentials can be revoked, superseded, or suspended by authorised
-roles. Source-bound suspension paths additionally write an append-only
+statement. Issuance and supersession revalidate the historical package and call
+its evidence-lifecycle module for each distinct receipt in the statement's
+evidence chain. Credential use records are target/nullifier/beneficiary-bound,
+require the beneficiary to submit the transaction, require a verifier proof
+whose public key matches the stored credential commitment, and reject replay.
+ZK proof and credential-use contexts also bind the chain id, registry
+deployment, and verifier deployment. Retained proof registries pin verifier
+runtime codehash and proof domain; direct drift disables active lookups while
+historical receipts remain readable. Mutable proxy verifier behavior is not
+supported. Credentials can be revoked, superseded, or suspended by authorised
+roles. Active proof use also requires the credential revision to equal the
+current package/subject revision. Source-bound suspension paths additionally write an append-only
 `ZKStandingCredentialSuspensionRecord`
 before marking a credential suspended. Settlement-bound suspension requires the
 referenced value-settlement record to match the credential package,
@@ -1335,18 +1616,27 @@ outcome-resolution transition for the same package and challenger subject
 commitment, and accepts negligent or malicious/fabricated outcomes while
 rejecting rejected-good-faith outcomes.
 
-`isCredentialActive` is intentionally only a local carrier-status helper:
-it checks whether the credential has not expired and has not been revoked,
-superseded, or suspended. It is not a sufficient standing proof by itself.
-Consumers that need a current standing signal must call `credentialProves` or
-record a target-bound credential-use receipt, because those paths also re-check
-the referenced ZK standing proof receipt and computation statement.
+An expired or stale-revision ZK credential remains unusable, but it can be
+explicitly superseded while it still owns its canonical slot. The replacement
+must come from a currently usable proof receipt for the same package, subject
+commitment, vector, and category with a later epoch; the old record retains its
+`supersededBy` lineage. Inactivity therefore cannot reactivate an old proof and
+cannot permanently lock future credential issuance.
+
+The ZK registry intentionally exposes no local-status-only
+`isCredentialActive` selector. Consumers that need a current standing signal
+must call the package-bound `credentialProves` function or record a target-bound
+credential-use receipt. Those paths re-check carrier status, subject lifecycle,
+the referenced ZK standing proof receipt, computation statement, and current
+standing revision. `getCredential` remains available for historical carrier
+inspection, but its stored status alone is not a standing proof.
 
 Allowed failure: revert for unknown proof receipt, wrong package, wrong subject
 commitment, wrong vector/category, invalid threshold/range, mismatched epoch,
 source root, rule hash, or inactive computation statement, duplicate credential
 commitment or nullifier, expired input, unauthorised authority, inactive
-credential, mismatched proof-use credential commitment, invalid proof-use
+credential, invalid historical package identity, evidence-lifecycle veto,
+mismatched proof-use credential commitment, invalid proof-use
 context/nullifier, or proof-use nullifier replay. Source-bound suspension also
 reverts for unknown or
 mismatched settlement ids, wrong package, wrong subject commitment, wrong

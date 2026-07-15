@@ -17,10 +17,9 @@ interface IStandingCredentialIssuer {
         string uri;
     }
 
-    function issueCredential(
-        AVADataTypes.Role actingRole,
-        StandingCredentialInput calldata input
-    ) external returns (uint256 id);
+    function issueCredential(AVADataTypes.Role actingRole, StandingCredentialInput calldata input)
+        external
+        returns (uint256 id);
 
     function revokeCredential(
         AVADataTypes.Role actingRole,
@@ -45,14 +44,6 @@ interface IStandingCredentialIssuer {
         bytes32 authorityId,
         string calldata uri
     ) external returns (uint256 id);
-
-    function credentialProves(
-        uint256 credentialId,
-        bytes32 subjectId,
-        bytes32 vectorKey,
-        bytes32 categoryHash,
-        int256 requiredThreshold
-    ) external view returns (bool);
 
     function credentialProvesSubjectStanding(
         uint256 credentialId,

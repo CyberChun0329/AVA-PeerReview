@@ -2,21 +2,28 @@
 pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "../src/AVADataTypes.sol";
+import {AVAApplicationRegistry} from "../src/AVAApplicationRegistry.sol";
 import {RoleIdentityRegistry} from "../src/RoleIdentityRegistry.sol";
 import {AuthorityMatrix} from "../src/AuthorityMatrix.sol";
 import {EvidenceCommitmentRegistry} from "../src/EvidenceCommitmentRegistry.sol";
 import {DisclosurePolicyRegistry} from "../src/DisclosurePolicyRegistry.sol";
 import {AVAStateMachine} from "../src/AVAStateMachine.sol";
+import {AVAChallengeWorkflow} from "../src/AVAChallengeWorkflow.sol";
+import {AVAWorkflowValidator} from "../src/AVAWorkflowValidator.sol";
+import {RulePackageIdentityVerifier} from "../src/RulePackageIdentityVerifier.sol";
 import {
     AVARulePackageRegistry,
     IEvidenceReceiptReader,
     IRecognisedStateReader
 } from "../src/AVARulePackageRegistry.sol";
+import {AVARulePackageLifecycleRegistry} from "../src/AVARulePackageLifecycleRegistry.sol";
 import {ConsequenceExecutor} from "../src/ConsequenceExecutor.sol";
 import {StandingRegistry} from "../src/StandingRegistry.sol";
+import {StandingRevisionRegistry} from "../src/StandingRevisionRegistry.sol";
 import {AllocationExecutor} from "../src/AllocationExecutor.sol";
 import {AttestationAuditModule} from "../src/AttestationAuditModule.sol";
 import {DefaultDisclosurePolicyModule} from "../src/modules/DefaultDisclosurePolicyModule.sol";
+import {DefaultApplicationModule} from "../src/modules/DefaultApplicationModule.sol";
 import {DefaultAttributionModule} from "../src/modules/DefaultAttributionModule.sol";
 import {DefaultVerificationModule} from "../src/modules/DefaultVerificationModule.sol";
 import {DefaultTransitionRuleModule} from "../src/modules/DefaultTransitionRuleModule.sol";
@@ -45,7 +52,12 @@ import {
 } from "../src/modules/DefaultFutureProofModules.sol";
 import {DefaultDisclosureExecutionModule} from "../src/modules/DefaultExecutionModules.sol";
 
+interface IAVAScriptVm {
+    function warp(uint256 timestamp) external;
+}
+
 contract DemoActor {
+    bytes32 private constant PEER_REVIEW_APP_ID = keccak256("peer-review-app");
     bytes32 private constant DEFAULT_WORKFLOW = keccak256("demo-review-workflow");
 
     function registerEvidenceReceipt(
@@ -56,7 +68,9 @@ contract DemoActor {
         string calldata evidenceType,
         uint256 disclosurePolicyId
     ) external returns (uint256) {
-        return registry.registerEvidenceReceipt(actingRole, DEFAULT_WORKFLOW, commitment, uri, evidenceType, disclosurePolicyId);
+        return registry.registerEvidenceReceipt(
+            actingRole, PEER_REVIEW_APP_ID, DEFAULT_WORKFLOW, commitment, uri, evidenceType, disclosurePolicyId
+        );
     }
 
     function registerManuscript(
@@ -65,7 +79,7 @@ contract DemoActor {
         bytes32 offchainRef,
         string calldata uri
     ) external returns (uint256) {
-        return stateMachine.registerManuscript(actingRole, offchainRef, uri);
+        return stateMachine.registerManuscript(actingRole, PEER_REVIEW_APP_ID, DEFAULT_WORKFLOW, offchainRef, uri, "");
     }
 
     function registerDisclosurePolicy(
@@ -74,7 +88,7 @@ contract DemoActor {
         string calldata label,
         string calldata uri
     ) external returns (uint256) {
-        return registry.registerDisclosurePolicy(actingRole, label, uri);
+        return registry.registerDisclosurePolicy(actingRole, PEER_REVIEW_APP_ID, label, uri);
     }
 
     function registerReviewContribution(
@@ -86,7 +100,13 @@ contract DemoActor {
         uint256 disclosurePolicyId
     ) external returns (uint256) {
         return stateMachine.registerReviewContribution(
-            actingRole, manuscriptId, reviewerSubjectId, evidenceReceiptId, disclosurePolicyId
+            actingRole,
+            PEER_REVIEW_APP_ID,
+            DEFAULT_WORKFLOW,
+            manuscriptId,
+            reviewerSubjectId,
+            evidenceReceiptId,
+            disclosurePolicyId
         );
     }
 
@@ -109,29 +129,35 @@ contract DemoActor {
     }
 
     function fileChallenge(
-        AVAStateMachine stateMachine,
+        AVAChallengeWorkflow challengeWorkflow,
         AVADataTypes.Role actingRole,
         uint256 challengedRecognisedStateId,
         bytes32 challengerSubjectId,
         uint256 evidenceReceiptId,
         uint256 disclosurePolicyId
     ) external returns (uint256) {
-        return stateMachine.fileChallenge(
-            actingRole, challengedRecognisedStateId, challengerSubjectId, evidenceReceiptId, disclosurePolicyId
+        return challengeWorkflow.fileChallenge(
+            actingRole,
+            PEER_REVIEW_APP_ID,
+            DEFAULT_WORKFLOW,
+            challengedRecognisedStateId,
+            challengerSubjectId,
+            evidenceReceiptId,
+            disclosurePolicyId
         );
     }
 
     function screenChallenge(
-        AVAStateMachine stateMachine,
+        AVAChallengeWorkflow challengeWorkflow,
         AVADataTypes.Role actingRole,
         uint256 challengeId,
         bytes32 authorityId
     ) external {
-        stateMachine.screenChallenge(actingRole, challengeId, authorityId);
+        challengeWorkflow.screenChallenge(actingRole, challengeId, authorityId);
     }
 
     function resolveChallenge(
-        AVAStateMachine stateMachine,
+        AVAChallengeWorkflow challengeWorkflow,
         AVADataTypes.Role actingRole,
         uint256 challengeId,
         AVADataTypes.ChallengeOutcome outcome,
@@ -139,7 +165,7 @@ contract DemoActor {
         bytes32 authorityId,
         string calldata reasonURI
     ) external {
-        stateMachine.resolveChallenge(actingRole, challengeId, outcome, toStatus, authorityId, reasonURI);
+        challengeWorkflow.resolveChallenge(actingRole, challengeId, outcome, toStatus, authorityId, reasonURI);
     }
 
     function recordStandingUpdate(
@@ -186,7 +212,16 @@ contract DemoActor {
         AVADataTypes.RecognisedStateStatus status
     ) external returns (uint256) {
         return stateMachine.registerRecognisedState(
-            actingRole, workflowKey, stage, objectId, subjectId, evidenceReceiptId, disclosurePolicyId, authorityId, status
+            actingRole,
+            PEER_REVIEW_APP_ID,
+            workflowKey,
+            stage,
+            objectId,
+            subjectId,
+            evidenceReceiptId,
+            disclosurePolicyId,
+            authorityId,
+            status
         );
     }
 
@@ -212,23 +247,23 @@ contract DemoActor {
     }
 
     function applyRestoration(
-        AVAStateMachine stateMachine,
+        AVAChallengeWorkflow challengeWorkflow,
         AVADataTypes.Role actingRole,
         uint256 challengeId,
         bytes32 authorityId,
         string calldata reasonURI
     ) external {
-        stateMachine.applyRestoration(actingRole, challengeId, authorityId, reasonURI);
+        challengeWorkflow.applyRestoration(actingRole, challengeId, authorityId, reasonURI);
     }
 
     function closeChallenge(
-        AVAStateMachine stateMachine,
+        AVAChallengeWorkflow challengeWorkflow,
         AVADataTypes.Role actingRole,
         uint256 challengeId,
         bytes32 authorityId,
         string calldata reasonURI
     ) external {
-        stateMachine.closeChallenge(actingRole, challengeId, authorityId, reasonURI);
+        challengeWorkflow.closeChallenge(actingRole, challengeId, authorityId, reasonURI);
     }
 
     function executeAllocation(
@@ -251,20 +286,39 @@ contract DemoActor {
         ConsequenceExecutor executor,
         AVADataTypes.Role actingRole,
         uint256 recognisedStateId,
+        uint256 challengeId,
+        AVADataTypes.GovernanceFindingKind findingKind,
         bytes32 subjectId,
         uint256 evidenceReceiptId,
         bytes32 authorityId,
         string calldata uri
     ) external returns (uint256) {
-        return executor.recordPenalty(actingRole, recognisedStateId, subjectId, evidenceReceiptId, authorityId, uri);
+        return executor.recordPenalty(
+            actingRole,
+            AVADataTypes.PenaltyConsequenceContext({
+                challengeId: challengeId, findingKind: findingKind, originSettlementId: 0
+            }),
+            AVADataTypes.ValueExecutionContext({
+                recognisedStateId: recognisedStateId,
+                asset: address(0),
+                payer: address(0),
+                recipientSubjectId: subjectId,
+                amount: 1,
+                mode: AVADataTypes.ValueExecutionMode.RecordOnly,
+                settlementKind: AVADataTypes.ValueSettlementKind.None,
+                executionReference: keccak256(bytes(uri)),
+                authorityId: authorityId,
+                evidenceReceiptId: evidenceReceiptId,
+                uri: uri,
+                actor: address(this)
+            })
+        );
     }
 
     function recordStandingPenaltyInput(
         ConsequenceExecutor executor,
         AVADataTypes.Role actingRole,
         uint256 penaltyConsequenceId,
-        uint256 challengeId,
-        AVADataTypes.StandingPenaltyKind penaltyKind,
         string calldata dimension,
         int256 delta,
         uint256 evidenceReceiptId,
@@ -272,7 +326,7 @@ contract DemoActor {
         string calldata uri
     ) external returns (uint256) {
         return executor.recordStandingPenaltyInput(
-            actingRole, penaltyConsequenceId, challengeId, penaltyKind, dimension, delta, evidenceReceiptId, authorityId, uri
+            actingRole, penaltyConsequenceId, dimension, delta, evidenceReceiptId, authorityId, uri
         );
     }
 
@@ -280,7 +334,6 @@ contract DemoActor {
         ConsequenceExecutor executor,
         AVADataTypes.Role actingRole,
         uint256 penaltyConsequenceId,
-        uint256 challengeId,
         AVADataTypes.EligibilityRestrictionKind restrictionKind,
         uint256 expiresAt,
         uint256 evidenceReceiptId,
@@ -288,24 +341,26 @@ contract DemoActor {
         string calldata uri
     ) external returns (uint256) {
         return executor.recordEligibilityRestriction(
-            actingRole, penaltyConsequenceId, challengeId, restrictionKind, expiresAt, evidenceReceiptId, authorityId, uri
+            actingRole, penaltyConsequenceId, restrictionKind, expiresAt, evidenceReceiptId, authorityId, uri
         );
     }
 
     function recordAttestation(
         AttestationAuditModule module,
-        AVADataTypes.Role actingRole,
-        bytes32 workflowKey,
-        AVADataTypes.Action action,
-        bytes32 objectId,
-        uint256 evidenceReceiptId,
-        bytes32 attestationHash,
-        bytes32 authorityId,
+        AttestationAuditModule.AttestationContext calldata context,
         string calldata attestationType,
         string calldata uri
     ) external returns (uint256) {
         return module.recordAttestation(
-            actingRole, workflowKey, action, objectId, evidenceReceiptId, attestationHash, authorityId, attestationType, uri
+            context.actingRole,
+            context.workflowKey,
+            context.action,
+            context.objectId,
+            context.evidenceReceiptId,
+            context.attestationHash,
+            context.authorityId,
+            attestationType,
+            uri
         );
     }
 
@@ -316,21 +371,13 @@ contract DemoActor {
         AVARulePackageRegistry.RulePackageModules calldata modules,
         string calldata uri
     ) external {
-        registry.registerRulePackage(actingRole, workflowKey, modules, uri);
-    }
-
-    function configureMigrationReferenceReaders(
-        AVARulePackageRegistry registry,
-        AVADataTypes.Role actingRole,
-        IRecognisedStateReader stateReader,
-        IEvidenceReceiptReader evidenceReader,
-        bytes32 authorityId
-    ) external {
-        registry.configureMigrationReferenceReaders(actingRole, stateReader, evidenceReader, authorityId);
+        registry.registerRulePackage(actingRole, PEER_REVIEW_APP_ID, workflowKey, modules, uri);
     }
 }
 
 contract AVADemoScenario {
+    IAVAScriptVm internal constant SCRIPT_VM = IAVAScriptVm(address(uint160(uint256(keccak256("hevm cheat code")))));
+
     bytes32 private constant AUTHOR_SUBJECT = keccak256("demo-author");
     bytes32 private constant REVIEWER_SUBJECT = keccak256("demo-reviewer");
     bytes32 private constant CHALLENGER_SUBJECT = keccak256("demo-challenger");
@@ -340,15 +387,21 @@ contract AVADemoScenario {
     bytes32 private constant EDITOR_AUTHORITY = keccak256("demo-editor-authority");
     bytes32 private constant PANEL_AUTHORITY = keccak256("demo-panel-authority");
     bytes32 private constant EXECUTOR_AUTHORITY = keccak256("demo-executor-authority");
+    bytes32 private constant PEER_REVIEW_APP_ID = keccak256("peer-review-app");
     bytes32 private constant DEFAULT_WORKFLOW = keccak256("demo-review-workflow");
 
     RoleIdentityRegistry public roleRegistry;
     AuthorityMatrix public authorityMatrix;
+    AVAApplicationRegistry public applicationRegistry;
+    DefaultApplicationModule public applicationModule;
     DefaultDisclosurePolicyModule public disclosurePolicyModule;
     EvidenceCommitmentRegistry public evidenceRegistry;
     DisclosurePolicyRegistry public disclosureRegistry;
     AVAStateMachine public stateMachine;
+    AVAChallengeWorkflow public challengeWorkflow;
+    AVAWorkflowValidator public workflowValidator;
     AVARulePackageRegistry public rulePackageRegistry;
+    AVARulePackageLifecycleRegistry public rulePackageLifecycleRegistry;
     DefaultAttributionModule public attributionModule;
     DefaultVerificationModule public verificationModule;
     DefaultTransitionRuleModule public transitionRuleModule;
@@ -374,9 +427,11 @@ contract AVADemoScenario {
     DefaultDisclosureExecutionModule public disclosureExecutionModule;
     ConsequenceExecutor public consequenceExecutor;
     StandingRegistry public standingRegistry;
+    StandingRevisionRegistry public standingRevisionRegistry;
     AllocationExecutor public allocationExecutor;
     AttestationAuditModule public auditModule;
     DemoActor public demoActor;
+    DemoActor public editorDemoActor;
     DemoActor public challengerDemoActor;
     DemoActor public panelDemoActor;
 
@@ -388,6 +443,10 @@ contract AVADemoScenario {
         uint256 standingUpdateId,
         uint256 allocationExecutionId
     );
+
+    function _advancePastMinimumChallengeWindow() internal {
+        SCRIPT_VM.warp(block.timestamp + stateMachine.minimumChallengeWindowDuration());
+    }
 
     function run()
         external
@@ -402,7 +461,7 @@ contract AVADemoScenario {
     {
         _deployAndConfigure();
 
-        uint256 disclosurePolicyId = demoActor.registerDisclosurePolicy(
+        uint256 disclosurePolicyId = editorDemoActor.registerDisclosurePolicy(
             disclosureRegistry,
             AVADataTypes.Role.Editor,
             "editor-visible-sealed-review",
@@ -430,10 +489,12 @@ contract AVADemoScenario {
         );
         _assertNoAutomaticOutputs();
 
-        recognisedStateId = demoActor.provisionallyRecogniseReview(
+        recognisedStateId = editorDemoActor.provisionallyRecogniseReview(
             stateMachine, AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY
         );
-        demoActor.openReviewChallengeWindow(stateMachine, AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY);
+        editorDemoActor.openReviewChallengeWindow(
+            stateMachine, AVADataTypes.Role.Editor, reviewContributionId, EDITOR_AUTHORITY
+        );
 
         uint256 challengeEvidenceId = challengerDemoActor.registerEvidenceReceipt(
             evidenceRegistry,
@@ -444,7 +505,7 @@ contract AVADemoScenario {
             disclosurePolicyId
         );
         challengeId = challengerDemoActor.fileChallenge(
-            stateMachine,
+            challengeWorkflow,
             AVADataTypes.Role.Challenger,
             recognisedStateId,
             CHALLENGER_SUBJECT,
@@ -453,9 +514,9 @@ contract AVADemoScenario {
         );
         _assertNoAutomaticOutputs();
 
-        demoActor.screenChallenge(stateMachine, AVADataTypes.Role.Editor, challengeId, EDITOR_AUTHORITY);
+        editorDemoActor.screenChallenge(challengeWorkflow, AVADataTypes.Role.Editor, challengeId, EDITOR_AUTHORITY);
         panelDemoActor.resolveChallenge(
-            stateMachine,
+            challengeWorkflow,
             AVADataTypes.Role.Panel,
             challengeId,
             AVADataTypes.ChallengeOutcome.Upheld,
@@ -489,13 +550,16 @@ contract AVADemoScenario {
         allocationExecutionId = _executeAllocation(disclosurePolicyId);
         panelDemoActor.recordAttestation(
             auditModule,
-            AVADataTypes.Role.Panel,
-            DEFAULT_WORKFLOW,
-            AVADataTypes.Action.RecordAttestation,
-            bytes32(challengeId),
-            challengeEvidenceId,
-            keccak256("demo-transition-audit"),
-            PANEL_AUTHORITY,
+            AttestationAuditModule.AttestationContext({
+                actingRole: AVADataTypes.Role.Panel,
+                workflowKey: DEFAULT_WORKFLOW,
+                targetKind: AVADataTypes.AttestationTargetKind.EvidenceReceipt,
+                action: AVADataTypes.Action.RecordAttestation,
+                objectId: bytes32(challengeEvidenceId),
+                evidenceReceiptId: challengeEvidenceId,
+                attestationHash: keccak256("demo-transition-audit"),
+                authorityId: PANEL_AUTHORITY
+            }),
             "demo-transition-audit",
             "ipfs://demo/audit"
         );
@@ -508,21 +572,46 @@ contract AVADemoScenario {
     function _deployAndConfigure() internal {
         roleRegistry = new RoleIdentityRegistry();
         authorityMatrix = new AuthorityMatrix(roleRegistry);
-        disclosureRegistry = new DisclosurePolicyRegistry(authorityMatrix);
+        applicationRegistry = new AVAApplicationRegistry();
+        applicationRegistry.registerApplication(
+            PEER_REVIEW_APP_ID,
+            keccak256("peer-review-application-identity-v1"),
+            keccak256("peer-review-application-authority"),
+            "ipfs://peer-review-application"
+        );
+        applicationModule = new DefaultApplicationModule(PEER_REVIEW_APP_ID);
+        disclosureRegistry = new DisclosurePolicyRegistry(authorityMatrix, applicationRegistry);
         disclosurePolicyModule = new DefaultDisclosurePolicyModule(disclosureRegistry);
-        rulePackageRegistry = new AVARulePackageRegistry(authorityMatrix, disclosureRegistry);
-        evidenceRegistry = new EvidenceCommitmentRegistry(authorityMatrix, disclosurePolicyModule, rulePackageRegistry);
+        rulePackageRegistry =
+            new AVARulePackageRegistry(authorityMatrix, applicationRegistry, new RulePackageIdentityVerifier());
+        evidenceRegistry = new EvidenceCommitmentRegistry(
+            authorityMatrix, disclosurePolicyModule, disclosureRegistry, rulePackageRegistry
+        );
         attributionModule = new DefaultAttributionModule();
         verificationModule = new DefaultVerificationModule();
         transitionRuleModule = new DefaultTransitionRuleModule();
-        stateMachine =
-            new AVAStateMachine(authorityMatrix, disclosurePolicyModule, rulePackageRegistry, evidenceRegistry, DEFAULT_WORKFLOW);
+        workflowValidator = new AVAWorkflowValidator(rulePackageRegistry, evidenceRegistry, disclosureRegistry);
+        standingRevisionRegistry = new StandingRevisionRegistry(authorityMatrix, rulePackageRegistry, evidenceRegistry);
+        stateMachine = new AVAStateMachine(
+            authorityMatrix, rulePackageRegistry, workflowValidator, standingRevisionRegistry, 1 days
+        );
+        challengeWorkflow = new AVAChallengeWorkflow(
+            authorityMatrix, rulePackageRegistry, workflowValidator, stateMachine, standingRevisionRegistry
+        );
+        stateMachine.bindChallengeWorkflow(address(challengeWorkflow));
+        rulePackageLifecycleRegistry = new AVARulePackageLifecycleRegistry(
+            authorityMatrix,
+            rulePackageRegistry,
+            disclosureRegistry,
+            IRecognisedStateReader(address(stateMachine)),
+            IEvidenceReceiptReader(address(evidenceRegistry))
+        );
         allocationAdapter = new DefaultAllocationAdapter();
         consequenceAdapter = new DefaultConsequenceAdapter();
         standingAdapter = new DefaultStandingAdapter();
         rewardAdapter = new DefaultRewardAdapter();
         priorityAdapter = new DefaultPriorityAdapter();
-        penaltyAdapter = new DefaultPenaltyAdapter();
+        penaltyAdapter = new DefaultPenaltyAdapter(100, 30 days);
         restorationAdapter = new DefaultRestorationAdapter();
         challengeLifecycleModule = new DefaultChallengeLifecycleModule();
         evidencePolicyModule = new DefaultEvidencePolicyModule();
@@ -537,23 +626,39 @@ contract AVADemoScenario {
         evidenceLifecycleModule = new DefaultEvidenceLifecycleModule();
         disclosureLifecycleModule = new DefaultDisclosureLifecycleModule(disclosureRegistry);
         disclosureExecutionModule = new DefaultDisclosureExecutionModule();
-        consequenceExecutor = new ConsequenceExecutor(authorityMatrix, stateMachine, rulePackageRegistry, evidenceRegistry);
-        standingRegistry = new StandingRegistry(authorityMatrix, stateMachine, rulePackageRegistry, evidenceRegistry);
-        allocationExecutor = new AllocationExecutor(authorityMatrix, stateMachine, rulePackageRegistry, evidenceRegistry);
-        auditModule = new AttestationAuditModule(authorityMatrix, rulePackageRegistry, evidenceRegistry, stateMachine);
+        consequenceExecutor = new ConsequenceExecutor(
+            authorityMatrix,
+            stateMachine,
+            challengeWorkflow,
+            rulePackageRegistry,
+            evidenceRegistry,
+            standingRevisionRegistry
+        );
+        standingRegistry = new StandingRegistry(
+            authorityMatrix, stateMachine, rulePackageRegistry, evidenceRegistry, standingRevisionRegistry
+        );
+        standingRevisionRegistry.bindWriter(StandingRevisionRegistry.WriterKind.StateMachine, address(stateMachine));
+        standingRevisionRegistry.bindWriter(
+            StandingRevisionRegistry.WriterKind.ChallengeWorkflow, address(challengeWorkflow)
+        );
+        standingRevisionRegistry.bindWriter(
+            StandingRevisionRegistry.WriterKind.StandingRegistry, address(standingRegistry)
+        );
+        standingRevisionRegistry.bindWriter(
+            StandingRevisionRegistry.WriterKind.ConsequenceExecutor, address(consequenceExecutor)
+        );
+        allocationExecutor =
+            new AllocationExecutor(authorityMatrix, stateMachine, rulePackageRegistry, evidenceRegistry);
+        auditModule = new AttestationAuditModule(
+            authorityMatrix, rulePackageRegistry, evidenceRegistry, stateMachine, challengeWorkflow
+        );
         demoActor = new DemoActor();
+        editorDemoActor = new DemoActor();
         challengerDemoActor = new DemoActor();
         panelDemoActor = new DemoActor();
 
         _assignRoles();
         _setPermissions();
-        panelDemoActor.configureMigrationReferenceReaders(
-            rulePackageRegistry,
-            AVADataTypes.Role.Panel,
-            IRecognisedStateReader(address(stateMachine)),
-            IEvidenceReceiptReader(address(evidenceRegistry)),
-            PANEL_AUTHORITY
-        );
         _registerRulePackage();
     }
 
@@ -565,7 +670,9 @@ contract AVADemoScenario {
         roleRegistry.assignRole(
             address(challengerDemoActor), AVADataTypes.Role.Challenger, CHALLENGER_SUBJECT, "ipfs://demo/challenger"
         );
-        roleRegistry.assignRole(address(demoActor), AVADataTypes.Role.Editor, EDITOR_AUTHORITY, "ipfs://demo/editor");
+        roleRegistry.assignRole(
+            address(editorDemoActor), AVADataTypes.Role.Editor, EDITOR_AUTHORITY, "ipfs://demo/editor"
+        );
         roleRegistry.assignRole(address(panelDemoActor), AVADataTypes.Role.Panel, PANEL_AUTHORITY, "ipfs://demo/panel");
         roleRegistry.assignRole(
             address(demoActor), AVADataTypes.Role.ProtocolExecutor, EXECUTOR_AUTHORITY, "ipfs://demo/executor"
@@ -596,46 +703,49 @@ contract AVADemoScenario {
     }
 
     function _registerRulePackage() internal {
+        AVARulePackageRegistry.RulePackageModules memory modules = _demoRulePackageModules();
         panelDemoActor.registerRulePackage(
-            rulePackageRegistry,
-            AVADataTypes.Role.Panel,
-            DEFAULT_WORKFLOW,
-            AVARulePackageRegistry.RulePackageModules({
-                attributionModule: attributionModule,
-                verificationModule: verificationModule,
-                allocationModule: allocationAdapter,
-                transitionRuleModule: transitionRuleModule,
-                disclosureModule: disclosurePolicyModule,
-                standingAdapter: standingAdapter,
-                consequenceAdapter: consequenceAdapter,
-                rewardAdapter: rewardAdapter,
-                priorityAdapter: priorityAdapter,
-                penaltyAdapter: penaltyAdapter,
-                restorationAdapter: restorationAdapter,
-                challengeLifecycleModule: challengeLifecycleModule,
-                evidencePolicyModule: evidencePolicyModule,
-                auditAdapter: auditAdapter,
-                editorialSystemAdapter: editorialSystemAdapter,
-                residualEditorialAuthorityModule: residualEditorialAuthorityModule,
-                fieldPolicyModule: fieldPolicyModule,
-                antiAbuseModule: antiAbuseModule,
-                valueExecutionAdapter: valueExecutionAdapter,
-                standingComputationModule: standingComputationModule,
-                rulePackageLifecycleModule: rulePackageLifecycleModule,
-                evidenceLifecycleModule: evidenceLifecycleModule,
-                disclosureLifecycleModule: disclosureLifecycleModule,
-                disclosureExecutionModule: disclosureExecutionModule,
-                version: 1,
-                compatibilityKey: keccak256("ava-m4-10-compatible"),
-                dependencyURI: "",
-                deprecated: false
-            }),
-            "ipfs://demo/default-rule-package"
+            rulePackageRegistry, AVADataTypes.Role.Panel, DEFAULT_WORKFLOW, modules, "ipfs://demo/default-rule-package"
         );
     }
 
+    function _demoRulePackageModules()
+        internal
+        view
+        returns (AVARulePackageRegistry.RulePackageModules memory modules)
+    {
+        modules.applicationModule = applicationModule;
+        modules.attributionModule = attributionModule;
+        modules.verificationModule = verificationModule;
+        modules.allocationModule = allocationAdapter;
+        modules.transitionRuleModule = transitionRuleModule;
+        modules.disclosureModule = disclosurePolicyModule;
+        modules.standingAdapter = standingAdapter;
+        modules.consequenceAdapter = consequenceAdapter;
+        modules.rewardAdapter = rewardAdapter;
+        modules.priorityAdapter = priorityAdapter;
+        modules.penaltyAdapter = penaltyAdapter;
+        modules.restorationAdapter = restorationAdapter;
+        modules.challengeLifecycleModule = challengeLifecycleModule;
+        modules.evidencePolicyModule = evidencePolicyModule;
+        modules.auditAdapter = auditAdapter;
+        modules.editorialSystemAdapter = editorialSystemAdapter;
+        modules.residualEditorialAuthorityModule = residualEditorialAuthorityModule;
+        modules.fieldPolicyModule = fieldPolicyModule;
+        modules.antiAbuseModule = antiAbuseModule;
+        modules.valueExecutionAdapter = valueExecutionAdapter;
+        modules.standingComputationModule = standingComputationModule;
+        modules.rulePackageLifecycleModule = rulePackageLifecycleModule;
+        modules.evidenceLifecycleModule = evidenceLifecycleModule;
+        modules.disclosureLifecycleModule = disclosureLifecycleModule;
+        modules.disclosureExecutionModule = disclosureExecutionModule;
+        modules.version = 1;
+        modules.compatibilityKey = keccak256("ava-m4-10-compatible");
+        modules.dependencyURI = "";
+    }
+
     function _executeAllocation(uint256 disclosurePolicyId) internal returns (uint256 allocationExecutionId) {
-        uint256 allocationEvidenceId = demoActor.registerEvidenceReceipt(
+        uint256 allocationEvidenceId = editorDemoActor.registerEvidenceReceipt(
             evidenceRegistry,
             AVADataTypes.Role.Editor,
             keccak256("demo-allocation-evidence"),
@@ -643,7 +753,7 @@ contract AVADemoScenario {
             "allocation-basis",
             disclosurePolicyId
         );
-        uint256 allocationStateId = demoActor.registerRecognisedState(
+        uint256 allocationStateId = editorDemoActor.registerRecognisedState(
             stateMachine,
             AVADataTypes.Role.Editor,
             DEFAULT_WORKFLOW,
@@ -678,7 +788,6 @@ contract AVADemoScenario {
     }
 
     function _assertNoAutomaticOutputs() internal view {
-        require(standingRegistry.nextStandingInputId() == 1, "unexpected standing input");
         require(standingRegistry.nextStandingUpdateId() == 1, "unexpected standing update");
         require(consequenceExecutor.nextConsequenceId() == 1, "unexpected consequence");
         require(allocationExecutor.nextAllocationExecutionId() == 1, "unexpected allocation");

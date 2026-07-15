@@ -16,32 +16,35 @@ interface IValueSettlementExecutor {
 
     function recordRepaymentObligation(
         AVADataTypes.Role actingRole,
-        AVADataTypes.ExecutionSourceType sourceType,
-        uint256 sourceRecordId,
+        uint256 penaltyConsequenceId,
+        bytes32 authorityId,
+        string calldata uri
+    ) external returns (uint256 id);
+
+    function settleClawback(
+        AVADataTypes.Role actingRole,
+        uint256 repaymentObligationId,
         bytes32 authorityId,
         string calldata uri
     ) external returns (uint256 id);
 
     function recordFuturePayoutSetoff(
         AVADataTypes.Role actingRole,
-        AVADataTypes.ExecutionSourceType sourceType,
-        uint256 sourceRecordId,
+        uint256 repaymentObligationId,
         bytes32 authorityId,
         string calldata uri
     ) external returns (uint256 id);
 
     function recordWaiver(
         AVADataTypes.Role actingRole,
-        AVADataTypes.ExecutionSourceType sourceType,
-        uint256 sourceRecordId,
+        uint256 repaymentObligationId,
         bytes32 authorityId,
         string calldata uri
     ) external returns (uint256 id);
 
     function recordSatisfaction(
         AVADataTypes.Role actingRole,
-        AVADataTypes.ExecutionSourceType sourceType,
-        uint256 sourceRecordId,
+        uint256 repaymentObligationId,
         bytes32 authorityId,
         string calldata uri
     ) external returns (uint256 id);

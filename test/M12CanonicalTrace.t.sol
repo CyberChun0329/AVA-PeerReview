@@ -1,149 +1,93 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {AVADataTypes} from "../src/AVADataTypes.sol";
+import {AVACoreTypes} from "../src/core/AVACoreTypes.sol";
+import {AVAChallengeExtension} from "../src/extensions/challenge/AVAChallengeExtension.sol";
+import {PeerReviewTypes} from "../src/apps/peerreview/PeerReviewTypes.sol";
 import {AVACanonicalTrace} from "../script/AVACanonicalTrace.s.sol";
+import {CanonicalPeerReviewFixture} from "../script/helpers/CanonicalPeerReviewFixture.sol";
+
+contract CanonicalPackageProfileHarness is CanonicalPeerReviewFixture {
+    function capabilityCounts() external returns (uint256 reviewCount, uint256 challengeCount) {
+        _deployCanonicalPeerReview();
+        reviewCount = packageRegistry.getCapabilityKeys(reviewPackageId).length;
+        challengeCount = packageRegistry.getCapabilityKeys(challengePackageId).length;
+    }
+}
 
 contract M12CanonicalTraceTest {
-    function testM124CanonicalTraceExportsPaperFacingScenarioNames() public {
-        string memory trace = new AVACanonicalTrace().runTrace();
-        _assertContains(trace, '"schema":"ava-canonical-trace-v1"');
-        _assertContains(trace, '"name":"honest_review_challenge_window_vesting"');
-        _assertContains(trace, '"name":"upheld_challenge_correction_standing_record"');
-        _assertContains(trace, '"name":"malicious_challenge_penalty_and_eligibility_restriction"');
-        _assertContains(trace, '"name":"restoration_after_correction"');
+    function testCanonicalDemoPackagesBindOnlyScenarioCapabilities() public {
+        (uint256 reviewCount, uint256 challengeCount) = new CanonicalPackageProfileHarness().capabilityCounts();
+        require(reviewCount == 12 && challengeCount == 12, "canonical package profile widened");
     }
 
-    function testM124CanonicalTraceUsesBoundarySafeVariableNames() public {
+    function testCanonicalTraceExportsBoundarySafeScenarioNames() public {
         string memory trace = new AVACanonicalTrace().runTrace();
-        _assertContains(trace, "review_registered");
-        _assertContains(trace, "challenge_upheld");
-        _assertContains(trace, "standing_penalty_input_recorded");
-        _assertContains(trace, "eligibility_restricted");
-        _assertContains(trace, "restoration_applied");
+        _assertContains(trace, '"schema":"ava-canonical-trace-v2"');
+        _assertContains(trace, '"name":"honest_review_vesting"');
+        _assertContains(trace, '"name":"upheld_recursive_challenge_and_downstream_records"');
+        _assertContains(trace, '"name":"malicious_or_fabricated_challenge_record_only"');
+        _assertContains(trace, '"name":"explicit_restoration_with_lineage"');
         _assertNotContains(trace, "sanction_executed");
         _assertNotContains(trace, "truth_decided");
         _assertNotContains(trace, "manuscript_accepted");
         _assertNotContains(trace, "merit_scored");
     }
 
-    function testM132CanonicalTraceTokensMapToReturnedIds() public {
-        AVACanonicalTrace canonicalTrace = new AVACanonicalTrace();
-        AVACanonicalTrace.HonestReviewTraceRecord memory honest = canonicalTrace.honestReviewTraceRecord();
-        require(honest.manuscriptId != 0, "review trace missing manuscript id");
-        require(honest.recognisedStateId != 0, "review trace missing recognised state id");
-        require(honest.reviewContributionId != 0, "review trace missing review id");
-        require(honest.reviewEvidenceId != 0, "review trace missing review evidence id");
-        require(honest.vestingTransitionId != 0, "review trace missing vesting transition id");
-
-        AVACanonicalTrace.UpheldChallengeTraceRecord memory upheld = canonicalTrace.upheldChallengeTraceRecord();
-        require(upheld.challengeId != 0, "upheld trace missing challenge id");
-        require(upheld.challengeEvidenceId != 0, "upheld trace missing challenge evidence id");
-        require(upheld.challengeTransitionId != 0, "upheld trace missing challenge transition id");
-        require(upheld.recognisedStateTransitionId != 0, "upheld trace missing state transition id");
-        require(upheld.consequenceId != 0, "upheld trace missing consequence id");
-        require(upheld.standingUpdateId != 0, "upheld trace missing standing update id");
-        require(upheld.consequenceEvidenceReceiptId == upheld.challengeEvidenceId, "consequence evidence mismatch");
-        require(upheld.standingEvidenceReceiptId == upheld.challengeEvidenceId, "standing evidence mismatch");
-
-        AVACanonicalTrace.MaliciousChallengeTraceRecord memory malicious =
-            canonicalTrace.maliciousChallengeTraceRecord();
-        require(malicious.challengeId != 0, "malicious trace missing challenge id");
-        require(malicious.challengeEvidenceId != 0, "malicious trace missing challenge evidence id");
-        require(malicious.penaltyConsequenceId != 0, "malicious trace missing penalty id");
-        require(malicious.standingPenaltyInputId != 0, "malicious trace missing standing penalty id");
-        require(malicious.eligibilityRestrictionId != 0, "malicious trace missing eligibility id");
-        require(malicious.penaltyEvidenceReceiptId == malicious.challengeEvidenceId, "penalty evidence mismatch");
-        require(
-            malicious.standingPenaltyEvidenceReceiptId == malicious.challengeEvidenceId,
-            "standing penalty evidence mismatch"
-        );
-        require(
-            malicious.eligibilityEvidenceReceiptId == malicious.challengeEvidenceId,
-            "eligibility evidence mismatch"
-        );
-
-        AVACanonicalTrace.RestorationTraceRecord memory restoration = canonicalTrace.restorationTraceRecord();
-        require(restoration.recognisedStateId != 0, "restoration trace missing recognised state id");
-        require(restoration.challengeId != 0, "restoration trace missing challenge id");
-        require(restoration.restorationChallengeTransitionId != 0, "restoration trace missing challenge transition id");
-        require(restoration.restorationStateTransitionId != 0, "restoration trace missing state transition id");
+    function testCanonicalHonestReviewTraceUsesCoreKernelAndPinnedPackage() public {
+        AVACanonicalTrace.HonestReviewTraceRecord memory record = new AVACanonicalTrace().honestReviewTraceRecord();
+        require(record.appId == PeerReviewTypes.APP_ID, "wrong application");
+        require(record.reviewPackageId != 0, "review package missing");
+        require(record.manuscriptObjectId != 0 && record.reviewObjectId != 0, "governed objects missing");
+        require(record.recognisedStateId != 0 && record.reviewEvidenceId != 0, "state evidence missing");
+        require(record.vestingTransitionId != 0, "vesting transition missing");
+        require(record.recognisedStateStatus == AVACoreTypes.RecognisedStateStatus.Vested, "state not vested");
+        require(record.vestingFromStatus == AVACoreTypes.RecognisedStateStatus.Challengeable, "wrong source");
+        require(record.vestingToStatus == AVACoreTypes.RecognisedStateStatus.Vested, "wrong target");
     }
 
-    function testM132CanonicalTraceRecordsHaveExpectedStatuses() public {
-        AVACanonicalTrace canonicalTrace = new AVACanonicalTrace();
-        AVACanonicalTrace.HonestReviewTraceRecord memory honest = canonicalTrace.honestReviewTraceRecord();
+    function testCanonicalUpheldChallengeTraceIsRecursiveAndUsesChallengeStateDownstream() public {
+        AVACanonicalTrace.UpheldChallengeTraceRecord memory record =
+            new AVACanonicalTrace().upheldChallengeTraceRecord();
+        require(record.appId == PeerReviewTypes.APP_ID, "wrong application");
+        require(record.reviewPackageId != 0 && record.challengePackageId != 0, "package missing");
+        require(record.reviewPackageId != record.challengePackageId, "challenge package not independent");
+        require(record.challengeObjectId != 0 && record.challengeRecognisedStateId != 0, "challenge state missing");
+        require(record.challengeId != 0 && record.challengeTransitionId != 0, "challenge lineage missing");
+        require(record.targetRecognisedStateTransitionId != 0, "target transition missing");
+        require(record.challengeStateTransitionId != 0, "challenge state transition missing");
+        require(record.outcome == AVAChallengeExtension.ChallengeOutcome.Upheld, "wrong outcome");
+        require(record.targetStatus == AVACoreTypes.RecognisedStateStatus.Downgraded, "target not corrected");
+        require(record.challengeStateStatus == AVACoreTypes.RecognisedStateStatus.Vested, "challenge not vested");
+        require(record.consequenceId != 0 && record.standingUpdateId != 0, "downstream records missing");
         require(
-            honest.recognisedStateStatus == AVADataTypes.RecognisedStateStatus.Vested,
-            "review trace did not vest state"
+            record.consequenceRecognisedStateId == record.challengeRecognisedStateId,
+            "consequence bypassed challenge state"
         );
         require(
-            honest.vestingFromStatus == AVADataTypes.RecognisedStateStatus.Challengeable,
-            "review trace wrong vesting source"
+            record.standingRecognisedStateId == record.challengeRecognisedStateId, "standing bypassed challenge state"
         );
-        require(
-            honest.vestingToStatus == AVADataTypes.RecognisedStateStatus.Vested,
-            "review trace wrong vesting target"
-        );
+    }
 
-        AVACanonicalTrace.UpheldChallengeTraceRecord memory upheld = canonicalTrace.upheldChallengeTraceRecord();
-        require(upheld.challengeOutcome == AVADataTypes.ChallengeOutcome.Upheld, "upheld trace wrong outcome");
-        require(
-            upheld.challengeStatus == AVADataTypes.ChallengeLifecycleStatus.Resolved,
-            "upheld trace wrong lifecycle status"
-        );
-        require(
-            upheld.challengeTransitionKind == AVADataTypes.ChallengeTransitionKind.OutcomeResolved,
-            "upheld trace wrong challenge transition"
-        );
-        require(
-            upheld.recognisedStateStatus == AVADataTypes.RecognisedStateStatus.Downgraded,
-            "upheld trace did not downgrade"
-        );
-        require(
-            upheld.stateTransitionToStatus == AVADataTypes.RecognisedStateStatus.Downgraded,
-            "upheld trace wrong state transition"
-        );
-        require(
-            upheld.consequenceKind == AVADataTypes.ConsequenceKind.ProcedureCorrection,
-            "upheld trace wrong consequence kind"
-        );
+    function testCanonicalMaliciousChallengeTraceIsRecordOnly() public {
+        AVACanonicalTrace.MaliciousChallengeTraceRecord memory record =
+            new AVACanonicalTrace().maliciousChallengeTraceRecord();
+        require(record.outcome == AVAChallengeExtension.ChallengeOutcome.MaliciousOrFabricated, "wrong outcome");
+        require(record.status == AVAChallengeExtension.ChallengeStatus.Resolved, "challenge not resolved");
+        require(record.targetTransitionIdAfter == record.targetTransitionIdAtFiling, "target mutated");
+        require(record.nextConsequenceId == 1, "raw outcome created consequence");
+        require(record.nextStandingUpdateId == 1, "raw outcome created standing update");
+    }
 
-        AVACanonicalTrace.MaliciousChallengeTraceRecord memory malicious =
-            canonicalTrace.maliciousChallengeTraceRecord();
-        require(
-            malicious.challengeOutcome == AVADataTypes.ChallengeOutcome.MaliciousOrFabricated,
-            "malicious trace wrong outcome"
-        );
-        require(
-            malicious.standingPenaltyKind == AVADataTypes.StandingPenaltyKind.MaliciousOrFabricatedChallenge,
-            "malicious trace wrong standing penalty kind"
-        );
-        require(
-            malicious.eligibilityRestrictionKind == AVADataTypes.EligibilityRestrictionKind.ChallengeIntake,
-            "malicious trace wrong eligibility restriction"
-        );
-        require(malicious.penaltySubjectId == malicious.standingPenaltySubjectId, "penalty subject mismatch");
-        require(malicious.penaltySubjectId == malicious.eligibilitySubjectId, "eligibility subject mismatch");
-
-        AVACanonicalTrace.RestorationTraceRecord memory restoration = canonicalTrace.restorationTraceRecord();
-        require(restoration.challengeOutcome == AVADataTypes.ChallengeOutcome.Upheld, "restoration wrong outcome");
-        require(
-            restoration.challengeStatus == AVADataTypes.ChallengeLifecycleStatus.RestorationApplied,
-            "restoration wrong lifecycle status"
-        );
-        require(
-            restoration.challengeTransitionKind == AVADataTypes.ChallengeTransitionKind.RestorationRecorded,
-            "restoration wrong transition kind"
-        );
-        require(
-            restoration.recognisedStateStatus == AVADataTypes.RecognisedStateStatus.Restored,
-            "restoration did not restore state"
-        );
-        require(
-            restoration.stateTransitionToStatus == AVADataTypes.RecognisedStateStatus.Restored,
-            "restoration wrong state transition"
-        );
+    function testCanonicalRestorationTraceWritesExplicitTargetLineage() public {
+        AVACanonicalTrace.RestorationTraceRecord memory record = new AVACanonicalTrace().restorationTraceRecord();
+        require(record.challengeId != 0, "challenge missing");
+        require(record.restorationChallengeTransitionId != 0, "challenge restoration missing");
+        require(record.restorationStateTransitionId != 0, "state restoration missing");
+        require(record.restorationStateTransitionId != record.correctionStateTransitionId, "silent overwrite");
+        require(record.challengeStatus == AVAChallengeExtension.ChallengeStatus.Closed, "challenge not closed");
+        require(record.targetStatus == AVACoreTypes.RecognisedStateStatus.Restored, "target not restored");
+        require(record.challengeStateStatus == AVACoreTypes.RecognisedStateStatus.Vested, "challenge history lost");
     }
 
     function _assertContains(string memory text, string memory needle) internal pure {
@@ -156,9 +100,9 @@ contract M12CanonicalTraceTest {
 
     function _contains(bytes memory text, bytes memory needle) internal pure returns (bool) {
         if (needle.length == 0 || needle.length > text.length) return false;
-        for (uint256 i = 0; i <= text.length - needle.length; i++) {
+        for (uint256 i; i <= text.length - needle.length; ++i) {
             bool matched = true;
-            for (uint256 j = 0; j < needle.length; j++) {
+            for (uint256 j; j < needle.length; ++j) {
                 if (text[i + j] != needle[j]) {
                     matched = false;
                     break;

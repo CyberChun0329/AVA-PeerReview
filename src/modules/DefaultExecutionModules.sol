@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {IDisclosureExecutionModule} from "../interfaces/IDisclosureExecutionModule.sol";
 
-contract DefaultDisclosureExecutionModule is IDisclosureExecutionModule {
+contract DefaultDisclosureExecutionModule is IDisclosureExecutionModule, RuleModuleIdentity {
     function validateDisclosureExecution(DisclosureExecutionContext calldata context) external pure {
         if (
             context.workflowKey == bytes32(0) || context.kind == AVADataTypes.DisclosureExecutionKind.None
@@ -34,7 +36,7 @@ contract DefaultDisclosureExecutionModule is IDisclosureExecutionModule {
     }
 }
 
-contract KindRejectingDisclosureExecutionModule is IDisclosureExecutionModule {
+contract KindRejectingDisclosureExecutionModule is IDisclosureExecutionModule, RuleModuleIdentity {
     AVADataTypes.DisclosureExecutionKind public immutable blockedKind;
 
     constructor(AVADataTypes.DisclosureExecutionKind blockedKind_) {

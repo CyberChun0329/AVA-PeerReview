@@ -6,28 +6,20 @@ import {AuthorityMatrix} from "./AuthorityMatrix.sol";
 import {AVAStateMachine} from "./AVAStateMachine.sol";
 import {AVARulePackageRegistry} from "./AVARulePackageRegistry.sol";
 import {EvidenceCommitmentRegistry} from "./EvidenceCommitmentRegistry.sol";
+import {StandingRevisionRegistry} from "./StandingRevisionRegistry.sol";
 
 contract StandingRegistry {
     AuthorityMatrix public immutable authorityMatrix;
     AVAStateMachine public immutable stateMachine;
     AVARulePackageRegistry public immutable rulePackageRegistry;
     EvidenceCommitmentRegistry public immutable evidenceRegistry;
-    uint256 public nextStandingInputId = 1;
+    StandingRevisionRegistry public immutable standingRevisionRegistry;
     uint256 public nextStandingUpdateId = 1;
     uint256 public nextStandingComputationRecordId = 1;
 
-    mapping(uint256 => AVADataTypes.StandingInputRecord) private standingInputs;
     mapping(uint256 => AVADataTypes.StandingUpdateRecord) private standingUpdates;
     mapping(uint256 => AVADataTypes.StandingComputationRecord) private standingComputationRecords;
-
-    event StandingInputRegistered(
-        uint256 indexed id,
-        uint256 indexed recognisedStateId,
-        bytes32 indexed subjectId,
-        string dimension,
-        string uri,
-        address registeredBy
-    );
+    mapping(bytes32 => uint256) private standingUpdateIdByInputHash;
 
     event StandingUpdateRecorded(
         uint256 indexed id, uint256 indexed recognisedStateId, bytes32 indexed subjectId, string dimension, int256 delta
@@ -42,30 +34,17 @@ contract StandingRegistry {
         AuthorityMatrix authorityMatrix_,
         AVAStateMachine stateMachine_,
         AVARulePackageRegistry rulePackageRegistry_,
-        EvidenceCommitmentRegistry evidenceRegistry_
+        EvidenceCommitmentRegistry evidenceRegistry_,
+        StandingRevisionRegistry standingRevisionRegistry_
     ) {
+        if (address(standingRevisionRegistry_) == address(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
         authorityMatrix = authorityMatrix_;
         stateMachine = stateMachine_;
         rulePackageRegistry = rulePackageRegistry_;
         evidenceRegistry = evidenceRegistry_;
-    }
-
-    function registerStandingInput(
-        AVADataTypes.Role actingRole,
-        uint256 recognisedStateId,
-        bytes32 subjectId,
-        string calldata dimension,
-        string calldata uri
-    ) external view returns (uint256) {
-        authorityMatrix.requireAuthorised(msg.sender, actingRole, AVADataTypes.Action.RegisterStandingInput);
-        (recognisedStateId, subjectId, dimension, uri);
-        revert AVADataTypes.InvalidState(recognisedStateId);
-    }
-
-    function getStandingInput(uint256 id) external view returns (AVADataTypes.StandingInputRecord memory) {
-        AVADataTypes.StandingInputRecord memory standingInput = standingInputs[id];
-        if (standingInput.id == 0) revert AVADataTypes.UnknownReference(id);
-        return standingInput;
+        standingRevisionRegistry = standingRevisionRegistry_;
     }
 
     function recordStandingUpdate(
@@ -90,39 +69,30 @@ contract StandingRegistry {
         }
         authorityMatrix.requireKnownActiveSubject(subjectId);
         _requireRecognisedStateSubject(recognisedState, subjectId);
-        AVADataTypes.StandingComputationContext memory context = AVADataTypes.StandingComputationContext({
-            recognisedStateId: recognisedStateId,
-            subjectId: subjectId,
-            dimension: dimension,
-            vectorKey: keccak256(bytes(dimension)),
-            currentValue: 0,
-            delta: delta,
-            effectiveAt: 0,
-            epoch: 1,
-            sourceRecordSetHash: keccak256(abi.encode(recognisedStateId, subjectId, dimension, delta, evidenceReceiptId)),
-            computationRuleHash: keccak256("ava-standing-update-record-rule-v1"),
-            reversible: true,
-            fieldKey: bytes32(uint256(recognisedState.stage)),
-            evidenceReceiptId: evidenceReceiptId,
-            authorityId: authorityId,
-            actor: msg.sender
-        });
-        _validateStandingUpdateModules(actingRole, recognisedState, context, uri);
-
+        _validateStandingUpdateModules(
+            actingRole, recognisedState, subjectId, dimension, delta, evidenceReceiptId, authorityId, uri
+        );
         id = nextStandingUpdateId++;
-        standingUpdates[id] = AVADataTypes.StandingUpdateRecord({
-            id: id,
-            recognisedStateId: recognisedStateId,
-            packageId: recognisedState.packageId,
-            subjectId: context.subjectId,
-            dimension: context.dimension,
-            delta: context.delta,
-            evidenceReceiptId: context.evidenceReceiptId,
-            authorityRole: actingRole,
-            authorityId: context.authorityId,
-            uri: uri,
-            recordedBy: msg.sender
-        });
+        AVADataTypes.StandingUpdateRecord storage standingUpdate = standingUpdates[id];
+        standingUpdate.id = id;
+        standingUpdate.recognisedStateId = recognisedStateId;
+        standingUpdate.packageId = recognisedState.packageId;
+        standingUpdate.subjectId = subjectId;
+        standingUpdate.dimension = dimension;
+        standingUpdate.delta = delta;
+        standingUpdate.evidenceReceiptId = evidenceReceiptId;
+        standingUpdate.authorityRole = actingRole;
+        standingUpdate.authorityId = authorityId;
+        standingUpdate.uri = uri;
+        standingUpdate.recordedBy = msg.sender;
+        bytes32 inputHash = _standingUpdateInputHash(standingUpdate);
+        if (standingUpdateIdByInputHash[inputHash] != 0) {
+            revert AVADataTypes.InvalidState(standingUpdateIdByInputHash[inputHash]);
+        }
+        standingUpdateIdByInputHash[inputHash] = id;
+        standingRevisionRegistry.advanceRevision(
+            recognisedState.packageId, subjectId, AVADataTypes.StandingRevisionReason.StandingUpdate, id
+        );
 
         emit StandingUpdateRecorded(id, recognisedStateId, subjectId, dimension, delta);
     }
@@ -164,16 +134,23 @@ contract StandingRegistry {
         _requireUsableEvidenceForRecognisedState(context.evidenceReceiptId, recognisedState);
         AVARulePackageRegistry.RulePackage memory rulePackage =
             rulePackageRegistry.getRulePackageById(recognisedState.packageId);
+        _validateEvidenceLifecycle(rulePackage, recognisedState.evidenceReceiptId);
+        if (context.evidenceReceiptId != recognisedState.evidenceReceiptId) {
+            _validateEvidenceLifecycle(rulePackage, context.evidenceReceiptId);
+        }
         _validateAntiAbuse(
             rulePackage, recognisedState.workflowKey, actingRole, context.subjectId, context.recognisedStateId
         );
         rulePackage.standingComputationModule.validateStandingComputation(context);
+        uint256 standingRevision =
+            standingRevisionRegistry.currentRevision(recognisedState.packageId, context.subjectId);
 
         id = nextStandingComputationRecordId++;
         standingComputationRecords[id] = AVADataTypes.StandingComputationRecord({
             id: id,
             recognisedStateId: context.recognisedStateId,
             packageId: recognisedState.packageId,
+            standingRevision: standingRevision,
             subjectId: context.subjectId,
             dimension: context.dimension,
             vectorKey: context.vectorKey,
@@ -255,7 +232,48 @@ contract StandingRegistry {
 
     function isStandingComputationActive(uint256 computationId) external view returns (bool) {
         AVADataTypes.StandingComputationRecord memory record = standingComputationRecords[computationId];
-        return record.id != 0 && record.status == AVADataTypes.StandingComputationStatus.Active;
+        if (
+            record.id == 0 || record.status != AVADataTypes.StandingComputationStatus.Active
+                || record.standingRevision
+                    != standingRevisionRegistry.currentRevision(record.packageId, record.subjectId)
+                || !authorityMatrix.roleRegistry().isKnownActiveSubject(record.subjectId)
+        ) {
+            return false;
+        }
+        try stateMachine.getRecognisedState(record.recognisedStateId) returns (
+            AVADataTypes.RecognisedStateRecord memory recognisedState
+        ) {
+            if (recognisedState.packageId != record.packageId || recognisedState.subjectId != record.subjectId) {
+                return false;
+            }
+            try rulePackageRegistry.getRulePackageById(record.packageId) returns (
+                AVARulePackageRegistry.RulePackage memory rulePackage
+            ) {
+                if (rulePackage.workflowKey != recognisedState.workflowKey) return false;
+            } catch {
+                return false;
+            }
+            try evidenceRegistry.requireUsableEvidenceReceipt(
+                recognisedState.evidenceReceiptId, recognisedState.appId, recognisedState.workflowKey
+            ) returns (
+                AVADataTypes.EvidenceReceipt memory stateReceipt
+            ) {
+                if (stateReceipt.packageId != record.packageId) return false;
+            } catch {
+                return false;
+            }
+            try evidenceRegistry.requireUsableEvidenceReceipt(
+                record.evidenceReceiptId, recognisedState.appId, recognisedState.workflowKey
+            ) returns (
+                AVADataTypes.EvidenceReceipt memory receipt
+            ) {
+                return receipt.packageId == record.packageId;
+            } catch {
+                return false;
+            }
+        } catch {
+            return false;
+        }
     }
 
     function getStandingComputationRecord(uint256 id)
@@ -282,6 +300,7 @@ contract StandingRegistry {
         ) {
             revert AVADataTypes.InvalidState(recognisedStateId);
         }
+        _requireUsableEvidenceForRecognisedState(recognisedState.evidenceReceiptId, recognisedState);
     }
 
     function _validateAntiAbuse(
@@ -291,40 +310,56 @@ contract StandingRegistry {
         bytes32 subjectId,
         uint256 recognisedStateId
     ) internal view {
-        rulePackage.antiAbuseModule.validateUse(
-            workflowKey, actingRole, AVADataTypes.Action.RecordStandingUpdate, subjectId, bytes32(recognisedStateId), msg.sender
-        );
+        rulePackage.antiAbuseModule
+            .validateUse(
+                workflowKey,
+                actingRole,
+                AVADataTypes.Action.RecordStandingUpdate,
+                subjectId,
+                bytes32(recognisedStateId),
+                msg.sender
+            );
     }
 
     function _requireRecognisedStateSubject(
         AVADataTypes.RecognisedStateRecord memory recognisedState,
         bytes32 subjectId
     ) internal pure {
-        if (recognisedState.subjectId != subjectId) revert AVADataTypes.InvalidState(recognisedState.id);
+        if (recognisedState.subjectId != subjectId) {
+            revert AVADataTypes.InvalidState(recognisedState.id);
+        }
     }
 
     function _validateStandingUpdateModules(
         AVADataTypes.Role actingRole,
         AVADataTypes.RecognisedStateRecord memory recognisedState,
-        AVADataTypes.StandingComputationContext memory context,
+        bytes32 subjectId,
+        string calldata dimension,
+        int256 delta,
+        uint256 evidenceReceiptId,
+        bytes32 authorityId,
         string calldata uri
     ) internal view {
-        _requireUsableEvidenceForRecognisedState(context.evidenceReceiptId, recognisedState);
+        _requireUsableEvidenceForRecognisedState(evidenceReceiptId, recognisedState);
         AVARulePackageRegistry.RulePackage memory rulePackage =
             rulePackageRegistry.getRulePackageById(recognisedState.packageId);
-        _validateAntiAbuse(rulePackage, recognisedState.workflowKey, actingRole, context.subjectId, context.recognisedStateId);
-        rulePackage.standingComputationModule.validateStandingComputation(context);
-        rulePackage.standingAdapter.validateStandingUpdate(
-            actingRole,
-            context.recognisedStateId,
-            context.subjectId,
-            context.dimension,
-            context.delta,
-            context.evidenceReceiptId,
-            context.authorityId,
-            uri,
-            msg.sender
-        );
+        _validateEvidenceLifecycle(rulePackage, recognisedState.evidenceReceiptId);
+        if (evidenceReceiptId != recognisedState.evidenceReceiptId) {
+            _validateEvidenceLifecycle(rulePackage, evidenceReceiptId);
+        }
+        _validateAntiAbuse(rulePackage, recognisedState.workflowKey, actingRole, subjectId, recognisedState.id);
+        rulePackage.standingAdapter
+            .validateStandingUpdate(
+                actingRole,
+                recognisedState.id,
+                subjectId,
+                dimension,
+                delta,
+                evidenceReceiptId,
+                authorityId,
+                uri,
+                msg.sender
+            );
     }
 
     function _requireUsableEvidenceForRecognisedState(
@@ -332,7 +367,40 @@ contract StandingRegistry {
         AVADataTypes.RecognisedStateRecord memory recognisedState
     ) internal view {
         AVADataTypes.EvidenceReceipt memory receipt =
-            evidenceRegistry.requireUsableEvidenceReceipt(evidenceReceiptId, recognisedState.workflowKey);
+            evidenceRegistry.requireUsableEvidenceReceipt(
+                evidenceReceiptId, recognisedState.appId, recognisedState.workflowKey
+            );
         if (receipt.packageId != recognisedState.packageId) revert AVADataTypes.InvalidState(evidenceReceiptId);
+    }
+
+    function _validateEvidenceLifecycle(
+        AVARulePackageRegistry.RulePackage memory rulePackage,
+        uint256 evidenceReceiptId
+    ) internal view {
+        rulePackage.evidenceLifecycleModule
+            .validateEvidenceLifecycle(
+                rulePackage.workflowKey,
+                AVADataTypes.Action.RecordStandingUpdate,
+                evidenceReceiptId,
+                AVADataTypes.EvidenceLifecycleKind.None,
+                0,
+                bytes32(0),
+                msg.sender
+            );
+    }
+
+    function _standingUpdateInputHash(AVADataTypes.StandingUpdateRecord storage standingUpdate)
+        internal
+        view
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encode(
+                standingUpdate.packageId,
+                standingUpdate.recognisedStateId,
+                standingUpdate.subjectId,
+                keccak256(bytes(standingUpdate.dimension))
+            )
+        );
     }
 }

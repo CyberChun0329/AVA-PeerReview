@@ -2,8 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "../AVADataTypes.sol";
+import {IRuleModuleIdentity} from "./IRuleModuleIdentity.sol";
 
-interface IDisclosureExecutionModule {
+interface IDisclosureExecutionModule is IRuleModuleIdentity {
     struct DisclosureExecutionContext {
         bytes32 workflowKey;
         AVADataTypes.DisclosureExecutionKind kind;

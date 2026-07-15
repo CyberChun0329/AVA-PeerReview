@@ -1,65 +1,62 @@
 {
-  "schema": "ava-canonical-trace-v1",
+  "schema": "ava-canonical-trace-v2",
   "scenarios": [
     {
-      "name": "honest_review_challenge_window_vesting",
+      "name": "honest_review_vesting",
       "trace": [
         "review_registered",
-        "challenge_opened",
+        "recognised_state_formed",
         "recognition_vested"
       ],
       "ids": {
-        "manuscriptId": 1,
+        "reviewObjectId": 2,
         "recognisedStateId": 1,
-        "reviewContributionId": 1,
         "vestingTransitionId": 3
       }
     },
     {
-      "name": "upheld_challenge_correction_standing_record",
+      "name": "upheld_recursive_challenge_and_downstream_records",
       "trace": [
-        "challenge_filed",
-        "challenge_screened",
+        "challenge_object_registered",
+        "challenge_state_formed",
         "challenge_upheld",
-        "recognition_downgraded",
+        "target_corrected",
+        "challenge_vested",
         "bounded_consequence_recorded",
         "standing_update_recorded"
       ],
       "ids": {
-        "recognisedStateId": 1,
         "challengeId": 1,
-        "consequenceId": 1,
-        "standingUpdateId": 1
+        "targetRecognisedStateTransitionId": 6,
+        "challengeStateTransitionId": 7
       }
     },
     {
-      "name": "malicious_challenge_penalty_and_eligibility_restriction",
+      "name": "malicious_or_fabricated_challenge_record_only",
       "trace": [
-        "challenge_malicious_or_fabricated",
-        "penalty_recorded",
-        "standing_penalty_input_recorded",
-        "eligibility_restricted"
+        "challenge_filed",
+        "challenge_screened",
+        "malicious_or_fabricated_outcome_recorded",
+        "no_automatic_consequence"
       ],
       "ids": {
         "challengeId": 1,
-        "penaltyConsequenceId": 1,
-        "standingPenaltyInputId": 1,
-        "eligibilityRestrictionId": 1
+        "targetTransitionId": 3
       }
     },
     {
-      "name": "restoration_after_correction",
+      "name": "explicit_restoration_with_lineage",
       "trace": [
         "challenge_upheld",
-        "recognition_downgraded",
-        "restoration_applied",
-        "recognition_restored"
+        "target_corrected",
+        "restoration_available",
+        "restoration_transition_recorded",
+        "target_restored"
       ],
       "ids": {
-        "recognisedStateId": 1,
         "challengeId": 1,
-        "restorationChallengeTransitionId": 3,
-        "restorationStateTransitionId": 4
+        "correctionStateTransitionId": 6,
+        "restorationStateTransitionId": 8
       }
     }
   ]

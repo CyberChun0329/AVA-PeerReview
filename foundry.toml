@@ -1,10 +1,43 @@
 [profile.default]
-src = "src"
-out = "out"
+src = "src/canonical"
+out = "out-canonical"
 test = "test"
 script = "script"
 libs = []
+cache_path = "cache-canonical"
 solc_version = "0.8.24"
 optimizer = true
 optimizer_runs = 200
+fs_permissions = [{ access = "read-write", path = "./generated" }]
+skip = [
+    "test/AVASkeleton*.t.sol",
+    "test/AVASecurity*.t.sol",
+    "test/M14ApplicationNamespace.t.sol",
+    "test/RuntimeSize.t.sol",
+    "test/helpers/AVASkeletonFixture.sol",
+    "script/AVADemoScenario.s.sol",
+]
 
+[invariant]
+runs = 128
+depth = 64
+fail_on_revert = false
+
+[profile.canonical]
+src = "src/canonical"
+out = "out-canonical"
+cache_path = "cache-canonical"
+skip = [
+    "test/AVASkeleton*.t.sol",
+    "test/AVASecurity*.t.sol",
+    "test/M14ApplicationNamespace.t.sol",
+    "test/RuntimeSize.t.sol",
+    "test/helpers/AVASkeletonFixture.sol",
+    "script/AVADemoScenario.s.sol",
+]
+
+[profile.retained]
+src = "src"
+out = "out-retained"
+cache_path = "cache-retained"
+skip = []

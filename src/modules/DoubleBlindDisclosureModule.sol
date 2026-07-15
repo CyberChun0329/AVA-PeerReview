@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {DisclosurePolicyRegistry} from "../DisclosurePolicyRegistry.sol";
 import {IDisclosurePolicyModule} from "../interfaces/IDisclosurePolicyModule.sol";
 
-contract DoubleBlindDisclosureModule is IDisclosurePolicyModule {
+contract DoubleBlindDisclosureModule is IDisclosurePolicyModule, RuleModuleIdentity {
     DisclosurePolicyRegistry public immutable disclosureRegistry;
     uint256 public immutable blindedReviewPolicyId;
 

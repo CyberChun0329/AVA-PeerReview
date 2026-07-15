@@ -12,6 +12,7 @@ contract ZKProofRegistry {
 
     struct ProofReceipt {
         uint256 id;
+        bytes32 appId;
         uint256 packageId;
         address verifier;
         bytes32 proofDomainHash;
@@ -24,6 +25,7 @@ contract ZKProofRegistry {
 
     struct ProofRegistrationInput {
         uint256 packageId;
+        bytes32 appId;
         bytes32 workflowKey;
         AVADataTypes.AVAStage stage;
         AVADataTypes.Action action;
@@ -34,6 +36,8 @@ contract ZKProofRegistry {
     }
 
     IZKProofVerifier public immutable verifier;
+    bytes32 public immutable VERIFIER_CODE_HASH;
+    bytes32 public immutable PROOF_DOMAIN_HASH;
     AVARulePackageRegistry public immutable rulePackageRegistry;
     DisclosurePolicyRegistry public immutable disclosureRegistry;
     uint256 public nextProofReceiptId = 1;
@@ -60,17 +64,23 @@ contract ZKProofRegistry {
         DisclosurePolicyRegistry disclosureRegistry_
     ) {
         if (
-            address(verifier_) == address(0) || address(rulePackageRegistry_) == address(0)
+            address(verifier_) == address(0) || address(verifier_).code.length == 0
+                || address(rulePackageRegistry_) == address(0)
                 || address(disclosureRegistry_) == address(0)
         ) {
             revert AVADataTypes.EmptyValue();
         }
         verifier = verifier_;
+        bytes32 proofDomainHash = verifier_.proofDomain();
+        if (proofDomainHash == bytes32(0)) revert AVADataTypes.EmptyValue();
+        VERIFIER_CODE_HASH = address(verifier_).codehash;
+        PROOF_DOMAIN_HASH = proofDomainHash;
         rulePackageRegistry = rulePackageRegistry_;
         disclosureRegistry = disclosureRegistry_;
     }
 
     function registerProof(
+        bytes32 appId,
         bytes32 workflowKey,
         AVADataTypes.AVAStage stage,
         AVADataTypes.Action action,
@@ -80,10 +90,11 @@ contract ZKProofRegistry {
         bytes32 subjectCommitment,
         IZKProofVerifier.SchnorrProof calldata proof
     ) external returns (uint256 id) {
-        uint256 packageId = _activePackageIdOrZero(workflowKey);
+        uint256 packageId = _activePackageIdOrZero(appId, workflowKey);
         return _registerProof(
             ProofRegistrationInput({
                 packageId: packageId,
+                appId: appId,
                 workflowKey: workflowKey,
                 stage: stage,
                 action: action,
@@ -103,6 +114,7 @@ contract ZKProofRegistry {
     /// grant authority, or validate evidence truth.
     function registerProofForPackage(
         uint256 packageId,
+        bytes32 appId,
         bytes32 workflowKey,
         AVADataTypes.AVAStage stage,
         AVADataTypes.Action action,
@@ -112,10 +124,11 @@ contract ZKProofRegistry {
         bytes32 subjectCommitment,
         IZKProofVerifier.SchnorrProof calldata proof
     ) external returns (uint256 id) {
-        _requirePackageForWorkflow(packageId, workflowKey);
+        _requirePackageForWorkflow(packageId, appId, workflowKey);
         return _registerProof(
             ProofRegistrationInput({
                 packageId: packageId,
+                appId: appId,
                 workflowKey: workflowKey,
                 stage: stage,
                 action: action,
@@ -128,14 +141,16 @@ contract ZKProofRegistry {
         );
     }
 
-    function _registerProof(
-        ProofRegistrationInput memory input,
-        IZKProofVerifier.SchnorrProof calldata proof
-    ) internal returns (uint256 id) {
-        bytes32 proofDomainHash = verifier.proofDomain();
+    function _registerProof(ProofRegistrationInput memory input, IZKProofVerifier.SchnorrProof calldata proof)
+        internal
+        returns (uint256 id)
+    {
+        _requireStableVerifier();
+        bytes32 proofDomainHash = PROOF_DOMAIN_HASH;
         bytes32 contextHash = computeDisclosureContextHashForPackageAndProofDomain(
             input.packageId,
             proofDomainHash,
+            input.appId,
             input.workflowKey,
             input.stage,
             input.action,
@@ -146,12 +161,14 @@ contract ZKProofRegistry {
         );
         bytes32 nullifierHash = computeNullifierHash(contextHash, input.subjectCommitment);
         if (
-            proofDomainHash == bytes32(0) || contextHash == bytes32(0) || nullifierHash == bytes32(0) || receiptIdByContextHash[contextHash] != 0
-                || receiptIdByNullifierHash[nullifierHash] != 0
+            proofDomainHash == bytes32(0) || contextHash == bytes32(0) || nullifierHash == bytes32(0)
+                || receiptIdByContextHash[contextHash] != 0 || receiptIdByNullifierHash[nullifierHash] != 0
         ) {
             revert AVADataTypes.InvalidState(uint256(contextHash));
         }
-        disclosureRegistry.getDisclosurePolicy(input.disclosurePolicyId);
+        if (disclosureRegistry.getDisclosurePolicy(input.disclosurePolicyId).appId != input.appId) {
+            revert AVADataTypes.InvalidState(input.disclosurePolicyId);
+        }
         if (input.subjectCommitment != computeSubjectCommitment(proof.publicKey)) {
             revert AVADataTypes.InvalidState(uint256(input.subjectCommitment));
         }
@@ -161,6 +178,7 @@ contract ZKProofRegistry {
         bytes32 proofHash = keccak256(abi.encode(proof));
         proofReceipts[id] = ProofReceipt({
             id: id,
+            appId: input.appId,
             packageId: input.packageId,
             verifier: address(verifier),
             proofDomainHash: proofDomainHash,
@@ -174,11 +192,20 @@ contract ZKProofRegistry {
         receiptIdByNullifierHash[nullifierHash] = id;
 
         emit ZKProofVerified(
-            id, contextHash, nullifierHash, input.packageId, address(verifier), proofDomainHash, input.subjectCommitment, proofHash, msg.sender
+            id,
+            contextHash,
+            nullifierHash,
+            input.packageId,
+            address(verifier),
+            proofDomainHash,
+            input.subjectCommitment,
+            proofHash,
+            msg.sender
         );
     }
 
     function computeDisclosureContextHash(
+        bytes32 appId,
         bytes32 workflowKey,
         AVADataTypes.AVAStage stage,
         AVADataTypes.Action action,
@@ -187,10 +214,11 @@ contract ZKProofRegistry {
         uint256 disclosurePolicyId,
         bytes32 subjectCommitment
     ) public view returns (bytes32) {
-        uint256 packageId = _activePackageIdOrZero(workflowKey);
+        uint256 packageId = _activePackageIdOrZero(appId, workflowKey);
         return computeDisclosureContextHashForPackageAndProofDomain(
             packageId,
             verifier.proofDomain(),
+            appId,
             workflowKey,
             stage,
             action,
@@ -203,6 +231,7 @@ contract ZKProofRegistry {
 
     function computeDisclosureContextHashForPackage(
         uint256 packageId,
+        bytes32 appId,
         bytes32 workflowKey,
         AVADataTypes.AVAStage stage,
         AVADataTypes.Action action,
@@ -214,6 +243,7 @@ contract ZKProofRegistry {
         return computeDisclosureContextHashForPackageAndProofDomain(
             packageId,
             verifier.proofDomain(),
+            appId,
             workflowKey,
             stage,
             action,
@@ -227,6 +257,7 @@ contract ZKProofRegistry {
     function computeDisclosureContextHashForPackageAndProofDomain(
         uint256 packageId,
         bytes32 proofDomainHash,
+        bytes32 appId,
         bytes32 workflowKey,
         AVADataTypes.AVAStage stage,
         AVADataTypes.Action action,
@@ -234,18 +265,21 @@ contract ZKProofRegistry {
         AVADataTypes.Role actingRole,
         uint256 disclosurePolicyId,
         bytes32 subjectCommitment
-    ) public pure returns (bytes32) {
+    ) public view returns (bytes32) {
+        if (!_verifierStable() || proofDomainHash != PROOF_DOMAIN_HASH) return bytes32(0);
         if (
-            packageId == 0 || proofDomainHash == bytes32(0) || workflowKey == bytes32(0) || objectId == bytes32(0) || disclosurePolicyId == 0
-                || subjectCommitment == bytes32(0)
+            packageId == 0 || proofDomainHash == bytes32(0) || appId == bytes32(0) || workflowKey == bytes32(0)
+                || objectId == bytes32(0) || disclosurePolicyId == 0 || subjectCommitment == bytes32(0)
         ) {
             return bytes32(0);
         }
         return keccak256(
             abi.encode(
                 DISCLOSURE_CONTEXT_DOMAIN,
+                keccak256(abi.encode(block.chainid, address(this), address(verifier))),
                 packageId,
                 proofDomainHash,
+                appId,
                 workflowKey,
                 stage,
                 action,
@@ -266,30 +300,38 @@ contract ZKProofRegistry {
         return keccak256(abi.encode(NULLIFIER_DOMAIN, contextHash, subjectCommitment));
     }
 
-    function _activePackageIdOrZero(bytes32 workflowKey) internal view returns (uint256) {
-        if (workflowKey == bytes32(0)) return 0;
-        try rulePackageRegistry.getRulePackage(workflowKey) returns (AVARulePackageRegistry.RulePackage memory rulePackage) {
+    function _activePackageIdOrZero(bytes32 appId, bytes32 workflowKey) internal view returns (uint256) {
+        if (appId == bytes32(0) || workflowKey == bytes32(0)) return 0;
+        try rulePackageRegistry.getRulePackage(appId, workflowKey) returns (
+            AVARulePackageRegistry.RulePackage memory rulePackage
+        ) {
             return rulePackage.packageId;
         } catch {
             return 0;
         }
     }
 
-    function _requirePackageForWorkflow(uint256 packageId, bytes32 workflowKey) internal view {
-        if (packageId == 0 || workflowKey == bytes32(0)) revert AVADataTypes.EmptyValue();
+    function _requirePackageForWorkflow(uint256 packageId, bytes32 appId, bytes32 workflowKey) internal view {
+        if (packageId == 0 || appId == bytes32(0) || workflowKey == bytes32(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
         AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
-        if (rulePackage.workflowKey != workflowKey) revert AVADataTypes.InvalidState(packageId);
+        if (rulePackage.appId != appId || rulePackage.workflowKey != workflowKey) {
+            revert AVADataTypes.InvalidState(packageId);
+        }
     }
 
     function hasVerifiedProof(bytes32 contextHash) external view returns (bool) {
-        return receiptIdByContextHash[contextHash] != 0;
+        return _verifierStable() && receiptIdByContextHash[contextHash] != 0;
     }
 
     function getProofReceiptId(bytes32 contextHash) external view returns (uint256) {
+        if (!_verifierStable()) return 0;
         return receiptIdByContextHash[contextHash];
     }
 
     function getProofReceiptIdByNullifier(bytes32 nullifierHash) external view returns (uint256) {
+        if (!_verifierStable()) return 0;
         return receiptIdByNullifierHash[nullifierHash];
     }
 
@@ -297,5 +339,18 @@ contract ZKProofRegistry {
         ProofReceipt memory receipt = proofReceipts[id];
         if (receipt.id == 0) revert AVADataTypes.UnknownReference(id);
         return receipt;
+    }
+
+    function _requireStableVerifier() internal view {
+        if (!_verifierStable()) revert AVADataTypes.InvalidState(uint256(PROOF_DOMAIN_HASH));
+    }
+
+    function _verifierStable() internal view returns (bool) {
+        if (address(verifier).codehash != VERIFIER_CODE_HASH) return false;
+        try verifier.proofDomain() returns (bytes32 proofDomainHash) {
+            return proofDomainHash == PROOF_DOMAIN_HASH;
+        } catch {
+            return false;
+        }
     }
 }

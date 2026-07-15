@@ -3,13 +3,18 @@ pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "./AVADataTypes.sol";
 import {AVAStateMachine} from "./AVAStateMachine.sol";
+import {AVAChallengeWorkflow} from "./AVAChallengeWorkflow.sol";
 import {AuthorityMatrix} from "./AuthorityMatrix.sol";
 import {ValueSettlementExecutor} from "./ValueSettlementExecutor.sol";
 import {ZKStandingComputationRegistry} from "./ZKStandingComputationRegistry.sol";
 import {IZKStandingCredentialIssuer} from "./interfaces/IZKStandingCredentialIssuer.sol";
 import {IZKProofVerifier} from "./interfaces/IZKProofVerifier.sol";
+import {StandingRevisionRegistry} from "./StandingRevisionRegistry.sol";
+import {AVARulePackageRegistry} from "./AVARulePackageRegistry.sol";
+import {IStandingFormulaRegistry} from "./interfaces/IStandingFormulaRegistry.sol";
 
 contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
+    uint256 public constant MAX_CREDENTIAL_VALIDITY = 365 days;
     bytes32 public constant STANDING_CREDENTIAL_USE_CONTEXT_DOMAIN =
         keccak256("AVA_ZK_STANDING_CREDENTIAL_USE_CONTEXT_V1");
     bytes32 public constant STANDING_CREDENTIAL_USE_NULLIFIER_DOMAIN =
@@ -37,6 +42,8 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
     ZKStandingComputationRegistry public immutable zkStandingComputationRegistry;
     ValueSettlementExecutor public immutable valueSettlementExecutor;
     AVAStateMachine public immutable stateMachine;
+    AVAChallengeWorkflow public immutable challengeWorkflow;
+    StandingRevisionRegistry public immutable standingRevisionRegistry;
 
     uint256 public nextCredentialId = 1;
     uint256 public nextCredentialUseRecordId = 1;
@@ -61,16 +68,10 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
     );
     event ZKStandingCredentialRevoked(uint256 indexed id, bytes32 indexed subjectCommitment, bytes32 authorityId);
     event ZKStandingCredentialSuperseded(
-        uint256 indexed id,
-        uint256 indexed supersededBy,
-        bytes32 indexed subjectCommitment,
-        bytes32 authorityId
+        uint256 indexed id, uint256 indexed supersededBy, bytes32 indexed subjectCommitment, bytes32 authorityId
     );
     event ZKStandingCredentialSuspended(
-        uint256 indexed id,
-        bytes32 indexed subjectCommitment,
-        bytes32 indexed suspensionReference,
-        bytes32 authorityId
+        uint256 indexed id, bytes32 indexed subjectCommitment, bytes32 indexed suspensionReference, bytes32 authorityId
     );
     event ZKStandingCredentialSourceBoundSuspensionRecorded(
         uint256 indexed id,
@@ -90,11 +91,14 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
         AuthorityMatrix authorityMatrix_,
         ZKStandingComputationRegistry zkStandingComputationRegistry_,
         ValueSettlementExecutor valueSettlementExecutor_,
-        AVAStateMachine stateMachine_
+        AVAStateMachine stateMachine_,
+        AVAChallengeWorkflow challengeWorkflow_,
+        StandingRevisionRegistry standingRevisionRegistry_
     ) {
         if (
             address(authorityMatrix_) == address(0) || address(zkStandingComputationRegistry_) == address(0)
                 || address(valueSettlementExecutor_) == address(0) || address(stateMachine_) == address(0)
+                || address(challengeWorkflow_) == address(0) || address(standingRevisionRegistry_) == address(0)
         ) {
             revert AVADataTypes.EmptyValue();
         }
@@ -102,16 +106,18 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
         zkStandingComputationRegistry = zkStandingComputationRegistry_;
         valueSettlementExecutor = valueSettlementExecutor_;
         stateMachine = stateMachine_;
+        challengeWorkflow = challengeWorkflow_;
+        standingRevisionRegistry = standingRevisionRegistry_;
     }
 
-    function issueCredential(
-        AVADataTypes.Role actingRole,
-        ZKStandingCredentialInput calldata input
-    ) external returns (uint256 id) {
+    function issueCredential(AVADataTypes.Role actingRole, ZKStandingCredentialInput calldata input)
+        external
+        returns (uint256 id)
+    {
         authorityMatrix.requireAuthorisedSubject(
             msg.sender, actingRole, AVADataTypes.Action.IssueStandingCredential, input.authorityId
         );
-        id = _issueCredential(actingRole, input);
+        id = _issueCredential(actingRole, input, AVADataTypes.Action.IssueStandingCredential);
     }
 
     function revokeCredential(
@@ -145,7 +151,7 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
         );
         ZKStandingCredentialRecord storage oldCredential = credentials[credentialId];
         _requireActiveCredential(oldCredential, credentialId);
-        id = _issueCredential(actingRole, input);
+        id = _issueCredential(actingRole, input, AVADataTypes.Action.SupersedeStandingCredential);
         ZKStandingCredentialRecord memory newCredential = credentials[id];
         if (
             newCredential.packageId != oldCredential.packageId
@@ -201,17 +207,14 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
         ZKStandingCredentialRecord storage credential = credentials[credentialId];
         _requireActiveCredential(credential, credentialId);
         AVADataTypes.ChallengeTransitionRecord memory transition =
-            stateMachine.getChallengeTransition(challengeTransitionId);
-        AVADataTypes.ChallengeRecord memory challenge = stateMachine.getChallenge(transition.challengeId);
+            challengeWorkflow.getChallengeTransition(challengeTransitionId);
+        AVADataTypes.ChallengeRecord memory challenge = challengeWorkflow.getChallenge(transition.challengeId);
         if (
             transition.transitionKind != AVADataTypes.ChallengeTransitionKind.OutcomeResolved
-                || transition.packageId != credential.packageId
-                || transition.outcome != challenge.outcome
+                || transition.packageId != credential.packageId || transition.outcome != challenge.outcome
                 || challenge.challengerSubjectId != credential.subjectCommitment
-                || (
-                    transition.outcome != AVADataTypes.ChallengeOutcome.Negligent
-                        && transition.outcome != AVADataTypes.ChallengeOutcome.MaliciousOrFabricated
-                )
+                || (transition.outcome != AVADataTypes.ChallengeOutcome.Negligent
+                    && transition.outcome != AVADataTypes.ChallengeOutcome.MaliciousOrFabricated)
         ) {
             revert AVADataTypes.InvalidState(credentialId);
         }
@@ -242,19 +245,20 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
     ) public view returns (bool) {
         ZKStandingCredentialRecord memory credential = credentials[credentialId];
         if (!_isActiveCredential(credential)) return false;
-        if (
-            !zkStandingComputationRegistry.standingProofSupportsCredential(
+        if (!_isSubjectLifecycleCompatible(subjectCommitment)) return false;
+        if (!zkStandingComputationRegistry.standingProofSupportsCredential(
                 credential.standingProofReceiptId,
                 packageId,
                 subjectCommitment,
                 vectorKey,
                 categoryHash,
                 requiredThreshold
-            )
-        ) {
+            )) {
             return false;
         }
         return credential.packageId == packageId && credential.subjectCommitment == subjectCommitment
+            && credential.standingRevision
+                == standingRevisionRegistry.currentRevision(credential.packageId, credential.subjectCommitment)
             && credential.vectorKey == vectorKey && credential.categoryHash == categoryHash
             && credential.threshold >= requiredThreshold && requiredThreshold >= credential.lowerBound
             && requiredThreshold <= credential.upperBound;
@@ -272,10 +276,12 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
             input.vectorKey,
             input.categoryHash,
             input.requiredThreshold,
-            input.targetContextHash
+            input.targetContextHash,
+            input.beneficiary
         );
         if (
             useContextHash == bytes32(0) || input.proofUseNullifierHash == bytes32(0)
+                || input.beneficiary != msg.sender
                 || useRecordIdByNullifier[input.proofUseNullifierHash] != 0
                 || input.proofUseNullifierHash
                     != computeCredentialUseNullifierHash(useContextHash, credential.credentialCommitment)
@@ -309,12 +315,6 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
         emit ZKStandingCredentialUsed(id, input.credentialId, input.proofUseNullifierHash, input.targetContextHash);
     }
 
-    function isCredentialActive(uint256 credentialId) external view returns (bool) {
-        // Local carrier status only. Proof consumers must use credentialProves,
-        // which also re-checks the standing proof and computation statement.
-        return _isActiveCredential(credentials[credentialId]);
-    }
-
     function computeCredentialCommitment(IZKProofVerifier.G1Point calldata publicKey) public pure returns (bytes32) {
         return keccak256(abi.encode(publicKey.x, publicKey.y));
     }
@@ -326,24 +326,29 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
         bytes32 vectorKey,
         bytes32 categoryHash,
         int256 requiredThreshold,
-        bytes32 targetContextHash
-    ) public pure returns (bytes32) {
+        bytes32 targetContextHash,
+        address beneficiary
+    ) public view returns (bytes32) {
         if (
             credentialId == 0 || packageId == 0 || subjectCommitment == bytes32(0) || vectorKey == bytes32(0)
-                || categoryHash == bytes32(0) || targetContextHash == bytes32(0)
+                || categoryHash == bytes32(0) || targetContextHash == bytes32(0) || beneficiary == address(0)
         ) {
             return bytes32(0);
         }
         return keccak256(
             abi.encode(
                 STANDING_CREDENTIAL_USE_CONTEXT_DOMAIN,
+                keccak256(
+                    abi.encode(block.chainid, address(this), address(zkStandingComputationRegistry.verifier()))
+                ),
                 credentialId,
                 packageId,
                 subjectCommitment,
                 vectorKey,
                 categoryHash,
                 requiredThreshold,
-                targetContextHash
+                targetContextHash,
+                beneficiary
             )
         );
     }
@@ -381,17 +386,18 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
 
     function _issueCredential(
         AVADataTypes.Role actingRole,
-        ZKStandingCredentialInput calldata input
+        ZKStandingCredentialInput calldata input,
+        AVADataTypes.Action action
     ) internal returns (uint256 id) {
         if (
             input.standingProofReceiptId == 0 || input.packageId == 0 || input.subjectCommitment == bytes32(0)
                 || input.credentialCommitment == bytes32(0) || input.credentialNullifierHash == bytes32(0)
                 || input.vectorKey == bytes32(0) || input.categoryHash == bytes32(0) || input.epoch == 0
                 || input.sourceRecordSetRoot == bytes32(0) || input.computationRuleHash == bytes32(0)
-                || input.expiresAt <= block.timestamp || input.authorityId == bytes32(0)
-                || bytes(input.uri).length == 0 || input.lowerBound > input.upperBound
-                || input.threshold < input.lowerBound || input.threshold > input.upperBound
-                || credentialIdByCommitment[input.credentialCommitment] != 0
+                || input.expiresAt <= block.timestamp || input.authorityId == bytes32(0) || bytes(input.uri).length == 0
+                || input.expiresAt > block.timestamp + MAX_CREDENTIAL_VALIDITY
+                || input.lowerBound > input.upperBound || input.threshold < input.lowerBound
+                || input.threshold > input.upperBound || credentialIdByCommitment[input.credentialCommitment] != 0
                 || credentialIdByNullifier[input.credentialNullifierHash] != 0
         ) {
             revert AVADataTypes.EmptyValue();
@@ -400,11 +406,14 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
         ZKStandingComputationRegistry.StandingProofReceipt memory proofReceipt =
             zkStandingComputationRegistry.getStandingProofReceipt(input.standingProofReceiptId);
         if (
-            proofReceipt.packageId != input.packageId || proofReceipt.subjectCommitment != input.subjectCommitment
+            !_isSubjectLifecycleCompatible(input.subjectCommitment) || proofReceipt.packageId != input.packageId
+                || proofReceipt.subjectCommitment != input.subjectCommitment
+                || proofReceipt.standingRevision
+                    != standingRevisionRegistry.currentRevision(input.packageId, input.subjectCommitment)
                 || proofReceipt.vectorKey != input.vectorKey || proofReceipt.categoryHash != input.categoryHash
                 || proofReceipt.epoch != input.epoch || proofReceipt.sourceRecordSetRoot != input.sourceRecordSetRoot
-                || proofReceipt.computationRuleHash != input.computationRuleHash || proofReceipt.lowerBound != input.lowerBound
-                || proofReceipt.upperBound != input.upperBound
+                || proofReceipt.computationRuleHash != input.computationRuleHash
+                || proofReceipt.lowerBound != input.lowerBound || proofReceipt.upperBound != input.upperBound
                 || !zkStandingComputationRegistry.standingProofSupportsCredential(
                     input.standingProofReceiptId,
                     input.packageId,
@@ -416,6 +425,7 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
         ) {
             revert AVADataTypes.InvalidState(input.standingProofReceiptId);
         }
+        _validateCredentialEvidenceLifecycle(proofReceipt, action);
 
         id = nextCredentialId++;
         credentials[id] = ZKStandingCredentialRecord({
@@ -424,6 +434,7 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
             standingComputationStatementId: proofReceipt.standingComputationStatementId,
             workflowKey: proofReceipt.workflowKey,
             packageId: input.packageId,
+            standingRevision: proofReceipt.standingRevision,
             subjectCommitment: input.subjectCommitment,
             credentialCommitment: input.credentialCommitment,
             credentialNullifierHash: input.credentialNullifierHash,
@@ -460,7 +471,61 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
         );
     }
 
-    function _requireActiveCredential(ZKStandingCredentialRecord storage credential, uint256 credentialId) internal view {
+    function _validateCredentialEvidenceLifecycle(
+        ZKStandingComputationRegistry.StandingProofReceipt memory proofReceipt,
+        AVADataTypes.Action action
+    ) internal view {
+        AVARulePackageRegistry.RulePackage memory rulePackage = zkStandingComputationRegistry.rulePackageRegistry()
+            .getRulePackageById(proofReceipt.packageId);
+        if (rulePackage.workflowKey != proofReceipt.workflowKey) {
+            revert AVADataTypes.InvalidState(proofReceipt.packageId);
+        }
+        IStandingFormulaRegistry formulaRegistry = zkStandingComputationRegistry.standingFormulaRegistry();
+        IStandingFormulaRegistry.StandingComputationStatementRecord memory statement =
+            formulaRegistry.getStandingComputationStatement(proofReceipt.standingComputationStatementId);
+        IStandingFormulaRegistry.SourceSetCommitmentRecord memory commitment =
+            formulaRegistry.getSourceSetCommitment(statement.sourceSetCommitmentId);
+        IStandingFormulaRegistry.SourceSetCompletenessAttestationRecord memory attestation =
+            formulaRegistry.getSourceSetCompletenessAttestation(statement.sourceSetCompletenessAttestationId);
+        if (
+            statement.packageId != proofReceipt.packageId || commitment.packageId != proofReceipt.packageId
+                || attestation.packageId != proofReceipt.packageId
+        ) {
+            revert AVADataTypes.InvalidState(proofReceipt.standingComputationStatementId);
+        }
+        _validateCredentialEvidenceReceipt(rulePackage, commitment.evidenceReceiptId, action);
+        if (attestation.evidenceReceiptId != commitment.evidenceReceiptId) {
+            _validateCredentialEvidenceReceipt(rulePackage, attestation.evidenceReceiptId, action);
+        }
+        if (
+            statement.evidenceReceiptId != commitment.evidenceReceiptId
+                && statement.evidenceReceiptId != attestation.evidenceReceiptId
+        ) {
+            _validateCredentialEvidenceReceipt(rulePackage, statement.evidenceReceiptId, action);
+        }
+    }
+
+    function _validateCredentialEvidenceReceipt(
+        AVARulePackageRegistry.RulePackage memory rulePackage,
+        uint256 evidenceReceiptId,
+        AVADataTypes.Action action
+    ) internal view {
+        rulePackage.evidenceLifecycleModule
+            .validateEvidenceLifecycle(
+                rulePackage.workflowKey,
+                action,
+                evidenceReceiptId,
+                AVADataTypes.EvidenceLifecycleKind.None,
+                0,
+                bytes32(0),
+                msg.sender
+            );
+    }
+
+    function _requireActiveCredential(ZKStandingCredentialRecord storage credential, uint256 credentialId)
+        internal
+        view
+    {
         if (credential.id == 0) revert AVADataTypes.UnknownReference(credentialId);
         if (!_isActiveCredential(credential)) revert AVADataTypes.InvalidState(credentialId);
     }
@@ -468,6 +533,16 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
     function _isActiveCredential(ZKStandingCredentialRecord memory credential) internal view returns (bool) {
         return credential.id != 0 && credential.status == AVADataTypes.StandingCredentialStatus.Active
             && block.timestamp < credential.expiresAt;
+    }
+
+    function _isSubjectLifecycleCompatible(bytes32 subjectCommitment) internal view returns (bool) {
+        try authorityMatrix.roleRegistry().getSubject(subjectCommitment) returns (
+            AVADataTypes.RoleSubject memory subject
+        ) {
+            return subject.active;
+        } catch {
+            return true;
+        }
     }
 
     function _recordSettlementBoundSuspension(
@@ -489,8 +564,7 @@ contract ZKStandingCredentialRegistry is IZKStandingCredentialIssuer {
             valueSettlementExecutor.getValueSettlement(request.settlementId);
         if (
             settlement.sourceType != request.sourceType || settlement.sourceRecordId != request.sourceRecordId
-                || settlement.packageId != credential.packageId
-                || settlement.subjectId != credential.subjectCommitment
+                || settlement.packageId != credential.packageId || settlement.subjectId != credential.subjectCommitment
                 || !_standingSettlementKindMatches(request.kind, settlement.kind)
         ) {
             revert AVADataTypes.InvalidState(credentialId);

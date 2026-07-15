@@ -5,6 +5,7 @@ import {AVADataTypes} from "../AVADataTypes.sol";
 
 interface IStandingFormulaRegistry {
     struct StandingFormulaInput {
+        bytes32 appId;
         bytes32 workflowKey;
         bytes32 vectorKey;
         uint64 formulaVersion;
@@ -20,6 +21,7 @@ interface IStandingFormulaRegistry {
 
     struct StandingFormulaRecord {
         uint256 id;
+        bytes32 appId;
         bytes32 workflowKey;
         uint256 packageId;
         bytes32 vectorKey;
@@ -54,6 +56,7 @@ interface IStandingFormulaRegistry {
         uint256 formulaId;
         bytes32 workflowKey;
         uint256 packageId;
+        uint256 standingRevision;
         bytes32 subjectCommitment;
         bytes32 vectorKey;
         bytes32 categoryHash;
@@ -85,6 +88,7 @@ interface IStandingFormulaRegistry {
         uint256 formulaId;
         bytes32 workflowKey;
         uint256 packageId;
+        uint256 standingRevision;
         bytes32 subjectCommitment;
         bytes32 vectorKey;
         bytes32 categoryHash;
@@ -130,6 +134,7 @@ interface IStandingFormulaRegistry {
         uint256 formulaId;
         bytes32 workflowKey;
         uint256 packageId;
+        uint256 standingRevision;
         bytes32 subjectCommitment;
         bytes32 vectorKey;
         bytes32 categoryHash;
@@ -187,6 +192,7 @@ interface IStandingFormulaRegistry {
     ) external;
 
     function proofInputMatchesRegisteredCommitment(
+        bytes32 appId,
         bytes32 workflowKey,
         bytes32 subjectCommitment,
         bytes32 vectorKey,
@@ -198,6 +204,7 @@ interface IStandingFormulaRegistry {
     ) external view returns (bool);
 
     function getSourceSetCommitmentIdForProofInput(
+        bytes32 appId,
         bytes32 workflowKey,
         bytes32 subjectCommitment,
         bytes32 vectorKey,

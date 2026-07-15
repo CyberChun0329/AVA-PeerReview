@@ -1,18 +1,16 @@
 # Demo Scenarios
 
-This file defines the demo flows covered by the current tests and by the local
-Foundry demo script.
+This file defines the canonical demo flows and identifies the older retained
+regression scenarios separately.
 
 The scenarios are examples for a peer review technical demo and early sample
 of the AVA protocol. They are not production peer-review, publication, payment,
 queue, disclosure-reveal, or sanction workflows.
 
-`script/AVADemoScenario.s.sol` is a baseline runtime harness. It demonstrates
-core review intake, challenge handling, bounded consequence, standing update,
-allocation execution, and audit receipt formation. More advanced ZK standing,
-standing-credential, settlement, recovery, and external-operation surfaces are
-covered by tests and current architecture docs rather than folded into the
-single baseline script.
+Cross-application behavior is verified in Foundry tests rather than a public
+second-application script. `test/helpers/SecondaryTestApp.sol` supplies neutral
+roles and objects solely to test namespace, package, subject, evidence, state,
+challenge, proof, and downstream-record isolation.
 
 `script/AVACanonicalTrace.s.sol` is the paper/model handoff trace harness.
 Run `AVACanonicalTrace --sig "runTrace()" --offline` to export four
@@ -23,12 +21,86 @@ being rewritten automatically by the script. These traces name records and
 transitions only; they do not encode sanction execution, truth decisions,
 manuscript acceptance, merit scoring, or publication outcomes.
 
-The script runtime command that avoids the normal sandbox Foundry/macOS
-proxy/signature panic is:
+The canonical runtime command is:
 
 ```bash
-forge script script/AVADemoScenario.s.sol:AVADemoScenario --sig "run()" --offline
+forge script script/AVACanonicalTrace.s.sol:AVACanonicalTrace --sig "runTrace()" --offline
 ```
+
+`script/AVADemoScenario.s.sol` exercises the pre-separation stack and is
+available only through `FOUNDRY_PROFILE=retained`. It is not evidence for the
+current canonical application/Core separation.
+
+## Canonical Trace Scenarios
+
+```mermaid
+flowchart TD
+    Review["Review governed object"] --> ReviewState["Review recognised state"]
+    ReviewState --> Vest["Authorised vesting transition"]
+    ReviewState --> ChallengeObject["Challenge governed object"]
+    ChallengeObject --> ChallengeState["Challenge recognised state under independent package"]
+    ChallengeState --> Lifecycle["File, screen, resolve"]
+    Lifecycle -->|"Upheld"| Correction["Source-bound target correction"]
+    Lifecycle -->|"Malicious or fabricated"| RecordOnly["Outcome record only"]
+    Correction --> Downstream["Bounded consequence and standing records against challenge state"]
+    Correction --> Restoration["Explicit lineage-bound restoration"]
+```
+
+The generated trace contains four deterministic scenarios:
+
+The review and challenge packages in this trace each bind the 12 capabilities
+used by these scenarios. Extended standing and recovery test fixtures bind
+additional capabilities separately; the trace is not intended to instantiate
+the entire optional capability catalogue.
+
+1. `honest_review_vesting`: a review object forms a recognised state and reaches
+   `Vested` only through an authorised transition.
+2. `upheld_recursive_challenge_and_downstream_records`: a challenge has its own
+   object, recognised state, evidence, and package; an upheld decision corrects
+   the target through its historical package and vests the challenge state
+   before bounded downstream records use it.
+3. `malicious_or_fabricated_challenge_record_only`: the outcome is recorded but
+   does not automatically create a consequence or standing update.
+4. `explicit_restoration_with_lineage`: restoration appends both challenge and
+   recognised-state transition history instead of overwriting status.
+
+## Retained Regression Scenarios
+
+The numbered scenarios below document the earlier root-level implementation.
+They remain useful regression coverage, but their contract names and entrypoints
+must not be treated as the canonical architecture.
+
+## Scenario 0: Application Isolation
+
+Purpose: prove that Peer Review and a domain-neutral test fixture can share one
+Core while keeping application vocabulary, subjects, evidence, package
+pointers, objects, recognised states, challenges, and downstream records
+isolated.
+
+```mermaid
+flowchart LR
+    Core["Domain-neutral AVA Core"]
+    Peer["PeerReviewApplicationModule"]
+    Secondary["SecondaryTestApplicationModule (test only)"]
+    PeerFlow["Manuscript -> Review -> Recognised State"]
+    SecondaryFlow["Root Object -> Submission -> Challenge -> Allocation"]
+    Peer --> Core
+    Secondary --> Core
+    Core --> PeerFlow
+    Core --> SecondaryFlow
+```
+
+Current evidence:
+
+- both applications deliberately reuse one `workflowKey` without pointer
+  collision;
+- package supersession in the secondary fixture does not move the Peer Review
+  pointer;
+- old states continue to dispatch through their historical package;
+- cross-application object, evidence, challenge, transition, proof, and
+  downstream references fail closed;
+- a 512x128 handler-based invariant interleaves package replacement with
+  cross-application attack attempts.
 
 ## Scenario 1: Register A Sealed Review Contribution
 
@@ -96,21 +168,25 @@ sequenceDiagram
     participant Challenger
     participant Editor
     participant Panel
+    participant CW as AVAChallengeWorkflow
     participant SM as AVAStateMachine
 
-    Challenger->>SM: fileChallenge(challengeableRecognisedStateId)
-    SM-->>Challenger: ChallengeRecord(status=ConcernFiled)
-    Editor->>SM: screenChallenge(challengeId)
-    SM-->>Editor: transition AdmissibilityScreened
-    Panel->>SM: resolveChallenge(challengeId, outcome, toStatus)
-    SM-->>Panel: transition OutcomeResolved
-    Panel->>SM: applyRestoration(challengeId)
-    SM-->>Panel: transition RestorationRecorded
+    Challenger->>CW: fileChallenge(challengeWorkflowKey, targetStateId)
+    CW-->>Challenger: ChallengeRecord(status=ConcernFiled)
+    Editor->>CW: screenChallenge(challengeId)
+    CW-->>Editor: transition AdmissibilityScreened
+    Panel->>CW: resolveChallenge(challengeId, outcome, toStatus)
+    CW->>SM: request restricted target-state transition if upheld
+    CW-->>Panel: transition OutcomeResolved
+    Panel->>CW: applyRestoration(challengeId)
+    CW->>SM: request causal restoration transition
+    CW-->>Panel: transition RestorationRecorded
 ```
 
 Expected checks:
 
-- challenge can target only an existing `Challengeable` recognised state;
+- challenge can target only an existing `Challengeable`, `Vested`, or
+  `Restored` recognised state;
 - challenge cannot target a raw review contribution;
 - filing a challenge does not mutate the recognised state;
 - editor can screen but cannot resolve;
@@ -119,6 +195,9 @@ Expected checks:
 - `RejectedGoodFaith`, `Negligent`, and `MaliciousOrFabricated` stay distinct;
 - malicious/fabricated outcome records abuse finding but executes no sanction;
 - restoration is explicit and preserves history;
+- stale restoration cannot overwrite a later recognised-state mutation;
+- challenge validation and decision authority use the challenge's fixed
+  package, while target-state mutation uses the target state's fixed package;
 - no standing, consequence, reward, allocation, or publication effect is
   created automatically.
 
@@ -164,7 +243,7 @@ Current evidence:
 - Covered by `testStandingAndAllocationRejectRawIdsAndProvisionalState`.
 - Covered by `testStandingAndAllocationRejectAllDisallowedRecognisedStateStatuses`.
 - Covered by `testStandingAndAllocationRejectZeroRequiredFields`.
-- Covered by `testLegacyStandingInputCannotBypassStepFourBoundaries`.
+- Covered by `testRemovedStandingInputEntrypointCannotBeCalled`.
 
 ## Scenario 5: Bounded Consequence Record From Authorised Recognised State
 
@@ -261,7 +340,8 @@ Expected checks:
 
 Current evidence:
 
-- Covered by `testRulePackagesBindTwoAVAWorkflowsToSameRecognisedStateSubstrate`.
+- Covered by `testM4MultiWorkflowScenarioPreservesSharedSubstrateAndBoundaries`.
+- Covered by `testChallengeWorkflowCanDifferFromTargetRecognisedStatePackage`.
 - Covered by `testDisclosureModuleCanVaryByStageActionAndObject`.
 - Covered by `testAllocationAndConsequenceModulesAreReplaceableAndRecordOnly`.
 
@@ -306,7 +386,7 @@ Current evidence:
 
 - tests cover package-bound standing proof receipts;
 - tests reject proof replay and bad subject binding;
-- tests reject cross-package proof reuse after workflow re-registration;
+- tests reject cross-package proof reuse after workflow supersession;
 - tests require registered formula and source-set commitment records;
 - tests reject unauthorised, wrong-package, wrong-evidence, and wrong-verifier
   standing formula paths;

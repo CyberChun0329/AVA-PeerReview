@@ -2,12 +2,13 @@
 pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "../AVADataTypes.sol";
+import {IRuleModuleIdentity} from "./IRuleModuleIdentity.sol";
 
-interface IRulePackageLifecycleModule {
+interface IRulePackageLifecycleModule is IRuleModuleIdentity {
     struct RulePackageLifecycleContext {
         bytes32 workflowKey;
         bytes32 modulesHash;
-        bytes32 modulesCodeHash;
+        bytes32 modulesIdentityHash;
         AVADataTypes.RulePackageLifecycleKind kind;
         uint64 version;
         bytes32 compatibilityKey;
@@ -16,7 +17,7 @@ interface IRulePackageLifecycleModule {
         bytes32 targetWorkflowKey;
         uint256 targetPackageId;
         bytes32 targetModulesHash;
-        bytes32 targetModulesCodeHash;
+        bytes32 targetModulesIdentityHash;
         uint64 targetVersion;
         bytes32 targetCompatibilityKey;
         AVADataTypes.Role authorityRole;

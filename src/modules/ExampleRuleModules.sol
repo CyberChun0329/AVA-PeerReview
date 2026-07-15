@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {IAttributionModule} from "../interfaces/IAttributionModule.sol";
 import {IVerificationModule} from "../interfaces/IVerificationModule.sol";
@@ -18,43 +20,41 @@ import {AVAStateMachine} from "../AVAStateMachine.sol";
 import {ConsequenceExecutor} from "../ConsequenceExecutor.sol";
 import {StandingCredentialRegistry} from "../StandingCredentialRegistry.sol";
 
-contract SubjectSaltAttributionModule is IAttributionModule {
-    function validateAttribution(
-        bytes32 workflowKey,
-        AVADataTypes.Role,
-        AVADataTypes.AVAStage,
-        bytes32 objectId,
-        bytes32 subjectId,
-        uint256 evidenceReceiptId
-    ) external pure returns (bytes32 attributedObjectId) {
-        if (workflowKey == bytes32(0) || objectId == bytes32(0) || subjectId == bytes32(0) || evidenceReceiptId == 0) {
+contract SubjectSaltAttributionModule is IAttributionModule, RuleModuleIdentity {
+    function validateAttribution(AttributionContext calldata context)
+        external
+        pure
+        returns (bytes32 attributedObjectId)
+    {
+        if (
+            context.workflowKey == bytes32(0) || context.packageId == 0 || context.objectId == bytes32(0)
+                || context.subjectId == bytes32(0) || context.evidenceReceiptId == 0 || context.actor == address(0)
+        ) {
             revert AVADataTypes.EmptyValue();
         }
-        return keccak256(abi.encode(workflowKey, objectId, subjectId));
+        return keccak256(abi.encode(context.packageId, context.action, context.objectId, context.subjectId));
     }
 }
 
-contract EvidenceThresholdVerificationModule is IVerificationModule {
+contract EvidenceThresholdVerificationModule is IVerificationModule, RuleModuleIdentity {
     uint256 public immutable minimumEvidenceReceiptId;
 
     constructor(uint256 minimumEvidenceReceiptId_) {
         minimumEvidenceReceiptId = minimumEvidenceReceiptId_;
     }
 
-    function validateVerification(
-        bytes32 workflowKey,
-        AVADataTypes.Role,
-        AVADataTypes.AVAStage,
-        bytes32 objectId,
-        uint256 evidenceReceiptId
-    ) external view {
-        if (workflowKey == bytes32(0) || objectId == bytes32(0) || evidenceReceiptId < minimumEvidenceReceiptId) {
-            revert AVADataTypes.InvalidState(evidenceReceiptId);
+    function validateVerification(VerificationContext calldata context) external view {
+        if (
+            context.workflowKey == bytes32(0) || context.packageId == 0 || context.objectId == bytes32(0)
+                || context.subjectId == bytes32(0) || context.actor == address(0)
+                || context.evidenceReceiptId < minimumEvidenceReceiptId
+        ) {
+            revert AVADataTypes.InvalidState(context.evidenceReceiptId);
         }
     }
 }
 
-contract NoFrozenTransitionRuleModule is ITransitionRuleModule {
+contract NoFrozenTransitionRuleModule is ITransitionRuleModule, RuleModuleIdentity {
     function validateTransition(
         bytes32 workflowKey,
         AVADataTypes.Action,
@@ -69,7 +69,11 @@ contract NoFrozenTransitionRuleModule is ITransitionRuleModule {
     }
 }
 
-contract MinimumChallengeWindowTransitionModule is ITransitionRuleModule, IChallengeWindowRuleModule {
+contract MinimumChallengeWindowTransitionModule is
+    ITransitionRuleModule,
+    IChallengeWindowRuleModule,
+    RuleModuleIdentity
+{
     uint64 public immutable MINIMUM_DURATION;
 
     constructor(uint64 minimumDuration_) {
@@ -112,7 +116,7 @@ contract MinimumChallengeWindowTransitionModule is ITransitionRuleModule, IChall
     }
 }
 
-contract PanelOnlyChallengeLifecycleModule is IChallengeLifecycleModule {
+contract PanelOnlyChallengeLifecycleModule is IChallengeLifecycleModule, RuleModuleIdentity {
     function validateChallengeAction(ChallengeLifecycleContext calldata context) external pure {
         if (context.workflowKey == bytes32(0)) revert AVADataTypes.EmptyValue();
         if (
@@ -125,7 +129,7 @@ contract PanelOnlyChallengeLifecycleModule is IChallengeLifecycleModule {
     }
 }
 
-contract TypedEvidencePolicyModule is IEvidencePolicyModule {
+contract TypedEvidencePolicyModule is IEvidencePolicyModule, RuleModuleIdentity {
     bytes32 public immutable requiredEvidenceTypeHash;
 
     constructor(bytes32 requiredEvidenceTypeHash_) {
@@ -148,7 +152,7 @@ contract TypedEvidencePolicyModule is IEvidencePolicyModule {
     }
 }
 
-contract HashAnchoredAuditAdapter is IAuditAdapter {
+contract HashAnchoredAuditAdapter is IAuditAdapter, RuleModuleIdentity {
     function validateAuditRecord(
         bytes32 workflowKey,
         AVADataTypes.Role,
@@ -167,7 +171,7 @@ contract HashAnchoredAuditAdapter is IAuditAdapter {
     }
 }
 
-contract EditorialReferenceAdapter is IEditorialSystemAdapter {
+contract EditorialReferenceAdapter is IEditorialSystemAdapter, RuleModuleIdentity {
     function validateEditorialReference(
         bytes32 workflowKey,
         AVADataTypes.Role actingRole,
@@ -186,7 +190,7 @@ contract EditorialReferenceAdapter is IEditorialSystemAdapter {
     }
 }
 
-contract ProceduralEditorialAuthorityModule is IResidualEditorialAuthorityModule {
+contract ProceduralEditorialAuthorityModule is IResidualEditorialAuthorityModule, RuleModuleIdentity {
     AVADataTypes.Action public immutable allowedAction;
 
     constructor(AVADataTypes.Action allowedAction_) {
@@ -195,8 +199,9 @@ contract ProceduralEditorialAuthorityModule is IResidualEditorialAuthorityModule
 
     function validateResidualEditorialAuthority(ResidualEditorialAuthorityContext calldata context) external view {
         if (
-            context.workflowKey == bytes32(0) || context.objectId == bytes32(0) || context.evidenceReceiptId == 0
-                || context.authorityId == bytes32(0) || context.actor == address(0)
+            context.workflowKey == bytes32(0) || context.packageId == 0 || context.targetPackageId == 0
+                || context.objectId == bytes32(0) || context.evidenceReceiptId == 0 || context.authorityId == bytes32(0)
+                || context.actor == address(0) || context.decisionHash == bytes32(0)
         ) {
             revert AVADataTypes.EmptyValue();
         }
@@ -207,23 +212,20 @@ contract ProceduralEditorialAuthorityModule is IResidualEditorialAuthorityModule
     }
 }
 
-contract StructuredResidualEditorialAuthorityModule is IResidualEditorialAuthorityModule {
+/// @notice Illustrative static validator for authority shapes that need no approval receipts.
+/// @dev Threshold, multisig, co-signature, and conflict-exclusion policies must use
+/// receipt-backed modules such as `ApprovalReceiptAuthorityModule`; they cannot
+/// be represented by constructor-supplied approval counts here.
+contract IllustrativeStaticAuthorityShapeModule is IResidualEditorialAuthorityModule, RuleModuleIdentity {
     enum PolicyKind {
-        SingleRole,
-        ThresholdPanel,
-        Multisig,
-        InstitutionalCoSignature,
-        ConflictExcludedPanel,
-        EmergencyPause
+        SingleAuthority,
+        EmergencyGate
     }
 
     PolicyKind public immutable POLICY_KIND;
     AVADataTypes.Role public immutable REQUIRED_ROLE;
     AVADataTypes.Action public immutable REQUIRED_ACTION;
     bytes32 public immutable PRIMARY_AUTHORITY_ID;
-    bytes32 public immutable SUPPORTING_AUTHORITY_ID;
-    uint8 public immutable REQUIRED_THRESHOLD;
-    uint8 public immutable OBSERVED_APPROVAL_COUNT;
     bool public immutable EMERGENCY_WINDOW_OPEN;
 
     constructor(
@@ -231,70 +233,32 @@ contract StructuredResidualEditorialAuthorityModule is IResidualEditorialAuthori
         AVADataTypes.Role requiredRole_,
         AVADataTypes.Action requiredAction_,
         bytes32 primaryAuthorityId_,
-        bytes32 supportingAuthorityId_,
-        uint8 requiredThreshold_,
-        uint8 observedApprovalCount_,
         bool emergencyWindowOpen_
     ) {
+        if (requiredRole_ == AVADataTypes.Role.None || primaryAuthorityId_ == bytes32(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
         POLICY_KIND = policyKind_;
         REQUIRED_ROLE = requiredRole_;
         REQUIRED_ACTION = requiredAction_;
         PRIMARY_AUTHORITY_ID = primaryAuthorityId_;
-        SUPPORTING_AUTHORITY_ID = supportingAuthorityId_;
-        REQUIRED_THRESHOLD = requiredThreshold_;
-        OBSERVED_APPROVAL_COUNT = observedApprovalCount_;
         EMERGENCY_WINDOW_OPEN = emergencyWindowOpen_;
     }
 
     function validateResidualEditorialAuthority(ResidualEditorialAuthorityContext calldata context) external view {
         if (
-            context.workflowKey == bytes32(0) || context.objectId == bytes32(0) || context.evidenceReceiptId == 0
-                || context.authorityId == bytes32(0) || context.actor == address(0)
+            context.workflowKey == bytes32(0) || context.packageId == 0 || context.targetPackageId == 0
+                || context.objectId == bytes32(0) || context.evidenceReceiptId == 0 || context.authorityId == bytes32(0)
+                || context.actor == address(0) || context.decisionHash == bytes32(0)
         ) {
             revert AVADataTypes.EmptyValue();
         }
         if (context.actingRole != REQUIRED_ROLE) revert AVADataTypes.InvalidRole();
         if (context.action != REQUIRED_ACTION) revert AVADataTypes.InvalidState(uint256(context.action));
+        _requirePrimaryAuthority(context.authorityId);
 
-        if (POLICY_KIND == PolicyKind.SingleRole) {
-            _requirePrimaryAuthority(context.authorityId);
-            return;
-        }
-        if (POLICY_KIND == PolicyKind.ThresholdPanel) {
-            _requirePrimaryAuthority(context.authorityId);
-            if (
-                context.actingRole != AVADataTypes.Role.Panel || REQUIRED_THRESHOLD == 0
-                    || OBSERVED_APPROVAL_COUNT < REQUIRED_THRESHOLD
-            ) {
-                revert AVADataTypes.InvalidState(uint256(context.action));
-            }
-            return;
-        }
-        if (POLICY_KIND == PolicyKind.Multisig) {
-            _requirePrimaryAuthority(context.authorityId);
-            if (SUPPORTING_AUTHORITY_ID == bytes32(0) || OBSERVED_APPROVAL_COUNT < 2) {
-                revert AVADataTypes.InvalidState(uint256(context.action));
-            }
-            return;
-        }
-        if (POLICY_KIND == PolicyKind.InstitutionalCoSignature) {
-            _requirePrimaryAuthority(context.authorityId);
-            if (SUPPORTING_AUTHORITY_ID == bytes32(0)) revert AVADataTypes.EmptyValue();
-            return;
-        }
-        if (POLICY_KIND == PolicyKind.ConflictExcludedPanel) {
-            if (
-                context.actingRole != AVADataTypes.Role.Panel || SUPPORTING_AUTHORITY_ID == bytes32(0)
-                    || context.authorityId == SUPPORTING_AUTHORITY_ID
-            ) {
-                revert AVADataTypes.InvalidState(uint256(context.action));
-            }
-            return;
-        }
-        if (POLICY_KIND == PolicyKind.EmergencyPause) {
-            _requirePrimaryAuthority(context.authorityId);
+        if (POLICY_KIND == PolicyKind.EmergencyGate) {
             if (!EMERGENCY_WINDOW_OPEN) revert AVADataTypes.InvalidState(uint256(context.action));
-            return;
         }
     }
 
@@ -305,7 +269,7 @@ contract StructuredResidualEditorialAuthorityModule is IResidualEditorialAuthori
     }
 }
 
-contract DisciplineFieldPolicyModule is IFieldPolicyModule {
+contract DisciplineFieldPolicyModule is IFieldPolicyModule, RuleModuleIdentity {
     AVADataTypes.AVAStage public immutable requiredStage;
 
     constructor(AVADataTypes.AVAStage requiredStage_) {
@@ -327,7 +291,7 @@ contract DisciplineFieldPolicyModule is IFieldPolicyModule {
     }
 }
 
-contract SubjectRateLimitModule is IAntiAbuseModule, IChallengeRateLimitModule {
+contract SubjectRateLimitModule is IAntiAbuseModule, IChallengeRateLimitModule, RuleModuleIdentity {
     function validateUse(
         bytes32 workflowKey,
         AVADataTypes.Role,
@@ -363,7 +327,7 @@ contract SubjectRateLimitModule is IAntiAbuseModule, IChallengeRateLimitModule {
     }
 }
 
-contract RestrictionAwareChallengeIntakeModule is IAntiAbuseModule, IChallengeRateLimitModule {
+contract RestrictionAwareChallengeIntakeModule is IAntiAbuseModule, IChallengeRateLimitModule, RuleModuleIdentity {
     ConsequenceExecutor public immutable CONSEQUENCE_EXECUTOR;
     AVAStateMachine public immutable STATE_MACHINE;
 
@@ -406,15 +370,15 @@ contract RestrictionAwareChallengeIntakeModule is IAntiAbuseModule, IChallengeRa
         if (state.workflowKey != workflowKey) revert AVADataTypes.InvalidState(challengedRecognisedStateId);
         if (
             CONSEQUENCE_EXECUTOR.activeEligibilityRestrictionId(
-                state.packageId, challengerSubjectId, AVADataTypes.EligibilityRestrictionKind.ChallengeIntake
-            ) != 0
+                    state.packageId, challengerSubjectId, AVADataTypes.EligibilityRestrictionKind.ChallengeIntake
+                ) != 0
         ) {
             revert AVADataTypes.InvalidState(challengedRecognisedStateId);
         }
     }
 }
 
-contract CredentialGatedPanelModule is IResidualEditorialAuthorityModule {
+contract CredentialGatedPanelModule is IResidualEditorialAuthorityModule, RuleModuleIdentity {
     StandingCredentialRegistry public immutable CREDENTIAL_REGISTRY;
     AVAStateMachine public immutable STATE_MACHINE;
     AVADataTypes.Action public immutable GATED_ACTION;
@@ -430,7 +394,9 @@ contract CredentialGatedPanelModule is IResidualEditorialAuthorityModule {
         bytes32 categoryHash_,
         int256 requiredThreshold_
     ) {
-        if (vectorKey_ == bytes32(0) || categoryHash_ == bytes32(0)) revert AVADataTypes.EmptyValue();
+        if (vectorKey_ == bytes32(0) || categoryHash_ == bytes32(0)) {
+            revert AVADataTypes.EmptyValue();
+        }
         CREDENTIAL_REGISTRY = credentialRegistry_;
         STATE_MACHINE = stateMachine_;
         GATED_ACTION = gatedAction_;
@@ -441,8 +407,9 @@ contract CredentialGatedPanelModule is IResidualEditorialAuthorityModule {
 
     function validateResidualEditorialAuthority(ResidualEditorialAuthorityContext calldata context) external view {
         if (
-            context.workflowKey == bytes32(0) || context.objectId == bytes32(0) || context.evidenceReceiptId == 0
-                || context.authorityId == bytes32(0) || context.actor == address(0)
+            context.workflowKey == bytes32(0) || context.packageId == 0 || context.targetPackageId == 0
+                || context.objectId == bytes32(0) || context.evidenceReceiptId == 0 || context.authorityId == bytes32(0)
+                || context.actor == address(0) || context.decisionHash == bytes32(0)
         ) {
             revert AVADataTypes.EmptyValue();
         }
@@ -451,13 +418,12 @@ contract CredentialGatedPanelModule is IResidualEditorialAuthorityModule {
 
         AVADataTypes.RecognisedStateRecord memory state = STATE_MACHINE.getRecognisedState(context.recognisedStateId);
         if (state.workflowKey != context.workflowKey) revert AVADataTypes.InvalidState(context.recognisedStateId);
-        uint256 credentialId =
-            CREDENTIAL_REGISTRY.activeStandingCredentialId(state.packageId, context.authorityId, VECTOR_KEY, CATEGORY_HASH);
-        if (
-            !CREDENTIAL_REGISTRY.credentialProvesSubjectStanding(
+        uint256 credentialId = CREDENTIAL_REGISTRY.activeStandingCredentialId(
+            state.packageId, context.authorityId, VECTOR_KEY, CATEGORY_HASH
+        );
+        if (!CREDENTIAL_REGISTRY.credentialProvesSubjectStanding(
                 credentialId, state.packageId, context.authorityId, VECTOR_KEY, CATEGORY_HASH, REQUIRED_THRESHOLD
-            )
-        ) {
+            )) {
             revert AVADataTypes.InvalidState(context.recognisedStateId);
         }
     }

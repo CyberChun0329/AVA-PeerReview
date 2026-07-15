@@ -52,7 +52,10 @@ library AVADataTypes {
         RegisterSourceSetCompletenessAttestation,
         RegisterStandingComputationStatement,
         SupersedeStandingComputationStatement,
-        InvalidateStandingComputationStatement
+        InvalidateStandingComputationStatement,
+        RegisterStandingProof,
+        RegisterStandingSourceSetCommitment,
+        RecordStandingCommitmentRevision
     }
 
     enum RecognisedStateStatus {
@@ -160,7 +163,8 @@ library AVADataTypes {
     enum ExecutionSourceType {
         None,
         AllocationRecord,
-        ConsequenceRecord
+        ConsequenceRecord,
+        ValueSettlementRecord
     }
 
     enum ValueSettlementKind {
@@ -243,6 +247,14 @@ library AVADataTypes {
         ConsequenceRecord
     }
 
+    enum AttestationTargetKind {
+        None,
+        EvidenceReceipt,
+        RecognisedState,
+        RecognisedStateTransition,
+        ChallengeTransition
+    }
+
     enum StandingCredentialStatus {
         None,
         Active,
@@ -256,6 +268,18 @@ library AVADataTypes {
         Active,
         Superseded,
         Invalidated
+    }
+
+    enum StandingRevisionReason {
+        None,
+        RecognisedStateTransition,
+        ChallengeResolution,
+        StandingUpdate,
+        StandingPenalty,
+        EligibilityRestriction,
+        RewardSettlement,
+        RecoverySettlement,
+        CommitmentRevision
     }
 
     enum StandingRelevantSettlementKind {
@@ -273,7 +297,7 @@ library AVADataTypes {
         EligibilityRestoration
     }
 
-    enum StandingPenaltyKind {
+    enum GovernanceFindingKind {
         None,
         AcademicFraud,
         IrresponsibleReview,
@@ -300,6 +324,7 @@ library AVADataTypes {
 
     struct EvidenceReceipt {
         uint256 id;
+        bytes32 appId;
         bytes32 workflowKey;
         uint256 packageId;
         bytes32 commitment;
@@ -317,6 +342,7 @@ library AVADataTypes {
 
     struct DisclosurePolicy {
         uint256 id;
+        bytes32 appId;
         string label;
         string uri;
         Role authorityRole;
@@ -327,6 +353,9 @@ library AVADataTypes {
 
     struct ManuscriptRecord {
         uint256 id;
+        bytes32 appId;
+        bytes32 workflowKey;
+        uint256 packageId;
         bytes32 offchainRef;
         string uri;
         Role registeredRole;
@@ -336,6 +365,7 @@ library AVADataTypes {
 
     struct RecognisedStateRecord {
         uint256 id;
+        bytes32 appId;
         bytes32 workflowKey;
         uint256 packageId;
         AVAStage stage;
@@ -345,11 +375,13 @@ library AVADataTypes {
         uint256 disclosurePolicyId;
         bytes32 authorityId;
         RecognisedStateStatus status;
+        uint256 lastTransitionId;
         address registeredBy;
     }
 
     struct ReviewContributionRecord {
         uint256 id;
+        bytes32 appId;
         bytes32 workflowKey;
         uint256 packageId;
         uint256 manuscriptId;
@@ -363,12 +395,18 @@ library AVADataTypes {
 
     struct ChallengeRecord {
         uint256 id;
+        bytes32 appId;
         bytes32 workflowKey;
         uint256 packageId;
+        bytes32 targetWorkflowKey;
+        uint256 targetPackageId;
         uint256 challengedRecognisedStateId;
+        bytes32 attributedObjectId;
         bytes32 challengerSubjectId;
         uint256 evidenceReceiptId;
         uint256 disclosurePolicyId;
+        RecognisedStateStatus targetStatusAtFiling;
+        uint256 targetTransitionIdAtFiling;
         ChallengeLifecycleStatus status;
         ChallengeOutcome outcome;
         uint256 lastTransitionId;
@@ -379,8 +417,11 @@ library AVADataTypes {
         uint256 id;
         bytes32 workflowKey;
         uint256 packageId;
+        uint256 targetPackageId;
         uint256 challengeId;
         uint256 challengedRecognisedStateId;
+        uint256 targetTransitionIdBefore;
+        uint256 targetTransitionIdAfter;
         RecognisedStateStatus fromStatus;
         RecognisedStateStatus toStatus;
         ChallengeTransitionKind transitionKind;
@@ -397,6 +438,7 @@ library AVADataTypes {
         uint256 id;
         uint256 recognisedStateId;
         uint256 packageId;
+        uint256 decisionPackageId;
         RecognisedStateStatus fromStatus;
         RecognisedStateStatus toStatus;
         Action action;
@@ -413,7 +455,12 @@ library AVADataTypes {
         uint256 id;
         uint256 recognisedStateId;
         uint256 packageId;
+        uint256 decisionPackageId;
         ConsequenceKind kind;
+        uint256 challengeId;
+        GovernanceFindingKind findingKind;
+        ChallengeOutcome challengeOutcome;
+        uint256 originSettlementId;
         bytes32 subjectId;
         address asset;
         address payer;
@@ -424,15 +471,6 @@ library AVADataTypes {
         uint256 evidenceReceiptId;
         Role authorityRole;
         bytes32 authorityId;
-        string uri;
-        address registeredBy;
-    }
-
-    struct StandingInputRecord {
-        uint256 id;
-        uint256 recognisedStateId;
-        bytes32 subjectId;
-        string dimension;
         string uri;
         address registeredBy;
     }
@@ -451,10 +489,21 @@ library AVADataTypes {
         address recordedBy;
     }
 
+    struct StandingRevisionRecord {
+        uint256 id;
+        uint256 packageId;
+        bytes32 subjectId;
+        uint256 revision;
+        StandingRevisionReason reason;
+        uint256 sourceRecordId;
+        address recordedBy;
+    }
+
     struct StandingComputationRecord {
         uint256 id;
         uint256 recognisedStateId;
         uint256 packageId;
+        uint256 standingRevision;
         bytes32 subjectId;
         string dimension;
         bytes32 vectorKey;
@@ -481,6 +530,7 @@ library AVADataTypes {
         uint256 recognisedStateId;
         bytes32 workflowKey;
         uint256 packageId;
+        uint256 standingRevision;
         bytes32 subjectId;
         address holder;
         string dimension;
@@ -552,6 +602,12 @@ library AVADataTypes {
         address actor;
     }
 
+    struct PenaltyConsequenceContext {
+        uint256 challengeId;
+        GovernanceFindingKind findingKind;
+        uint256 originSettlementId;
+    }
+
     struct StandingComputationContext {
         uint256 recognisedStateId;
         bytes32 subjectId;
@@ -576,13 +632,13 @@ library AVADataTypes {
         uint256 packageId;
         RulePackageLifecycleKind kind;
         bytes32 modulesHash;
-        bytes32 modulesCodeHash;
+        bytes32 modulesIdentityHash;
         uint64 version;
         bytes32 compatibilityKey;
         bytes32 targetWorkflowKey;
         uint256 targetPackageId;
         bytes32 targetModulesHash;
-        bytes32 targetModulesCodeHash;
+        bytes32 targetModulesIdentityHash;
         uint64 targetVersion;
         bytes32 targetCompatibilityKey;
         string dependencyURI;
@@ -590,6 +646,20 @@ library AVADataTypes {
         Role authorityRole;
         bytes32 authorityId;
         address recordedBy;
+    }
+
+    struct RulePackageSupersessionRecord {
+        uint256 id;
+        bytes32 appId;
+        bytes32 workflowKey;
+        uint256 previousPackageId;
+        uint256 newPackageId;
+        uint64 previousVersion;
+        uint64 newVersion;
+        bytes32 compatibilityKey;
+        bytes32 authorityId;
+        uint256 createdAt;
+        address createdBy;
     }
 
     struct ObjectMigrationReadinessRecord {
@@ -643,6 +713,7 @@ library AVADataTypes {
         uint256 id;
         ExecutionSourceType sourceType;
         uint256 sourceRecordId;
+        uint256 recognisedStateId;
         uint256 packageId;
         ValueSettlementKind kind;
         ValueSettlementStatus status;
@@ -654,6 +725,9 @@ library AVADataTypes {
         ValueExecutionMode sourceExecutionMode;
         ValueSettlementKind sourceSettlementKind;
         bytes32 sourceExecutionReference;
+        uint256 originSettlementId;
+        uint256 penaltyConsequenceId;
+        uint256 repaymentObligationId;
         bytes32 settlementContextHash;
         Role authorityRole;
         bytes32 authorityId;
@@ -664,8 +738,9 @@ library AVADataTypes {
     struct StandingPenaltyInputRecord {
         uint256 id;
         uint256 penaltyConsequenceId;
+        uint256 packageId;
         uint256 challengeId;
-        StandingPenaltyKind penaltyKind;
+        GovernanceFindingKind findingKind;
         ChallengeOutcome challengeOutcome;
         bytes32 subjectId;
         string dimension;
@@ -680,7 +755,9 @@ library AVADataTypes {
     struct EligibilityRestrictionRecord {
         uint256 id;
         uint256 penaltyConsequenceId;
+        uint256 packageId;
         uint256 challengeId;
+        GovernanceFindingKind findingKind;
         EligibilityRestrictionKind restrictionKind;
         ChallengeOutcome challengeOutcome;
         bytes32 subjectId;
@@ -690,6 +767,34 @@ library AVADataTypes {
         bytes32 authorityId;
         string uri;
         address recordedBy;
+    }
+
+    struct StandingPenaltyValidationContext {
+        uint256 penaltyConsequenceId;
+        uint256 packageId;
+        uint256 challengeId;
+        GovernanceFindingKind findingKind;
+        ChallengeOutcome challengeOutcome;
+        bytes32 subjectId;
+        string dimension;
+        int256 delta;
+        uint256 evidenceReceiptId;
+        bytes32 authorityId;
+        address actor;
+    }
+
+    struct EligibilityRestrictionValidationContext {
+        uint256 penaltyConsequenceId;
+        uint256 packageId;
+        uint256 challengeId;
+        GovernanceFindingKind findingKind;
+        ChallengeOutcome challengeOutcome;
+        EligibilityRestrictionKind restrictionKind;
+        bytes32 subjectId;
+        uint256 expiresAt;
+        uint256 evidenceReceiptId;
+        bytes32 authorityId;
+        address actor;
     }
 
     struct DisclosureExecutionRecord {
@@ -737,6 +842,8 @@ library AVADataTypes {
         uint256 id;
         bytes32 workflowKey;
         uint256 packageId;
+        AttestationTargetKind targetKind;
+        Action action;
         bytes32 objectId;
         uint256 evidenceReceiptId;
         bytes32 attestationHash;

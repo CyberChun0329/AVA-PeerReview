@@ -45,7 +45,9 @@ contract AllocationExecutor {
         return _executeAllocationWithExecution(
             actingRole,
             allocationKind,
-            _defaultValueExecutionContext(recognisedStateId, subjectId, amountOrUnits, evidenceReceiptId, authorityId, uri)
+            _defaultValueExecutionContext(
+                recognisedStateId, subjectId, amountOrUnits, evidenceReceiptId, authorityId, uri
+            )
         );
     }
 
@@ -68,7 +70,9 @@ contract AllocationExecutor {
     ) external returns (uint256 id) {
         return _recordRewardValueWithExecution(
             actingRole,
-            _defaultValueExecutionContext(recognisedStateId, subjectId, amountOrUnits, evidenceReceiptId, authorityId, uri)
+            _defaultValueExecutionContext(
+                recognisedStateId, subjectId, amountOrUnits, evidenceReceiptId, authorityId, uri
+            )
         );
     }
 
@@ -90,7 +94,9 @@ contract AllocationExecutor {
     ) external returns (uint256 id) {
         return _recordAdministrativePriorityWithExecution(
             actingRole,
-            _defaultValueExecutionContext(recognisedStateId, subjectId, amountOrUnits, evidenceReceiptId, authorityId, uri)
+            _defaultValueExecutionContext(
+                recognisedStateId, subjectId, amountOrUnits, evidenceReceiptId, authorityId, uri
+            )
         );
     }
 
@@ -107,7 +113,7 @@ contract AllocationExecutor {
         return allocationExecution;
     }
 
-    function _requireAllowedRecognisedState(uint256 recognisedStateId)
+    function _requireAllowedRecognisedState(uint256 recognisedStateId, AVADataTypes.AllocationKind allocationKind)
         internal
         view
         returns (AVADataTypes.RecognisedStateRecord memory recognisedState)
@@ -120,6 +126,20 @@ contract AllocationExecutor {
                 && status != AVADataTypes.RecognisedStateStatus.Voided
         ) {
             revert AVADataTypes.InvalidState(recognisedStateId);
+        }
+        if (
+            (allocationKind == AVADataTypes.AllocationKind.RewardValueRecord
+                    || allocationKind == AVADataTypes.AllocationKind.AdministrativeQueueRecord)
+                && status != AVADataTypes.RecognisedStateStatus.Vested
+                && status != AVADataTypes.RecognisedStateStatus.Restored
+        ) {
+            revert AVADataTypes.InvalidState(recognisedStateId);
+        }
+        AVADataTypes.EvidenceReceipt memory evidence = evidenceRegistry.requireUsableEvidenceReceipt(
+            recognisedState.evidenceReceiptId, recognisedState.appId, recognisedState.workflowKey
+        );
+        if (evidence.packageId != recognisedState.packageId) {
+            revert AVADataTypes.InvalidState(recognisedState.evidenceReceiptId);
         }
     }
 
@@ -159,9 +179,15 @@ contract AllocationExecutor {
         bytes32 subjectId,
         uint256 recognisedStateId
     ) internal view {
-        rulePackage.antiAbuseModule.validateUse(
-            workflowKey, actingRole, AVADataTypes.Action.ExecuteAllocation, subjectId, bytes32(recognisedStateId), msg.sender
-        );
+        rulePackage.antiAbuseModule
+            .validateUse(
+                workflowKey,
+                actingRole,
+                AVADataTypes.Action.ExecuteAllocation,
+                subjectId,
+                bytes32(recognisedStateId),
+                msg.sender
+            );
     }
 
     function _validateValueExecution(
@@ -220,19 +246,20 @@ contract AllocationExecutor {
         }
         _requireCoreAllocationKind(allocationKind, executionContext.recognisedStateId);
         AVARulePackageRegistry.RulePackage memory rulePackage =
-            _prepareAllocationExecution(actingRole, executionContext);
+            _prepareAllocationExecution(actingRole, allocationKind, executionContext);
         _requireSettlementKindForAllocation(allocationKind, executionContext);
-        rulePackage.allocationModule.validateAllocation(
-            actingRole,
-            executionContext.recognisedStateId,
-            allocationKind,
-            executionContext.recipientSubjectId,
-            executionContext.amount,
-            executionContext.evidenceReceiptId,
-            executionContext.authorityId,
-            executionContext.uri,
-            msg.sender
-        );
+        rulePackage.allocationModule
+            .validateAllocation(
+                actingRole,
+                executionContext.recognisedStateId,
+                allocationKind,
+                executionContext.recipientSubjectId,
+                executionContext.amount,
+                executionContext.evidenceReceiptId,
+                executionContext.authorityId,
+                executionContext.uri,
+                msg.sender
+            );
         id = _recordAllocation(actingRole, allocationKind, executionContext, rulePackage.packageId);
     }
 
@@ -252,19 +279,21 @@ contract AllocationExecutor {
         AVADataTypes.Role actingRole,
         AVADataTypes.ValueExecutionContext memory executionContext
     ) internal returns (uint256 id) {
-        AVARulePackageRegistry.RulePackage memory rulePackage =
-            _prepareAllocationExecution(actingRole, executionContext);
+        AVARulePackageRegistry.RulePackage memory
+            rulePackage =
+            _prepareAllocationExecution(actingRole, AVADataTypes.AllocationKind.RewardValueRecord, executionContext);
         _requireSettlementKindForAllocation(AVADataTypes.AllocationKind.RewardValueRecord, executionContext);
-        rulePackage.rewardAdapter.validateRewardRecord(
-            actingRole,
-            executionContext.recognisedStateId,
-            executionContext.recipientSubjectId,
-            executionContext.amount,
-            executionContext.evidenceReceiptId,
-            executionContext.authorityId,
-            executionContext.uri,
-            msg.sender
-        );
+        rulePackage.rewardAdapter
+            .validateRewardRecord(
+                actingRole,
+                executionContext.recognisedStateId,
+                executionContext.recipientSubjectId,
+                executionContext.amount,
+                executionContext.evidenceReceiptId,
+                executionContext.authorityId,
+                executionContext.uri,
+                msg.sender
+            );
         id = _recordAllocation(
             actingRole, AVADataTypes.AllocationKind.RewardValueRecord, executionContext, rulePackage.packageId
         );
@@ -274,19 +303,23 @@ contract AllocationExecutor {
         AVADataTypes.Role actingRole,
         AVADataTypes.ValueExecutionContext memory executionContext
     ) internal returns (uint256 id) {
-        AVARulePackageRegistry.RulePackage memory rulePackage =
-            _prepareAllocationExecution(actingRole, executionContext);
+        AVARulePackageRegistry.RulePackage memory
+            rulePackage =
+            _prepareAllocationExecution(
+                actingRole, AVADataTypes.AllocationKind.AdministrativeQueueRecord, executionContext
+            );
         _requireSettlementKindForAllocation(AVADataTypes.AllocationKind.AdministrativeQueueRecord, executionContext);
-        rulePackage.priorityAdapter.validatePriorityRecord(
-            actingRole,
-            executionContext.recognisedStateId,
-            executionContext.recipientSubjectId,
-            executionContext.amount,
-            executionContext.evidenceReceiptId,
-            executionContext.authorityId,
-            executionContext.uri,
-            msg.sender
-        );
+        rulePackage.priorityAdapter
+            .validatePriorityRecord(
+                actingRole,
+                executionContext.recognisedStateId,
+                executionContext.recipientSubjectId,
+                executionContext.amount,
+                executionContext.evidenceReceiptId,
+                executionContext.authorityId,
+                executionContext.uri,
+                msg.sender
+            );
         id = _recordAllocation(
             actingRole, AVADataTypes.AllocationKind.AdministrativeQueueRecord, executionContext, rulePackage.packageId
         );
@@ -294,21 +327,27 @@ contract AllocationExecutor {
 
     function _prepareAllocationExecution(
         AVADataTypes.Role actingRole,
+        AVADataTypes.AllocationKind allocationKind,
         AVADataTypes.ValueExecutionContext memory executionContext
     ) internal view returns (AVARulePackageRegistry.RulePackage memory rulePackage) {
         authorityMatrix.requireAuthorisedSubject(
             msg.sender, actingRole, AVADataTypes.Action.ExecuteAllocation, executionContext.authorityId
         );
         AVADataTypes.RecognisedStateRecord memory recognisedState =
-            _requireAllowedRecognisedState(executionContext.recognisedStateId);
+            _requireAllowedRecognisedState(executionContext.recognisedStateId, allocationKind);
         _requireValidExecutionContext(executionContext);
         authorityMatrix.requireKnownActiveSubject(executionContext.recipientSubjectId);
-        AVADataTypes.EvidenceReceipt memory evidence =
-            evidenceRegistry.requireUsableEvidenceReceipt(executionContext.evidenceReceiptId, recognisedState.workflowKey);
+        AVADataTypes.EvidenceReceipt memory evidence = evidenceRegistry.requireUsableEvidenceReceipt(
+            executionContext.evidenceReceiptId, recognisedState.appId, recognisedState.workflowKey
+        );
         if (evidence.packageId != recognisedState.packageId) {
             revert AVADataTypes.InvalidState(executionContext.evidenceReceiptId);
         }
         rulePackage = rulePackageRegistry.getRulePackageById(recognisedState.packageId);
+        _validateEvidenceLifecycle(rulePackage, recognisedState.evidenceReceiptId);
+        if (executionContext.evidenceReceiptId != recognisedState.evidenceReceiptId) {
+            _validateEvidenceLifecycle(rulePackage, executionContext.evidenceReceiptId);
+        }
         _validateAntiAbuse(
             rulePackage,
             recognisedState.workflowKey,
@@ -319,6 +358,22 @@ contract AllocationExecutor {
         _validateValueExecution(rulePackage, executionContext);
     }
 
+    function _validateEvidenceLifecycle(
+        AVARulePackageRegistry.RulePackage memory rulePackage,
+        uint256 evidenceReceiptId
+    ) internal view {
+        rulePackage.evidenceLifecycleModule
+            .validateEvidenceLifecycle(
+                rulePackage.workflowKey,
+                AVADataTypes.Action.ExecuteAllocation,
+                evidenceReceiptId,
+                AVADataTypes.EvidenceLifecycleKind.None,
+                0,
+                bytes32(0),
+                msg.sender
+            );
+    }
+
     function _requireSettlementKindForAllocation(
         AVADataTypes.AllocationKind allocationKind,
         AVADataTypes.ValueExecutionContext memory executionContext
@@ -327,13 +382,14 @@ contract AllocationExecutor {
             return;
         }
         if (allocationKind == AVADataTypes.AllocationKind.RewardValueRecord) {
-            bool validRewardSettlement = executionContext.settlementKind == AVADataTypes.ValueSettlementKind.TokenTransfer
+            bool validRewardSettlement = executionContext.settlementKind
+                    == AVADataTypes.ValueSettlementKind.TokenTransfer
                 || executionContext.settlementKind == AVADataTypes.ValueSettlementKind.EscrowDeposit;
             if (!validRewardSettlement) revert AVADataTypes.InvalidState(executionContext.recognisedStateId);
         } else if (allocationKind == AVADataTypes.AllocationKind.AdministrativeQueueRecord) {
-            bool validPrioritySettlement =
-                executionContext.settlementKind == AVADataTypes.ValueSettlementKind.PriorityTokenMint
-                    || executionContext.settlementKind == AVADataTypes.ValueSettlementKind.PriorityTokenConsume;
+            bool validPrioritySettlement = executionContext.settlementKind
+                    == AVADataTypes.ValueSettlementKind.PriorityTokenMint
+                || executionContext.settlementKind == AVADataTypes.ValueSettlementKind.PriorityTokenConsume;
             if (!validPrioritySettlement) revert AVADataTypes.InvalidState(executionContext.recognisedStateId);
         } else {
             revert AVADataTypes.InvalidState(executionContext.recognisedStateId);

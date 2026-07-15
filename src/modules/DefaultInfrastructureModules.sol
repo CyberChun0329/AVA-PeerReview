@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {IEvidencePolicyModule} from "../interfaces/IEvidencePolicyModule.sol";
 import {IAuditAdapter} from "../interfaces/IAuditAdapter.sol";
@@ -9,7 +11,7 @@ import {IResidualEditorialAuthorityModule} from "../interfaces/IResidualEditoria
 import {IFieldPolicyModule} from "../interfaces/IFieldPolicyModule.sol";
 import {IAntiAbuseModule} from "../interfaces/IAntiAbuseModule.sol";
 
-contract DefaultEvidencePolicyModule is IEvidencePolicyModule {
+contract DefaultEvidencePolicyModule is IEvidencePolicyModule, RuleModuleIdentity {
     function validateEvidencePolicy(
         bytes32 workflowKey,
         AVADataTypes.Role,
@@ -25,7 +27,7 @@ contract DefaultEvidencePolicyModule is IEvidencePolicyModule {
     }
 }
 
-contract DefaultAuditAdapter is IAuditAdapter {
+contract DefaultAuditAdapter is IAuditAdapter, RuleModuleIdentity {
     function validateAuditRecord(
         bytes32 workflowKey,
         AVADataTypes.Role,
@@ -41,7 +43,7 @@ contract DefaultAuditAdapter is IAuditAdapter {
     }
 }
 
-contract DefaultEditorialSystemAdapter is IEditorialSystemAdapter {
+contract DefaultEditorialSystemAdapter is IEditorialSystemAdapter, RuleModuleIdentity {
     function validateEditorialReference(
         bytes32 workflowKey,
         AVADataTypes.Role,
@@ -56,11 +58,13 @@ contract DefaultEditorialSystemAdapter is IEditorialSystemAdapter {
     }
 }
 
-contract DefaultResidualEditorialAuthorityModule is IResidualEditorialAuthorityModule {
+contract DefaultResidualEditorialAuthorityModule is IResidualEditorialAuthorityModule, RuleModuleIdentity {
     function validateResidualEditorialAuthority(ResidualEditorialAuthorityContext calldata context) external pure {
         if (
-            context.workflowKey == bytes32(0) || context.objectId == bytes32(0) || context.evidenceReceiptId == 0
+            context.workflowKey == bytes32(0) || context.packageId == 0 || context.targetPackageId == 0
+                || context.objectId == bytes32(0) || context.evidenceReceiptId == 0
                 || context.authorityId == bytes32(0) || context.actor == address(0)
+                || context.decisionHash == bytes32(0)
         ) {
             revert AVADataTypes.EmptyValue();
         }
@@ -70,7 +74,7 @@ contract DefaultResidualEditorialAuthorityModule is IResidualEditorialAuthorityM
     }
 }
 
-contract DefaultFieldPolicyModule is IFieldPolicyModule {
+contract DefaultFieldPolicyModule is IFieldPolicyModule, RuleModuleIdentity {
     function validateFieldPolicy(
         bytes32 workflowKey,
         AVADataTypes.Role,
@@ -85,7 +89,7 @@ contract DefaultFieldPolicyModule is IFieldPolicyModule {
     }
 }
 
-contract DefaultAntiAbuseModule is IAntiAbuseModule {
+contract DefaultAntiAbuseModule is IAntiAbuseModule, RuleModuleIdentity {
     function validateUse(
         bytes32 workflowKey,
         AVADataTypes.Role,

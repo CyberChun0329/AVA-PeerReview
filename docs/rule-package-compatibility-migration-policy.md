@@ -2,11 +2,11 @@
 
 Status: current implementation policy
 
-Date: 2026-06-06
+Date: 2026-07-11
 
-This policy explains how the current AVA-PeerReview Solidity demo treats rule
-package replacement, compatibility metadata, supersession readiness, and
-migration readiness.
+This policy explains how the current multi-application AVA Solidity demo treats
+rule-package replacement, compatibility metadata, historical dispatch, and the
+retained pre-separation migration-readiness records.
 
 It is a current implementation policy, not approval to implement automatic
 migration, state rewrite, model, simulation, publication logic, reveal/decrypt,
@@ -15,67 +15,83 @@ deployment.
 
 ## 1. Core Rule
 
-`workflowKey` is an active pointer. `packageId` is historical identity.
+On the canonical path, `(appId, workflowKey)` identifies an active pointer.
+`packageId` is historical identity.
 
-- `workflowKey` selects the current package for new workflow actions.
-- `registerRulePackage` always creates a fresh `packageId`.
-- Re-registering the same `workflowKey` updates the active package pointer.
-- Active pointer replacement is currently a trusted governance action by the
-  authorised package registrar. The current registry validates the new package
-  and lifecycle metadata, but it does not ask the incumbent package to approve
-  the pointer flip before registration.
+- `(appId, workflowKey)` selects the current package for new workflow actions.
+  The same workflow key may be active independently in different applications.
+- `registerRulePackage` creates the initial package and rejects an existing
+  application/workflow pair.
+- `supersedeRulePackage` creates a fresh `packageId`, requires the caller to
+  name the current active package, requires exactly the next version and the
+  same compatibility key, emits an append-only supersession event, and then
+  advances that application's pointer.
+- Supersession remains a trusted governance action by the authorised package
+  registrar. It is explicit and compare-and-set bound, but
+  `AVACoreRulePackageRegistry` does not require an incumbent module to approve
+  the pointer change.
 - Old recognised states, challenges, evidence receipts, downstream records,
   proof receipts, credentials, settlement receipts, and audit records must be
   interpreted through their stored `packageId` or through the package-bound
   source record they reference.
+- A challenge recognised state formed before supersession completes filing
+  through its stored historical `packageId`; filing does not silently switch
+  to the workflow's newer active package.
 - A new active package cannot retroactively change old records.
 
 ## 2. Compatibility Metadata
 
-Each package stores:
+Each canonical package stores:
 
+- `appId`
+- `workflowKey`
 - `modulesHash`
-- `modulesCodeHash`
+- `modulesIdentityHash`
 - `version`
 - `compatibilityKey`
-- `dependencyURI`
-- `deprecated`
+- `uri`
 - `authorityId`
 - `registeredBy`
+- `active`
 
-`modulesHash` represents module address/configuration data plus module-code
-identity. `modulesCodeHash` is the aggregate code-identity hash. The registry
-rechecks stored module-code identity when `getRulePackageById(packageId)` is
-called.
+`modulesHash` binds the ordered capability keys and module addresses.
+`modulesIdentityHash` binds the ordered capability keys and each module's
+`moduleIdentityHash()`. The registry recomputes both aggregates whenever
+`getRulePackageById(packageId)` is called.
 
-If a stored package's module code identity no longer matches, package reads
+If a stored package's module behaviour identity no longer matches, package reads
 fail closed. This is intentional tamper evidence for the demo: old records are
-not silently reinterpreted through changed module code. The operational cost is
+not silently reinterpreted through changed module behaviour. The operational cost is
 that affected package reads may become unavailable until a separately designed
 governance path records how readers should treat the tampered package. The
 current contracts do not include a tamper-acknowledged read path or a migration
 executor.
 
-`compatibilityKey` is a policy label. It does not execute migration, grant
-authority, or override substrate gates.
+This mechanism assumes modules honestly expose every behaviour-affecting
+configuration. The current package model therefore does not support proxy
+modules whose implementation can change behind a stable proxy identity.
 
-`version` is package metadata. It can be used by a lifecycle module to reject
-incompatible packages, but it does not rewrite old package-bound records.
+`compatibilityKey` is an application-local policy label. Canonical
+supersession requires it to remain unchanged. It does not execute migration,
+grant authority, or override substrate gates.
 
-`dependencyURI` is off-chain metadata. It is not code execution.
+`version` is package metadata. Initial registration requires version `1`, and
+canonical supersession requires exactly `previous.version + 1`. It does not
+rewrite old package-bound records.
 
-`deprecated` cannot be true at package registration in the current registry.
-Any future deprecation policy must be an explicit lifecycle record or a future
-approved change, not silent mutation of old records.
+`uri` is off-chain metadata. It is not code execution.
 
-## 3. Lifecycle Readiness Records
+## 3. Retained Lifecycle Readiness Records
 
-`AVARulePackageRegistry` supports two package-lifecycle entrypoints:
+The root-level pre-separation `AVARulePackageRegistry` supports two
+package-lifecycle entrypoints:
 
 - `recordRulePackageLifecycle`
 - `recordRulePackageLifecycleForPackage`
 
-Both write `RulePackageLifecycleRecord`. They do not perform migration.
+Both write `RulePackageLifecycleRecord`. They do not perform migration. These
+records remain available for regression and research-trace continuity, but
+they are not part of the canonical `src/core/` application integration path.
 
 The record stores:
 
@@ -83,7 +99,7 @@ The record stores:
 - source `packageId`
 - lifecycle kind
 - source `modulesHash`
-- source `modulesCodeHash`
+- source `modulesIdentityHash`
 - source `version`
 - source `compatibilityKey`
 - target `workflowKey` and `targetPackageId` when required
@@ -105,23 +121,27 @@ the object, create a replacement object, or mutate any recognised state.
 
 ## 4. Package Replacement Policy
 
-When a workflow package is replaced:
+When a canonical workflow package is replaced:
 
-1. Register the new package under the same `workflowKey`.
+1. Call `AVACoreRulePackageRegistry.supersedeRulePackage` with the same
+   `(appId, workflowKey)`, the expected current package id, exactly the next
+   version, the same compatibility key, and replacement capability bindings.
 2. New records use the new active `packageId`.
 3. Old records keep their original `packageId`.
-4. If compatibility or migration readiness needs to be recorded, write an
-   explicit lifecycle readiness record. If an individual object is ready for a
-   future migration path, write an object migration readiness record against
-   that lifecycle record.
-5. External readers must inspect the record's stored `packageId`, not the
+4. External readers must inspect the record's stored `packageId`, not the
    current active package pointer, when interpreting old records.
+5. Do not infer cross-application compatibility from a matching workflow or
+   compatibility key. Canonical references must retain the same `appId`.
 
-This policy intentionally keeps replacement and migration separate.
+This policy intentionally keeps replacement and migration separate. The
+canonical Core currently implements replacement, historical reads, and
+application isolation; it does not implement migration readiness or migration
+execution. The retained root-level readiness records do not migrate canonical
+objects.
 
 ## 5. What A Future Migration Would Need
 
-The current demo does not implement migration execution. A future approved
+The current demo does not implement canonical migration execution. A future approved
 migration execution path would need separate design and tests for:
 
 - source package id;
@@ -141,9 +161,22 @@ auditability gap for object/source/target binding, but remains record-only.
 
 ## 6. Current Test Evidence
 
-Current tests already cover the policy shape:
+Current tests cover both the canonical replacement rule and retained
+pre-separation readiness behavior:
 
-- package re-registration does not rewrite existing recognised-state dispatch;
+- two applications can use the same workflow key without sharing an active
+  pointer;
+- cross-application objects, evidence, subjects, recognised states, challenges,
+  and downstream records are rejected;
+- canonical package supersession does not rewrite existing recognised-state,
+  credential, or proof dispatch;
+- old Peer Review and test-only secondary-application states continue to use
+  their historical application module and package after active-pointer
+  replacement;
+- initial registration cannot overwrite an existing workflow, and explicit
+  supersession is versioned and append-only;
+- a changed module behaviour identity makes historical package reads fail
+  closed;
 - double-blind review, anonymous challenge, and restoration scenarios use the
   historical package bound to their source records;
 - package lifecycle readiness records bind explicit source and target packages;
@@ -157,7 +190,7 @@ Current tests already cover the policy shape:
 - legacy disclosure configuration cannot override the rule-package module;
 - anonymous challenge proof-use rejects a proof from the wrong package;
 - package-bound evidence cannot cross recognised-state, challenge, allocation,
-  or consequence contexts after workflow re-registration.
+  or consequence contexts after workflow supersession.
 
 This document is a public policy summary for those tested behaviors. It does
 not add Solidity, ABI, storage, or test changes.

@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {DisclosurePolicyRegistry} from "../DisclosurePolicyRegistry.sol";
 import {ZKProofRegistry} from "../ZKProofRegistry.sol";
 import {IDisclosurePolicyModule} from "../interfaces/IDisclosurePolicyModule.sol";
 
-contract ZKBackedDisclosureModule is IDisclosurePolicyModule {
+contract ZKBackedDisclosureModule is IDisclosurePolicyModule, RuleModuleIdentity {
     DisclosurePolicyRegistry public immutable disclosureRegistry;
     ZKProofRegistry public immutable proofRegistry;
     uint256 public immutable zkDisclosurePolicyId;
@@ -73,8 +75,10 @@ contract ZKBackedDisclosureModule is IDisclosurePolicyModule {
     }
 
     function _contextHash(ProofContext memory context) internal view returns (bytes32) {
+        bytes32 appId = proofRegistry.rulePackageRegistry().getRulePackageById(context.packageId).appId;
         return proofRegistry.computeDisclosureContextHashForPackage(
             context.packageId,
+            appId,
             context.workflowKey,
             context.stage,
             context.action,

@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {AVADataTypes} from "./AVADataTypes.sol";
 import {AuthorityMatrix} from "./AuthorityMatrix.sol";
 import {AVAStateMachine} from "./AVAStateMachine.sol";
+import {AVAChallengeWorkflow} from "./AVAChallengeWorkflow.sol";
 import {AVARulePackageRegistry} from "./AVARulePackageRegistry.sol";
 import {EvidenceCommitmentRegistry} from "./EvidenceCommitmentRegistry.sol";
 import {DisclosurePolicyRegistry} from "./DisclosurePolicyRegistry.sol";
@@ -16,14 +17,13 @@ contract DisclosureAccessExecutor {
     EvidenceCommitmentRegistry public immutable evidenceRegistry;
     DisclosurePolicyRegistry public immutable disclosureRegistry;
     AVAStateMachine public immutable stateMachine;
+    AVAChallengeWorkflow public immutable challengeWorkflow;
     ZKProofRegistry public immutable proofRegistry;
-    IDisclosureExecutionModule public immutable defaultExecutionModule;
     uint256 public nextDisclosureExecutionId = 1;
 
     mapping(uint256 => AVADataTypes.DisclosureExecutionRecord) private disclosureExecutions;
     mapping(bytes32 => uint256) public disclosureExecutionIdByNullifier;
 
-    event DisclosureExecutionModuleConfigured(bytes32 indexed workflowKey, address indexed module, address configuredBy);
     event DisclosureExecutionRecorded(
         uint256 indexed id,
         bytes32 indexed workflowKey,
@@ -38,41 +38,21 @@ contract DisclosureAccessExecutor {
         EvidenceCommitmentRegistry evidenceRegistry_,
         DisclosurePolicyRegistry disclosureRegistry_,
         AVAStateMachine stateMachine_,
-        ZKProofRegistry proofRegistry_,
-        IDisclosureExecutionModule defaultExecutionModule_
+        AVAChallengeWorkflow challengeWorkflow_,
+        ZKProofRegistry proofRegistry_
     ) {
-        if (address(defaultExecutionModule_) == address(0)) revert AVADataTypes.EmptyValue();
         authorityMatrix = authorityMatrix_;
         rulePackageRegistry = rulePackageRegistry_;
         evidenceRegistry = evidenceRegistry_;
         disclosureRegistry = disclosureRegistry_;
         stateMachine = stateMachine_;
+        challengeWorkflow = challengeWorkflow_;
         proofRegistry = proofRegistry_;
-        defaultExecutionModule = defaultExecutionModule_;
-    }
-
-    /// @dev Legacy compatibility entrypoint. Disclosure execution modules are
-    /// bound in AVA rule packages; this function cannot mutate runtime module
-    /// configuration or override a target package.
-    function configureWorkflowExecutionModule(
-        AVADataTypes.Role actingRole,
-        bytes32 workflowKey,
-        IDisclosureExecutionModule module,
-        bytes32 authorityId
-    ) external view {
-        authorityMatrix.requireAuthorisedSubject(
-            msg.sender, actingRole, AVADataTypes.Action.RecordDisclosureExecution, authorityId
-        );
-        if (workflowKey == bytes32(0) || address(module) == address(0) || address(module).code.length == 0) {
-            revert AVADataTypes.EmptyValue();
-        }
-        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackage(workflowKey);
-        (module);
-        revert AVADataTypes.InvalidState(rulePackage.packageId);
     }
 
     function recordAccessGrant(
         AVADataTypes.Role actingRole,
+        bytes32 appId,
         bytes32 workflowKey,
         AVADataTypes.DisclosureTargetKind targetKind,
         uint256 targetId,
@@ -87,7 +67,7 @@ contract DisclosureAccessExecutor {
         );
         authorityMatrix.requireKnownActiveSubject(subjectId);
         if (expiresAt <= block.timestamp) revert AVADataTypes.InvalidState(expiresAt);
-        uint256 packageId = _validateTarget(workflowKey, targetKind, targetId, disclosurePolicyId);
+        uint256 packageId = _validateTarget(appId, workflowKey, targetKind, targetId, disclosurePolicyId);
         IDisclosureExecutionModule.DisclosureExecutionContext memory context;
         context.workflowKey = workflowKey;
         context.kind = AVADataTypes.DisclosureExecutionKind.AccessGrant;
@@ -168,8 +148,7 @@ contract DisclosureAccessExecutor {
         if (grant.id == 0) revert AVADataTypes.UnknownReference(grantExecutionId);
         if (
             grant.kind != AVADataTypes.DisclosureExecutionKind.AccessGrant
-                || grant.status != AVADataTypes.DisclosureExecutionStatus.Recorded
-                || grant.expiresAt > block.timestamp
+                || grant.status != AVADataTypes.DisclosureExecutionStatus.Recorded || grant.expiresAt > block.timestamp
         ) {
             revert AVADataTypes.InvalidState(grantExecutionId);
         }
@@ -245,6 +224,7 @@ contract DisclosureAccessExecutor {
 
     function recordDisclosureLifecycleExecution(
         AVADataTypes.Role actingRole,
+        bytes32 appId,
         bytes32 workflowKey,
         AVADataTypes.DisclosureExecutionKind kind,
         AVADataTypes.DisclosureTargetKind targetKind,
@@ -262,7 +242,7 @@ contract DisclosureAccessExecutor {
         ) {
             revert AVADataTypes.InvalidState(uint256(kind));
         }
-        uint256 packageId = _validateTarget(workflowKey, targetKind, targetId, disclosurePolicyId);
+        uint256 packageId = _validateTarget(appId, workflowKey, targetKind, targetId, disclosurePolicyId);
         IDisclosureExecutionModule.DisclosureExecutionContext memory context;
         context.workflowKey = workflowKey;
         context.kind = kind;
@@ -288,6 +268,7 @@ contract DisclosureAccessExecutor {
 
     function recordVoluntaryDisclosureIntent(
         AVADataTypes.Role actingRole,
+        bytes32 appId,
         bytes32 workflowKey,
         AVADataTypes.DisclosureTargetKind targetKind,
         uint256 targetId,
@@ -298,7 +279,7 @@ contract DisclosureAccessExecutor {
         authorityMatrix.requireAuthorisedSubject(
             msg.sender, actingRole, AVADataTypes.Action.RecordDisclosureExecution, subjectId
         );
-        uint256 packageId = _validateTarget(workflowKey, targetKind, targetId, disclosurePolicyId);
+        uint256 packageId = _validateTarget(appId, workflowKey, targetKind, targetId, disclosurePolicyId);
         IDisclosureExecutionModule.DisclosureExecutionContext memory context;
         context.workflowKey = workflowKey;
         context.kind = AVADataTypes.DisclosureExecutionKind.VoluntaryDisclosureIntent;
@@ -334,9 +315,13 @@ contract DisclosureAccessExecutor {
         authorityMatrix.requireAuthorisedSubject(
             msg.sender, actingRole, AVADataTypes.Action.RecordDisclosureExecution, subjectCommitment
         );
-        AVADataTypes.ChallengeRecord memory challenge = stateMachine.getChallenge(challengeId);
+        AVADataTypes.ChallengeRecord memory challenge = challengeWorkflow.getChallenge(challengeId);
         _validateTarget(
-            challenge.workflowKey, AVADataTypes.DisclosureTargetKind.Challenge, challengeId, disclosurePolicyId
+            challenge.appId,
+            challenge.workflowKey,
+            AVADataTypes.DisclosureTargetKind.Challenge,
+            challengeId,
+            disclosurePolicyId
         );
         _validateAnonymousChallengeProofUse(
             actingRole, challengeId, challenge, disclosurePolicyId, proofReceiptId, subjectCommitment, nullifierHash
@@ -379,8 +364,12 @@ contract DisclosureAccessExecutor {
         return record;
     }
 
-    function getWorkflowExecutionModule(bytes32 workflowKey) external view returns (IDisclosureExecutionModule) {
-        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackage(workflowKey);
+    function getWorkflowExecutionModule(bytes32 appId, bytes32 workflowKey)
+        external
+        view
+        returns (IDisclosureExecutionModule)
+    {
+        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackage(appId, workflowKey);
         return _executionModule(rulePackage.packageId);
     }
 
@@ -402,39 +391,54 @@ contract DisclosureAccessExecutor {
     }
 
     function _validateTarget(
+        bytes32 appId,
         bytes32 workflowKey,
         AVADataTypes.DisclosureTargetKind targetKind,
         uint256 targetId,
         uint256 disclosurePolicyId
     ) internal view returns (uint256 packageId) {
-        if (workflowKey == bytes32(0) || targetKind == AVADataTypes.DisclosureTargetKind.None || disclosurePolicyId == 0) {
+        if (
+            appId == bytes32(0) || workflowKey == bytes32(0) || targetKind == AVADataTypes.DisclosureTargetKind.None
+                || disclosurePolicyId == 0
+        ) {
             revert AVADataTypes.EmptyValue();
         }
-        disclosureRegistry.getDisclosurePolicy(disclosurePolicyId);
+        if (disclosureRegistry.getDisclosurePolicy(disclosurePolicyId).appId != appId) {
+            revert AVADataTypes.InvalidState(disclosurePolicyId);
+        }
         if (targetKind == AVADataTypes.DisclosureTargetKind.EvidenceReceipt) {
             AVADataTypes.EvidenceReceipt memory receipt = evidenceRegistry.getEvidenceReceipt(targetId);
-            if (receipt.workflowKey != workflowKey || receipt.disclosurePolicyId != disclosurePolicyId) {
+            if (
+                receipt.appId != appId || receipt.workflowKey != workflowKey
+                    || receipt.disclosurePolicyId != disclosurePolicyId
+            ) {
                 revert AVADataTypes.InvalidState(targetId);
             }
             packageId = receipt.packageId;
         } else if (targetKind == AVADataTypes.DisclosureTargetKind.RecognisedState) {
             AVADataTypes.RecognisedStateRecord memory state = stateMachine.getRecognisedState(targetId);
-            if (state.workflowKey != workflowKey || state.disclosurePolicyId != disclosurePolicyId) {
+            if (
+                state.appId != appId || state.workflowKey != workflowKey
+                    || state.disclosurePolicyId != disclosurePolicyId
+            ) {
                 revert AVADataTypes.InvalidState(targetId);
             }
             packageId = state.packageId;
         } else if (targetKind == AVADataTypes.DisclosureTargetKind.Challenge) {
-            AVADataTypes.ChallengeRecord memory challenge = stateMachine.getChallenge(targetId);
-            if (challenge.workflowKey != workflowKey || challenge.disclosurePolicyId != disclosurePolicyId) {
+            AVADataTypes.ChallengeRecord memory challenge = challengeWorkflow.getChallenge(targetId);
+            if (
+                challenge.appId != appId || challenge.workflowKey != workflowKey
+                    || challenge.disclosurePolicyId != disclosurePolicyId
+            ) {
                 revert AVADataTypes.InvalidState(targetId);
             }
             packageId = challenge.packageId;
         } else if (targetKind == AVADataTypes.DisclosureTargetKind.Workflow) {
             if (targetId != 0) revert AVADataTypes.InvalidState(targetId);
-            packageId = rulePackageRegistry.getRulePackage(workflowKey).packageId;
+            packageId = rulePackageRegistry.getRulePackage(appId, workflowKey).packageId;
         } else if (targetKind == AVADataTypes.DisclosureTargetKind.DisclosurePolicy) {
             if (targetId != disclosurePolicyId) revert AVADataTypes.InvalidState(targetId);
-            packageId = rulePackageRegistry.getRulePackage(workflowKey).packageId;
+            packageId = rulePackageRegistry.getRulePackage(appId, workflowKey).packageId;
         } else {
             revert AVADataTypes.InvalidState(uint256(targetKind));
         }
@@ -443,10 +447,7 @@ contract DisclosureAccessExecutor {
     function _validateExecutionModule(
         uint256 packageId,
         IDisclosureExecutionModule.DisclosureExecutionContext memory context
-    )
-        internal
-        view
-    {
+    ) internal view {
         context.actor = msg.sender;
         _executionModule(packageId).validateDisclosureExecution(context);
     }
@@ -461,8 +462,30 @@ contract DisclosureAccessExecutor {
         bytes32 nullifierHash
     ) internal view {
         ZKProofRegistry.ProofReceipt memory proofReceipt = proofRegistry.getProofReceipt(proofReceiptId);
-        bytes32 expectedContextHash = proofRegistry.computeDisclosureContextHashForPackage(
+        bytes32 expectedContextHash = _anonymousChallengeProofContextHash(
+            challenge, challengeId, actingRole, disclosurePolicyId, subjectCommitment
+        );
+        if (
+            subjectCommitment == bytes32(0) || nullifierHash == bytes32(0)
+                || challenge.challengerSubjectId != subjectCommitment || proofReceipt.appId != challenge.appId
+                || proofReceipt.packageId != challenge.packageId || proofReceipt.contextHash != expectedContextHash
+                || proofReceipt.subjectCommitment != subjectCommitment || proofReceipt.nullifierHash != nullifierHash
+                || disclosureExecutionIdByNullifier[nullifierHash] != 0
+        ) {
+            revert AVADataTypes.InvalidState(proofReceiptId);
+        }
+    }
+
+    function _anonymousChallengeProofContextHash(
+        AVADataTypes.ChallengeRecord memory challenge,
+        uint256 challengeId,
+        AVADataTypes.Role actingRole,
+        uint256 disclosurePolicyId,
+        bytes32 subjectCommitment
+    ) internal view returns (bytes32) {
+        return proofRegistry.computeDisclosureContextHashForPackage(
             challenge.packageId,
+            challenge.appId,
             challenge.workflowKey,
             AVADataTypes.AVAStage.Verification,
             AVADataTypes.Action.RecordDisclosureExecution,
@@ -471,20 +494,9 @@ contract DisclosureAccessExecutor {
             disclosurePolicyId,
             subjectCommitment
         );
-        if (
-            subjectCommitment == bytes32(0) || nullifierHash == bytes32(0)
-                || challenge.challengerSubjectId != subjectCommitment || proofReceipt.packageId != challenge.packageId
-                || proofReceipt.contextHash != expectedContextHash || proofReceipt.subjectCommitment != subjectCommitment
-                || proofReceipt.nullifierHash != nullifierHash || disclosureExecutionIdByNullifier[nullifierHash] != 0
-        ) {
-            revert AVADataTypes.InvalidState(proofReceiptId);
-        }
     }
 
     function _executionModule(uint256 packageId) internal view returns (IDisclosureExecutionModule module) {
         module = rulePackageRegistry.getRulePackageById(packageId).disclosureExecutionModule;
-        if (address(module) == address(0)) {
-            module = defaultExecutionModule;
-        }
     }
 }

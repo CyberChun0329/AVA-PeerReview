@@ -1,9 +1,11 @@
 # Public Technical Overview
 
-This repository is an early technical demo of the AVA protocol for peer
-review. It demonstrates how AVA-style governance can be represented on chain
-through records, authorised transitions, rule packages, proof receipts, and
-bounded downstream effects.
+This repository is an early technical demo of the AVA protocol. Peer review is
+the first application, not the substrate itself. The implemented architecture
+separates a domain-neutral AVA Core, optional reusable governance extensions,
+and application modules. Peer review is the current application implementation.
+A domain-neutral test fixture supplies different role, object, workflow, and
+validation vocabulary to verify that the Core remains application-independent.
 
 The contracts are implemented in Solidity for EVM-compatible chains. Base is
 the intended L2 target for future deployment work, but the current repository
@@ -25,13 +27,29 @@ references, scoped subjects, rule packages, and explicit status transitions.
 
 For extension work, the design has three practical layers:
 
-1. the AVA substrate, which stores records and enforces hard gates;
-2. functional interfaces, which define what a package may validate;
-3. scenario modules and adapters, which implement those interfaces for a
-   concrete workflow such as double-blind review or anonymous challenge.
+1. AVA Core, which stores generic governed objects and recognised states and
+   enforces app, subject, authority, evidence, package, and transition gates;
+2. optional extensions, which add challenge, standing, proof, disclosure,
+   audit, settlement, or external-operation records without becoming Core;
+3. application modules, which define domain vocabulary and validate concrete
+   relationships for an app such as peer review.
 
-That is why future workflows should usually add or swap modules inside a rule
-package rather than rewrite the recognised-state substrate.
+That is why a different governance application should register an `appId`,
+define an `IAVAApplicationModule`, and bind capability modules in rule
+packages rather than rewrite the recognised-state substrate.
+
+The canonical source boundary is explicit:
+
+- `src/core/` contains domain-neutral Core contracts;
+- `src/extensions/` contains optional reusable extensions;
+- `src/apps/peerreview/` contains the current application vocabulary and
+  validator;
+- `test/helpers/SecondaryTestApp.sol` provides a test-only genericity fixture,
+  not another shipped application.
+
+Root-level contracts under `src/` retain the pre-separation research
+implementation and its regression suite. They remain useful evidence, but
+they are not the recommended integration surface for a new application.
 
 The project is not token-first blockchain infrastructure. Blockchain is used
 only after an AVA workflow has named the governable object: the attributed
@@ -65,11 +83,20 @@ Recognised state is the central governance object. It is not a fourth stage.
 
 ## Rule Packages
 
-Rule packages let different peer-review workflows bind different validator
-modules and downstream adapters without rewriting the recognised-state
-substrate. A workflow key points to the currently active package, but each
-record stores the `packageId` it was created under. This prevents new packages
-from retroactively changing old recognised states.
+Rule packages are scoped by `(appId, workflowKey)`. Each package binds an
+application module plus capability modules and receives a stable `packageId`.
+An active pointer selects the package for new records, while governed objects,
+evidence, recognised states, transitions, proofs, credentials, and downstream
+receipts preserve the package used at creation. Replacing one application's
+active package neither moves another application's pointer nor reinterprets
+historical records.
+
+Challenge is implemented as a recursive AVA workflow. A challenge has its own
+governed object, evidence-backed recognised state, and independently selected
+package before its lifecycle can target another recognised state. The
+challenge package governs intake and decision policy; a correction or
+restoration also passes the target state's historical package and the Core
+transition graph.
 
 ## Privacy And Evidence
 
@@ -91,9 +118,12 @@ signal.
 
 The repository includes standing computation statements, formula/source-set
 commitments, ZK standing proof receipts, account-bound standing credentials,
-and commitment-bound ZK standing credentials. These records make authorised
-standing outputs auditable while keeping heavy calculation, private history
-collection, and production ZK circuits outside the demo.
+and commitment-bound ZK standing credentials. The canonical ZK carrier records
+both a role-scoped subject id and its commitment: it avoids exposing the full
+standing history but remains role-subject-linkable rather than unlinkably
+anonymous. These records make authorised standing outputs auditable while
+keeping heavy calculation, private history collection, and production ZK
+circuits outside the demo.
 
 Credentials are proof carriers. They are non-transferable, expiring,
 revocable, supersedable, and source-bound where relevant. They cannot create
@@ -127,9 +157,14 @@ abstraction.
 The current verified demo state records:
 
 - `forge build` passes;
-- `forge test` passes with 263 tests;
-- the baseline demo script runs with `--offline` in the local Foundry
-  environment used for verification.
+- the default canonical profile passes 250 tests;
+- four canonical handler-based invariant suites pass at 512 runs by 128 calls
+  for recursive challenge lineage, recovery uniqueness, standing-proof
+  freshness, and cross-application isolation;
+- the explicit retained profile passes 637 pre-separation regression tests;
+- the canonical trace script runs successfully, while second-app isolation
+  remains a test-only verification surface;
+- all contracts in the canonical production manifest remain below EIP-170.
 
 ## What To Read Next
 

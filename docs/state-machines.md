@@ -1,11 +1,120 @@
 # AVA-PeerReview State Machines
 
-This document mirrors the current contracts and tests. It should be updated
-whenever `src/AVAStateMachine.sol` changes.
+This document mirrors the current contracts and tests. The canonical multi-
+application state owner is `src/core/AVAGovernanceKernel.sol`; the canonical
+challenge owner is `src/extensions/challenge/AVAChallengeExtension.sol`.
+The longer `AVAStateMachine` and `AVAChallengeWorkflow` paths below document
+the retained pre-separation regression implementation.
 
-## Reader Map
+## Canonical Multi-Application State Path
 
-Use this file as a state-path reference, not as the first overview document.
+```mermaid
+sequenceDiagram
+    participant Actor
+    participant Evidence as AVAEvidenceRegistry
+    participant Core as AVAGovernanceKernel
+    participant Router as AVAWorkflowPolicyRouter
+    participant Package as Package Modules
+    participant Challenge as AVAChallengeExtension
+
+    Actor->>Evidence: registerEvidence(appId, workflowKey, packageId, subjectId)
+    Actor->>Core: registerGovernedObject(...)
+    Core->>Package: validate governed object and attribution
+    Actor->>Core: formRecognisedState(objectId, status)
+    Core->>Router: validateFormation(package-bound context)
+    Router->>Package: verification, evidence, disclosure, authority, optional policies
+    Core-->>Actor: RecognisedStateRecord(appId, packageId, lastTransitionId)
+    Actor->>Core: transitionRecognisedState(...) or vestRecognisedState(...)
+    Core->>Router: validateTransition(package-bound context)
+    Router->>Package: transition, evidence, disclosure, authority, optional policies
+    Core-->>Actor: RecognisedStateTransitionRecord
+    Actor->>Challenge: optional recursive challenge lifecycle
+    Challenge->>Core: request source-bound correction or restoration
+```
+
+The generic status set is `None`, `Draft`, `Registered`, `Provisional`,
+`Challengeable`, `Vested`, `Frozen`, `Downgraded`, `Voided`, and `Restored`.
+Direct formation cannot create `Vested`, `Downgraded`, `Voided`, or
+`Restored`. Generic transitions cannot create correction/restoration states.
+Challenge correction and restoration must use the restricted extension-to-
+Core request path and always append a generic transition record.
+
+Challenge evidence must remain active and bound to the challenge's historical
+application, workflow, package, subject, and disclosure policy for screening,
+resolution, restoration readiness, or restoration application. If that
+evidence becomes inactive, an authorised actor may still close the challenge
+without recording an outcome or mutating the recognised state.
+
+## Canonical Recursive Challenge Path
+
+```mermaid
+sequenceDiagram
+    participant Challenger
+    participant Core as AVAGovernanceKernel
+    participant Router as AVAWorkflowPolicyRouter
+    participant Challenge as AVAChallengeExtension
+    participant Panel
+
+    Challenger->>Core: register challenge governed object
+    Challenger->>Core: form challenge recognised state under challenge package
+    Challenger->>Challenge: fileChallenge(challengeStateId, targetStateId)
+    Challenge->>Router: validate challenge-package intake policy
+    Panel->>Challenge: screen and resolve with decision-bound authority
+    Challenge->>Core: vest challenge state under challenge package
+    opt upheld correction
+        Challenge->>Core: request source-bound target transition
+        Core->>Router: validate target package transition policy
+        Core-->>Challenge: generic transition id
+    end
+    opt explicit restoration
+        Panel->>Challenge: record availability and apply restoration
+        Challenge->>Core: request lineage-bound restoration
+        Core-->>Challenge: restoration transition id
+    end
+```
+
+The challenge is therefore a recursive AVA workflow, not an accusation-only
+side table. Its object, evidence, recognised state, lifecycle, and package are
+independent of the target's package. A raw filing never mutates the target or
+creates standing, allocation, consequence, settlement, or publication effects.
+Only the challenge extension may request correction/restoration, and the Core
+still applies the target's historical package plus `AVACoreTransitionRules`.
+
+`appId`, stored `packageId`, responsible `subjectId`, pinned evidence,
+disclosure policy, and `lastTransitionId` travel together. The same workflow
+key may be active in Peer Review and a test-only secondary application, but
+their application-scoped records and pointers cannot cross.
+
+Governed-object parentage follows the same rule. Core requires a parent in the
+same application and a package with the same compatibility key, then passes
+the parent's workflow, package, object type, and subject to the application
+module. Peer Review narrows review-to-manuscript parentage to the same workflow
+while allowing a challenge object to use a distinct compatible workflow.
+
+State-derived evidence use also compares the receipt's disclosure policy with
+the source state's policy. A same-package receipt under a different policy
+cannot be substituted by a permissive module.
+
+Challenger-side findings, challenge-transition audits, and challenge-target
+external-operation requests use the challenge recognised state, package,
+subject, and evidence. Target-side upheld findings use the challenged state.
+This keeps recursive challenge records reconstructible instead of combining
+the target state with challenger provenance.
+
+For Peer Review challenge states, the application transition context also
+carries `actionKey` and `sourceRecordId`. `Registered -> Challengeable` requires
+the `FileChallenge` action and a nonzero challenge source; challenge-state
+vesting requires a recorded resolution source. Direct generic transition
+permission cannot substitute for filing. Review objects accept only
+irresponsible-review findings, while challenge objects accept only negligent or
+malicious/fabricated-challenge findings.
+
+## Retained Reference Map
+
+The detailed sections below preserve the pre-separation
+`AVAStateMachine`/`AVAChallengeWorkflow` behavior for regression readers. They
+are not alternate canonical entrypoints. Use the canonical sections above and
+`script/AVACanonicalTrace.s.sol` for current architecture claims.
 
 - For the review path, read `Review Contribution Path`,
   `Recognised State Statuses`, and `Challenge Lifecycle`.
@@ -64,12 +173,19 @@ Rules currently enforced:
   records the chain timestamp readable through
   `getChallengeWindowOpenedAt(recognisedStateId)`.
 - `vestReviewRecognition` requires `TransitionRecognisedState`, rejects if the
-  linked recognised state has any unclosed challenge, calls any selected
-  `IChallengeWindowRuleModule` timing veto, writes a generic recognised-state
-  transition, and sets the linked recognised state to `Vested`.
-- default packages remain a permissive baseline, while packages that select
-  `SubjectRateLimitModule` can reject repeated challenge filings by the same
-  subject against the same recognised state for that package.
+  linked recognised state has any unclosed challenge, enforces the deployed
+  state machine's immutable nonzero minimum challenge-window duration, calls
+  any selected `IChallengeWindowRuleModule` for an additional timing veto,
+  writes a generic recognised-state transition, and sets the linked recognised
+  state to `Vested`.
+- the substrate permits only one simultaneously open challenge for the same
+  challenger subject or filing account and recognised state, and only one
+  filing by either identity against the same recognised-state transition
+  version. Rotating the account's canonical challenger subject does not reset
+  either cap. Default anti-abuse
+  modules remain a permissive module baseline above that hard floor, while
+  packages that select `SubjectRateLimitModule` can reject repeated challenge
+  filings across later target versions for the same package path.
 - none of these steps creates standing, consequence, reward, sanction,
   allocation, service entitlement, or manuscript advantage.
 
@@ -84,9 +200,15 @@ stateDiagram-v2
     Challengeable --> Vested: vestReviewRecognition after closed challenge window
     Challengeable --> Downgraded: upheld challenge transition
     Challengeable --> Voided: upheld challenge transition
-    Downgraded --> Restored: restoration transition
-    Voided --> Restored: restoration transition
-    Challengeable --> Restored: restoration transition
+    Vested --> Downgraded: upheld challenge transition
+    Vested --> Voided: upheld challenge transition
+    Restored --> Downgraded: upheld challenge transition
+    Restored --> Voided: upheld challenge transition
+    Downgraded --> Challengeable: restore challenge filed at Challengeable
+    Voided --> Challengeable: restore challenge filed at Challengeable
+    Downgraded --> Restored: restore challenge filed at Vested or Restored
+    Voided --> Restored: restore challenge filed at Vested or Restored
+    Vested --> Restored: explicit rejected or malicious challenge restoration
 ```
 
 `Draft` and `Frozen` exist in the enum but are not currently moved by the
@@ -95,15 +217,24 @@ cannot create `Vested`, `Restored`, `Downgraded`, or `Voided`. Those
 downstream-eligible statuses must be reached through authorised transition
 paths that pass transition-rule validation and write generic recognised-state
 transition records.
+Rejected-good-faith or malicious/fabricated restoration on an unchanged
+`Challengeable` target writes an explicit challenge transition but leaves the
+recognised-state status and generic transition id unchanged. It cannot upgrade
+that target to `Restored`.
 
 The paper-support matrix in
 `generated/recognised-state-transition-matrix.csv` is hash-pinned by
 `script/AVATransitionMatrix.s.sol`, and its rows are checked against
-row-level kernel executions in the test suite. It records the current substrate
-admissibility surface for direct recognised-state creation, review vesting,
-generic transition, challenge resolution, and restoration. The matrix is a
-deterministic documentation artifact for figures or model extraction; it is
-not a replacement for the Solidity transition checks.
+row-level kernel executions in the test suite. Its 330 cases are generated from
+all recognised-state enum values: 10 formation cases, 100 generic from/to
+pairs, 10 vesting sources, 10 challenge-target statuses, 100 challenge-
+correction from/to pairs, and 100 restoration from/to pairs. The canonical
+artifact therefore contains 330 rule rows and is pinned by hash
+`0x9cba1aa4d1a8141ded47fb76ad2a2f2d96a4a83608a76bbf29e1bbe48e73dd97`.
+The admissibility rules come from `AVACoreTransitionRules`, not from a manual
+row switch. The matrix is a deterministic documentation artifact for figures
+or model extraction; it is not a replacement for the Solidity transition
+checks.
 
 ## Challenge Lifecycle
 
@@ -111,6 +242,8 @@ not a replacement for the Solidity transition checks.
 stateDiagram-v2
     [*] --> ConcernFiled: fileChallenge
     ConcernFiled --> AdmissibilityScreening: screenChallenge
+    ConcernFiled --> Closed: authorised administrative close
+    AdmissibilityScreening --> Closed: authorised administrative close
     AdmissibilityScreening --> Resolved: resolveChallenge
     Resolved --> RestorationApplied: applyRestoration
     Resolved --> Closed: closeChallenge
@@ -122,26 +255,29 @@ sequenceDiagram
     participant CH as Challenger
     participant ED as Editor
     participant PN as Panel
+    participant CW as AVAChallengeWorkflow
     participant SM as AVAStateMachine
     participant CTR as ChallengeTransitionRecord
     participant RSTR as RecognisedStateTransitionRecord
     participant RS as RecognisedStateRecord
 
-    CH->>SM: fileChallenge(...)
-    SM-->>CH: ChallengeRecord(status=ConcernFiled)
-    ED->>SM: screenChallenge(...)
-    SM->>CTR: record AdmissibilityScreened transition
-    PN->>SM: resolveChallenge(...)
-    SM->>CTR: record OutcomeResolved transition
+    CH->>CW: fileChallenge(challengeWorkflowKey, ...)
+    CW-->>CH: ChallengeRecord(status=ConcernFiled)
+    ED->>CW: screenChallenge(...)
+    CW->>CTR: record AdmissibilityScreened transition
+    PN->>CW: resolveChallenge(...)
+    CW->>CTR: record OutcomeResolved transition
     alt outcome mutates recognised state
-        SM->>RSTR: record recognised-state status transition
+        CW->>SM: request restricted target-state transition
+        SM->>RSTR: record target and decision package identities
         SM->>RS: update status through transition
     else outcome is record-only
-        SM-->>RS: leave recognised-state status unchanged
+        CW-->>RS: leave recognised-state status unchanged
     end
     opt restoration required and authorised
-        PN->>SM: applyRestoration(...)
-        SM->>CTR: record RestorationRecorded transition
+        PN->>CW: applyRestoration(...)
+        CW->>CTR: record RestorationRecorded transition
+        CW->>SM: request causal restoration transition
         SM->>RSTR: record restoration status transition
         SM->>RS: restore only through authorised transition
     end
@@ -151,40 +287,75 @@ Rules currently enforced:
 
 - `fileChallenge` requires `FileChallenge`, a caller-bound challenger subject,
   and a registered evidence receipt.
-- the target must be an existing recognised state with status `Challengeable`.
+- the target must be an existing recognised state with status `Challengeable`,
+  `Vested`, or `Restored`.
 - the target cannot be a raw review contribution.
 - filing creates only a `ChallengeRecord`.
-- `screenChallenge` requires `ScreenChallenge`.
+- the challenge package and target package must share the same stable
+  `compatibilityKey` at filing. Resolution and restoration pass the residual
+  authority validators of both packages when they differ; target mutation still
+  uses the target package's historical transition rule.
+- `screenChallenge` requires `ScreenChallenge`; the screening authority account
+  must be distinct from both the challenger and the responsible target account.
 - screening records an `AdmissibilityScreened` transition and does not decide
   truth or wrongdoing.
 - `resolveChallenge` requires `ResolveChallenge`.
-- the challenge filer cannot resolve their own challenge.
+- the challenger and responsible target accounts cannot resolve the challenge,
+  including through different role-scoped authority subjects.
 - resolution records an `OutcomeResolved` transition.
+- an authorised, conflict-free panel may close a filed or screened challenge
+  with outcome `None`. This writes only a `Closed` challenge transition,
+  releases the open-challenge count and filing cap, and does not mutate the
+  recognised state.
 - a ZK-backed anonymous challenge package can require separate action-bound
   proof receipts for filing, screening, and resolution.
 - anonymous challenge proof-use receipts bind to `RecordDisclosureExecution`
   context, target challenge id, subject commitment, package id, policy id,
   proof receipt, and nullifier, so a `FileChallenge` proof cannot be reused as
   proof-use.
-- only an upheld challenge may mutate the recognised state.
+- only an upheld challenge may correct the recognised state to `Downgraded` or
+  `Voided`; a `Voided` state cannot be reversed to `Downgraded` by a later
+  challenge.
 - `applyRestoration` requires `ApplyRestoration`.
 - restoration records a `RestorationRecorded` transition and preserves prior
-  challenge history. It can restore a recognised state after rejected
-  good-faith or malicious/fabricated challenge handling, and the correction
-  and restoration package also allows restoration after an upheld challenge has
-  already moved the state to
-  `Downgraded` or `Voided`.
-- `closeChallenge` requires `CloseChallenge`.
+  challenge history. It is causal: the target must still be in the status
+  written by that challenge's resolution transition. A stale challenge cannot
+  overwrite a later recognised-state mutation.
+- the restoration target is derived from `targetStatusAtFiling`: filing at
+  `Challengeable` restores to `Challengeable`, while filing at `Vested` or
+  `Restored` may restore to `Restored`.
+- each recognised state stores `lastTransitionId`; each challenge stores
+  `targetStatusAtFiling` and `targetTransitionIdAtFiling`; challenge-transition
+  records store `targetTransitionIdBefore` and `targetTransitionIdAfter`.
+  Decision hashes include the challenge lifecycle status, latest
+  challenge-transition id, and target transition id, so approval cannot replay
+  across either challenge or recognised-state versions.
+- `closeChallenge` requires `CloseChallenge` and applies the same account-level
+  conflict exclusion as screening, resolution, and restoration. It can close a
+  filed or screened challenge without deciding an outcome. Receipt-backed
+  close authority may be recorded after challenge evidence becomes terminal,
+  but remains bound to the exact challenge, object, lifecycle version, target
+  version, and close decision hash. Recursive challenge resolution,
+  restoration, and close validate residual authority under both the challenge
+  package and the target state's fixed package before mutation or open-count
+  release.
 
-Challenge lifecycle admissibility is validated through the workflow package's
+Challenge lifecycle admissibility is validated through the challenge workflow
+package's
 `IChallengeLifecycleModule`. The default package uses
 `DefaultChallengeLifecycleModule`, preserving the current lifecycle order.
-`AVAStateMachine` still owns challenge storage and transition records, and it
-keeps non-delegable safety gates such as role-subject binding, authority-id
-binding, upstream evidence existence, known recognised-state targets,
-`Challengeable` filing targets, challenger self-resolution rejection, direct
-high-impact status registration rejection, and generic recognised-state
-transition recording.
+`AVAChallengeWorkflow` owns challenge and challenge-transition storage. It uses
+the challenge's fixed package for evidence, attribution, verification,
+disclosure, lifecycle, anti-abuse, and decision-authority validation.
+`AVAStateMachine` owns recognised-state storage and the generic transition
+ledger. Its one-time-bound challenge workflow is the only external contract
+that can request challenge-driven status changes, and the target state's fixed
+package still controls transition-rule validation. Both contracts retain
+non-delegable subject, authority, evidence, lifecycle, and conflict gates.
+Each governed transition rechecks its pinned evidence receipt against the
+record's historical workflow/package and calls that package's evidence
+lifecycle module. Evidence content, quality, and truth remain outside the
+contract.
 
 ## Challenge Outcomes
 
@@ -215,14 +386,16 @@ Current outcome effects:
 ```mermaid
 sequenceDiagram
     participant A as Actor
+    participant CW as AVAChallengeWorkflow
     participant SM as AVAStateMachine
     participant CTR as ChallengeTransitionRecord
     participant RSTR as RecognisedStateTransitionRecord
     participant RS as RecognisedStateRecord
 
-    A->>SM: resolveChallenge(...)
-    SM->>CTR: create OutcomeResolved transition
+    A->>CW: resolveChallenge(...)
+    CW->>CTR: create OutcomeResolved transition
     alt outcome is Upheld
+        CW->>SM: request restricted mutation
         SM->>RSTR: create recognised-state transition
         SM->>RS: update status through transition
     else non-mutating outcome
@@ -231,10 +404,11 @@ sequenceDiagram
 ```
 
 Every implemented challenge resolution or restoration path records a
-`ChallengeTransitionRecord`. Every recognised-state creation or status mutation
-also records a generic `RecognisedStateTransitionRecord` and emits a
-`RecognisedStateTransitionRecorded` event. Recognised-state mutation in the
-challenge path is paired with this generic transition ledger.
+`ChallengeTransitionRecord` in `AVAChallengeWorkflow`. Every recognised-state
+creation or status mutation also records a generic
+`RecognisedStateTransitionRecord` in `AVAStateMachine` and emits a
+`RecognisedStateTransitionRecorded` event. Challenge-driven entries bind both
+the target `packageId` and the challenge decision `decisionPackageId`.
 
 ## Publication Boundary
 
@@ -250,6 +424,11 @@ Attribution, Verification, TransitionRule, Disclosure, Allocation, Standing,
 Reward, Priority, Consequence, Penalty, Restoration, ChallengeLifecycle,
 EvidencePolicy, Audit, EditorialSystem, ResidualEditorialAuthority,
 DisclosureLifecycle, FieldPolicy, and AntiAbuse.
+`AVARulePackageLifecycleRegistry` separately owns package-lifecycle,
+object-migration-readiness, and disclosure-lifecycle-readiness records. Its
+constructor fixes the authority, package, disclosure-policy, recognised-state,
+and evidence readers; the package catalog no longer carries mutable readiness
+reader configuration.
 
 ```mermaid
 sequenceDiagram
@@ -259,8 +438,8 @@ sequenceDiagram
     participant MOD as PackageModules
     participant RS as RecognisedStateRecord
 
-    GOV->>RPR: registerRulePackage(workflowKey, modules, uri)
-    RPR-->>GOV: packageId and modulesHash
+    GOV->>RPR: registerRulePackage or supersedeRulePackage
+    RPR-->>GOV: packageId, modulesHash, modulesIdentityHash
     SM->>RPR: resolve active package for workflowKey
     SM->>MOD: run selected validation hooks
     SM->>RS: store stable packageId with record
@@ -278,20 +457,22 @@ reject records around the fixed substrate:
   `EvidenceCommitmentRegistry`;
 - disclosure policy references stay in `DisclosurePolicyRegistry`;
 - recognised states stay in `AVAStateMachine`;
+- challenges and challenge transitions stay in `AVAChallengeWorkflow`;
 - audit receipts stay in `AttestationAuditModule`; workflow-aware audit records
   must carry a role-scoped authority subject, and evidence/state/transition
   audits use the audited receipt or target object's stable package identity.
 
 Current tests use this scaffold to show a review-service workflow and a
 challenge/integrity workflow sharing the same recognised-state substrate.
-`AVAStateMachine` dispatches its stage, transition, disclosure,
-evidence-policy, evidence-lifecycle, field-policy, anti-abuse, and
-challenge-lifecycle admissibility hooks by the active package for the workflow
-when a workflow object is formed. Residual editorial authority validation is
-called on authorised state-governance actions while `AVAStateMachine` keeps
-storage and mutation gates. The resulting review contribution, recognised
-state, challenge, transition, and downstream records bind the stable `packageId`
-used at creation time. `StandingRegistry`, `AllocationExecutor`,
+`AVAWorkflowValidator` centralises package-bound attribution, verification,
+evidence, disclosure, field-policy, and anti-abuse checks. `AVAStateMachine`
+uses it for manuscript, review, and recognised-state formation;
+`AVAChallengeWorkflow` uses it with the independently selected challenge
+package. Residual authority validation is decision-bound while the state
+machine keeps recognised-state storage and mutation gates. The resulting review
+contribution, recognised state, challenge, transition, and downstream records
+bind the stable package identities used at creation or decision time.
+`StandingRegistry`, `AllocationExecutor`,
 `ConsequenceExecutor`, and target-bound audit paths dispatch adapters by
 reading the target recognised state, transition, challenge transition, or
 evidence receipt `packageId`, not by reloading the current package for the
@@ -300,7 +481,7 @@ records must belong to the same workflow as the object or target recognised
 state; cross-workflow evidence references are rejected as substrate errors.
 Scenario tests cover that historical binding across double-blind review
 vesting, anonymous challenge proof-use/resolution, and correction/restoration
-records after same-workflow re-registration.
+records after same-workflow supersession.
 
 Current module coverage:
 
@@ -312,13 +493,13 @@ Current module coverage:
 | Disclosure/privacy | `IDisclosurePolicyModule` | `DefaultDisclosurePolicyModule` | disclosure scenario modules, `ZKBackedDisclosureModule` | Rule package and evidence registry | No reveal or decryption |
 | Challenge lifecycle | `IChallengeLifecycleModule` | `DefaultChallengeLifecycleModule` | `PanelOnlyChallengeLifecycleModule` | Rule package | Admissibility only |
 | Evidence policy | `IEvidencePolicyModule` | `DefaultEvidencePolicyModule` | `TypedEvidencePolicyModule` | Rule package | Active on workflow-scoped evidence registration and recognised-state validation; reference/type/workflow validation only |
-| Audit adapter | `IAuditAdapter` | `DefaultAuditAdapter` | `HashAnchoredAuditAdapter` | Evidence receipt or target `packageId` | Active on workflow-aware and target-bound attestation paths; attestation reference and authority-subject validation only |
+| Audit adapter | `IAuditAdapter` | `DefaultAuditAdapter` | `HashAnchoredAuditAdapter` | Evidence receipt or target `packageId` | Active on workflow-aware and target-bound attestation paths; substrate records target kind/action while adapters validate reference and authority-subject context only |
 | Editorial adapter | `IEditorialSystemAdapter` | `DefaultEditorialSystemAdapter` | `EditorialReferenceAdapter` | Rule package | Workflow-aware manuscript overload requires a known package; adapter is active only when optional external reference metadata is supplied |
-| Residual editorial authority | `IResidualEditorialAuthorityModule` plus `AuthorityApprovalRegistry` for receipt-backed examples | `DefaultResidualEditorialAuthorityModule` | `ProceduralEditorialAuthorityModule`, `StructuredResidualEditorialAuthorityModule`, `ApprovalReceiptAuthorityModule`, `CredentialGatedPanelModule` | Rule package | Procedural authority validation only; supports single-role, threshold-panel, multisig, institutional-co-signature, conflict-excluded-panel, emergency-pause, approval-receipt, and standing-credential-gated validator formats without publication decision or merit logic |
+| Residual editorial authority | `IResidualEditorialAuthorityModule` plus `AuthorityApprovalRegistry` for receipt-backed examples | `DefaultResidualEditorialAuthorityModule` | `ProceduralEditorialAuthorityModule`, `IllustrativeStaticAuthorityShapeModule`, `ApprovalReceiptAuthorityModule`, `CredentialGatedPanelModule` | Rule package | Procedural authority validation only. Static examples cover a single authority or emergency gate. Real m-of-n approval uses distinct canonical-subject receipts with optional conflict exclusion. No generic multisig or cross-role institutional co-signature implementation is claimed, and no authority module decides publication or merit. |
 | Field policy | `IFieldPolicyModule` | `DefaultFieldPolicyModule` | `DisciplineFieldPolicyModule` | Rule package | Active on recognised-state validation; discipline rule validation only |
 | Anti-abuse | `IAntiAbuseModule` / optional `IChallengeRateLimitModule` | `DefaultAntiAbuseModule` | `SubjectRateLimitModule`, `RestrictionAwareChallengeIntakeModule` | Rule package | Active on review, challenge, and downstream record paths; default package is a permissive baseline; example modules can veto selected subject/object/action paths, repeated challenge filings, or active challenge-intake eligibility restrictions; no sanction execution |
 | Standing | `IStandingAdapter` | `DefaultStandingAdapter` | `VectorStandingAdapter` | Recognised-state `packageId` | Procedural weight record only |
-| Reward/value | `IRewardAdapter` | `DefaultRewardAdapter` | `StablecoinRecordRewardAdapter`, `GenericTokenRecordRewardAdapter` | Recognised-state `packageId` | Record only, no transfer |
+| Reward/value | `IRewardAdapter` | `DefaultRewardAdapter` | `StablecoinRecordRewardAdapter`, `GenericTokenRecordRewardAdapter` | Recognised-state `packageId` | Adapter validates bounded records; mock settlement execution is separate and package/asset bound |
 | Priority | `IPriorityAdapter` | `DefaultPriorityAdapter` | `PriorityTokenRecordAdapter`, `RentedPriorityRecordAdapter` | Recognised-state `packageId` | Administrative queue record only |
 | Penalty | `IPenaltyAdapter` | `DefaultPenaltyAdapter` | `ProceduralPenaltyRecordAdapter`, `PriorityReturnObligationRecordAdapter` | Recognised-state `packageId` | Record only, no sanction execution |
 | Restoration | `IRestorationAdapter` | `DefaultRestorationAdapter` | `RestorationProcedureRecordAdapter`, `CorrectionRestorationRecordAdapter` | Recognised-state `packageId` | Repair record only |
@@ -382,7 +563,6 @@ flowchart TB
     ConsequenceRecord --> Boundary
     AllocationRecord --> Boundary
 
-    LegacyStandingInput["registerStandingInput"] -. disabled .-> Boundary
 ```
 
 ```mermaid
@@ -423,8 +603,6 @@ Rules currently enforced:
   penalty, and restoration reject raw review ids, raw challenge ids, unknown
   recognised-state ids, unsupported recognised-state statuses, and unknown or
   inactive target subjects.
-- legacy `registerStandingInput` is disabled in the active demo so it cannot
-  bypass recognised-state/status/evidence/authority checks.
 - `evidenceReceiptId` must be nonzero, registered, workflow-scoped, package
   bound, and currently `Active` in `EvidenceCommitmentRegistry`; upstream
   review, recognised-state, and challenge formation also reject unknown,
@@ -434,12 +612,14 @@ Rules currently enforced:
 - authority ids representing the acting authority must match the caller's
   active role-scoped subject.
 - recognised states store the responsible role-scoped subject. Standing and
-  consequence / penalty / restoration records that target a recognised state
-  must use the same responsible subject unless a future explicitly designed
-  cross-subject record type is added.
-- downstream adapters are selected from the target recognised state's recorded
-  package id, so re-registering a workflow key cannot rewrite old state
-  behaviour.
+  ordinary consequence / penalty / restoration records that target a
+  recognised state use that subject. The explicit exception is a negligent or
+  malicious/fabricated challenger finding: it is challenge-linked, uses the
+  challenge package and evidence, and targets the recorded challenger subject.
+- downstream adapters are selected from the applicable recorded package id, so
+  explicit workflow supersession cannot rewrite old behaviour. Target-side
+  effects use the recognised state's package; challenger-side findings use the
+  challenge's package.
 - consequence registration does not create standing or allocation records.
 - standing updates do not create allocation or consequence records.
 - allocation executions do not create standing or consequence records.
@@ -457,9 +637,26 @@ Rules currently enforced:
 - reward and penalty reversal is append-only: grant, execution, freeze, void,
   repayment obligation, setoff, waiver, satisfaction, reversal, and restoration
   records are retained rather than deleted.
-- setoff, waiver, and satisfaction are mutually exclusive terminal recovery
-  receipts for a source. Open escrow deposits cannot receive recovery receipts,
-  and refunded escrow sources cannot become recovery chains.
+- active recovery is source-bound and append-only: a completed origin token
+  transfer or escrow claim must match package, subject, asset, payer, and full
+  amount; it then links to one compatible penalty consequence, one repayment
+  obligation, and exactly one terminal clawback, setoff, waiver, or satisfaction
+  receipt. Only clawback moves the configured mock asset. External calls occur
+  after settlement and revision state has been written, and reentrancy is
+  rejected. Clawback revalidates the consequence package identity and evidence
+  lifecycle; record-only setoff, waiver, and satisfaction remain available to
+  close an existing obligation. Open or refunded escrow sources cannot start
+  recovery chains.
+- standing, allocation, and consequence record creation invokes the historical
+  package's action-scoped evidence-lifecycle module after checking receipt
+  status and package binding. Active non-refund settlement also revalidates the
+  package identity and invokes that module for `ExecuteValueSettlement`.
+- active allocation settlement revalidates the current source state, its pinned
+  evidence, and the allocation evidence. A new repayment obligation also
+  requires the linked penalty evidence to remain active. Escrow refund remains
+  available after source-evidence invalidation, package-identity drift, or
+  recipient-subject deactivation because it returns an existing deposit to the
+  original payer rather than creating a new benefit.
 - generic allocation and generic consequence records also route through the
   same value-execution readiness surface, with parameterized record-only asset,
   payer, amount/units, mode, execution-reference, authority, evidence, and URI
@@ -477,11 +674,39 @@ Rules currently enforced:
   record and write only a non-transferable, expiring, revocable/supersedable
   proof carrier. It does not create standing, reputation, reward, priority,
   allocation, consequence, publication, or manuscript-merit effects.
+- an expired or stale-revision ZK credential remains unable to prove but may be
+  explicitly superseded by a fresh proof with a later epoch for the same
+  canonical key; the old record retains replacement lineage and cannot lock the
+  issuance slot permanently.
+- standing source-set, completeness-attestation, computation-statement, ZK
+  proof, and ordinary/ZK credential issuance paths revalidate their historical
+  package identity and invoke its evidence-lifecycle module with the exact
+  record action. Package identity drift blocks new records and makes existing
+  proof surfaces fail closed.
 - standing credential proof is package-, subject-, vector-, category-,
-  threshold-, and range-bound.
-- standing-computation records bind epoch, source-record-set hash,
-  computation-rule hash, and active/superseded/invalidated status. Credentials
-  can prove only while the source computation remains active.
+  threshold-, and range-bound. Ordinary and ZK issuers enforce a 365-day
+  maximum validity period.
+- ordinary standing computation and credential proof fail closed when the
+  role-scoped subject is deactivated or the source evidence receipt becomes
+  non-active.
+- `StandingRevisionRegistry` maintains an append-only package/subject revision
+  waterline. Relevant recognised-state, challenge, standing, penalty,
+  eligibility, reward, and recovery events advance it without computing
+  standing. An upheld challenge mutation advances the target revision through
+  the recognised-state transition exactly once; challenge resolution does not
+  repeat that target update. Standing-computation records bind the current
+  revision together with epoch, source-record-set hash, computation-rule hash, and
+  active/superseded/invalidated status. Credentials can prove only while the
+  source computation remains active and its revision remains current. An
+  authorised panel may advance the same watermark for an anonymous subject
+  commitment through an evidence-backed, package-bound commitment-revision
+  receipt; the path records no account or identity link.
+- On the canonical path, each record-driven revision writer is bound to an
+  explicit `packageId` before revision use starts for that package. First use
+  seals that package's writer set without globally blocking writer setup for a
+  different package. Every write rechecks the
+  package application and subject application, preventing a writer from one
+  package from invalidating another package's credential surface.
 - the Formula V0 standing-computation example validates bounded reversible
   outputs for the four demo vectors. It does not compute complete historical
   standing and does not apply standing.
@@ -506,13 +731,18 @@ Rules currently enforced:
   credential commitment, vector/category/range, epoch, source-record-set root,
   computation-rule hash, expiry, and authority. Proof-use records require a
   verifier proof whose public key matches the stored credential commitment and
-  reject replayed use nullifiers; they expose no owner account, balance,
+  reject replayed use nullifiers. Proof and use contexts bind chain id,
+  registry deployment, and verifier deployment; use contexts additionally bind
+  the beneficiary and reject copied submissions from another caller. Verifier
+  runtime codehash and proof domain are pinned, and direct drift disables active
+  proof use. They expose no owner account, balance,
   transfer, approval, reward, priority, reveal, publication, or manuscript-merit
   surface.
 - credential proof checks also require the source computation statement
   referenced by the ZK proof receipt to remain active. Superseded or invalidated
-  statements stop supporting stale credential proof without deleting prior
-  proof or credential history.
+  statements, or non-active evidence bound to the source set, completeness
+  attestation, or statement, stop supporting stale credential proof without
+  deleting prior proof or credential history.
 - source-bound ZK credential suspension records require either a matching
   value-settlement record or a matching challenge transition record. Good-faith
   rejected challenges cannot suspend a credential as misconduct; negligent and
@@ -536,15 +766,36 @@ Rules currently enforced:
 - anonymous challenge proof-use receipts store the referenced proof receipt's
   proof context hash, verifier, and proof-domain hash while preserving
   no-reveal semantics.
+- canonical standing ZK proof receipts also pin the verifier runtime codehash
+  and proof-domain hash. Runtime or domain drift blocks new registration and
+  makes existing proof receipts unusable; mutable proxy verifier identities
+  are not treated as stable.
 - external operation receipts store an operation context hash and terminal
   receipts link to their source operation; they do not execute external queues,
-  billing, sanctions, or publication actions.
-- value-settlement receipts store source execution mode, source settlement
-  kind, source execution reference, and a settlement context hash; priority
+  billing, sanctions, or publication actions. Requests and acknowledgements
+  require active evidence and revalidate historical package identity and
+  evidence lifecycle, and require the source recognised-state transition to
+  remain current. Cancellation and supersession retain the pinned
+  workflow/package/evidence reference and remain defensive closeout paths after
+  package drift, evidence termination, or a later state transition. Healthy
+  packages still apply application and anti-abuse policy to closeout; after
+  package-identity drift, closeout is limited to substrate authority and the
+  immutable historical target, subject, and evidence bindings.
+- value-settlement receipts store the recognised-state id, source execution
+  mode, source settlement kind, source execution reference, and a versioned
+  settlement context hash; priority
   token paths remain bounded administrative queue/service-right artifacts only.
+  Reward freeze/void and record-only setoff/waiver/satisfaction remain available
+  as defensive closeouts over immutable historical references after evidence or
+  subject deactivation. Vest/restore, new settlement or obligation creation,
+  and clawback remain effectful paths and require active references.
 - none of these paths exposes publication priority, manuscript merit,
   acceptance, or rejection functions.
-- current verification is 263 tests passing.
+- the default canonical profile passes 250 tests; the explicit retained
+  profile passes 637 regression tests.
+- four canonical handler-based invariant suites pass at 512 runs by 128 calls
+  for recursive challenge lineage/open counts, recovery uniqueness,
+  standing-proof freshness, and cross-application package/reference isolation.
 - The current state-machine surface includes authorised standing computation,
   credential use-surface hardening, disclosure proof-use, and lifecycle-record
   closure hardening.

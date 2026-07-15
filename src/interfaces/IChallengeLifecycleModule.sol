@@ -2,8 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "../AVADataTypes.sol";
+import {IRuleModuleIdentity} from "./IRuleModuleIdentity.sol";
 
-interface IChallengeLifecycleModule {
+interface IChallengeLifecycleModule is IRuleModuleIdentity {
     struct ChallengeLifecycleContext {
         bytes32 workflowKey;
         AVADataTypes.Action action;

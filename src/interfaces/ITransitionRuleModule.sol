@@ -2,8 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "../AVADataTypes.sol";
+import {IRuleModuleIdentity} from "./IRuleModuleIdentity.sol";
 
-interface ITransitionRuleModule {
+interface ITransitionRuleModule is IRuleModuleIdentity {
     /// @notice Validator-only recognised-state transition seam.
     /// @dev Success means no transition veto only. Substrate hard gates still
     /// own status mutation, transition records, and high-impact status limits.

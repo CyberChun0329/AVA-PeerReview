@@ -1,5 +1,11 @@
 cache/
+cache-canonical/
+cache-retained/
 out/
+out-canonical/
+out-retained/
+__pycache__/
+*.py[cod]
 .DS_Store
 broadcast/
 *.log
@@ -8,3 +14,4 @@ AGENTS.md
 .codex/
 .claude/
 .agents/
+github-snapshot/

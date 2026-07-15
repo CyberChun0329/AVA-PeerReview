@@ -2,7 +2,7 @@
 
 Status: current integration handoff
 
-Date: 2026-06-06
+Date: 2026-07-12
 
 This pack is the practical entrypoint for another developer, reviewer, or paper
 assistant who needs to understand the implemented AVA-PeerReview Solidity demo
@@ -57,13 +57,13 @@ Before adding or replacing a module:
 3. Register it through a rule package when workflow-specific behavior is
    needed.
    - Existing recognised states remain bound to their historical `packageId`.
-   - Re-registering a `workflowKey` only changes the active package for future
-     records.
+   - Explicitly superseding a `workflowKey` changes the active package only for
+     future records.
 4. Add tests for:
    - package registration;
    - module rejection fail-closed behavior;
    - permissive module cannot bypass substrate hard gates;
-   - historical package binding after workflow re-registration;
+   - historical package binding after workflow supersession;
    - forbidden selector absence.
 5. Keep AVA at three stages only.
    - Transition, challenge, disclosure, standing, reward, penalty,
@@ -93,7 +93,9 @@ When creating a new scenario workflow:
 1. Define the workflow key and rule-package modules.
 2. Define required disclosure policy and evidence policy references.
 3. Define which recognised-state statuses can support downstream records.
-4. Define the challenge lifecycle module and correction/restoration path.
+4. Define a challenge workflow/package, challenge governed object and
+   recognised-state formation path, lifecycle policy, and target
+   correction/restoration path.
 5. Define whether standing, reward, priority, penalty, restoration, value
    settlement, external operation, standing credential, or ZK proof support is
    needed.
@@ -101,25 +103,24 @@ When creating a new scenario workflow:
 7. Add a scenario test proving:
    - the happy path works;
    - invalid evidence/subject/authority/package/status is rejected;
-   - workflow re-registration does not rewrite old records;
+   - workflow supersession does not rewrite old records;
    - raw review, raw challenge, and raw evidence ids cannot create downstream
      effects;
    - forbidden selectors remain absent.
 
 ## Current Runtime Evidence
 
-The current baseline demo script demonstrates:
+The canonical trace script demonstrates:
 
-- manuscript intake;
-- review contribution intake;
-- evidence receipt and disclosure policy references;
-- provisional recognised state;
-- challenge filing, screening, and panel resolution;
-- recognised-state status change;
-- bounded consequence record;
-- standing update record;
-- allocation execution record;
-- attestation/audit record.
+- a review governed object and evidence-backed recognised state;
+- authorised review-state vesting;
+- a recursive challenge with its own object, recognised state, evidence, and
+  package;
+- challenge filing, screening, panel resolution, and target-package
+  correction;
+- challenge-state vesting before bounded consequence and standing records;
+- malicious/fabricated outcome recording without automatic consequence;
+- explicit restoration with preserved challenge and state-transition lineage.
 
 The broader test suite covers additional proof, disclosure, credential,
 settlement, recovery, external-operation, and package-reconfiguration surfaces.
@@ -127,8 +128,10 @@ settlement, recovery, external-operation, and package-reconfiguration surfaces.
 Current verification expectation:
 
 - `forge build` passes;
-- `forge test` passes with 263 tests;
-- the baseline demo script runs with `--offline` in this environment.
+- the default canonical profile passes 250 tests;
+- the explicit retained profile passes 637 regression tests;
+- the four canonical invariant suites pass at 512 runs by 128 calls;
+- the canonical trace script runs with `--offline` in this environment.
 
 ## Hard Boundaries
 

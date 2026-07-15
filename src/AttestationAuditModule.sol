@@ -6,12 +6,14 @@ import {AuthorityMatrix} from "./AuthorityMatrix.sol";
 import {AVARulePackageRegistry} from "./AVARulePackageRegistry.sol";
 import {EvidenceCommitmentRegistry} from "./EvidenceCommitmentRegistry.sol";
 import {AVAStateMachine} from "./AVAStateMachine.sol";
+import {AVAChallengeWorkflow} from "./AVAChallengeWorkflow.sol";
 
 contract AttestationAuditModule {
     AuthorityMatrix public immutable authorityMatrix;
     AVARulePackageRegistry public immutable rulePackageRegistry;
     EvidenceCommitmentRegistry public immutable evidenceRegistry;
     AVAStateMachine public immutable stateMachine;
+    AVAChallengeWorkflow public immutable challengeWorkflow;
     uint256 public nextAttestationId = 1;
 
     mapping(uint256 => AVADataTypes.AttestationRecord) private attestations;
@@ -19,6 +21,7 @@ contract AttestationAuditModule {
     struct AttestationContext {
         AVADataTypes.Role actingRole;
         bytes32 workflowKey;
+        AVADataTypes.AttestationTargetKind targetKind;
         AVADataTypes.Action action;
         bytes32 objectId;
         uint256 evidenceReceiptId;
@@ -27,43 +30,27 @@ contract AttestationAuditModule {
     }
 
     event AttestationRecorded(
-        uint256 indexed id, bytes32 indexed objectId, string attestationType, string uri, address indexed recordedBy
+        uint256 indexed id,
+        bytes32 indexed objectId,
+        AVADataTypes.AttestationTargetKind targetKind,
+        AVADataTypes.Action action,
+        string attestationType,
+        string uri,
+        address indexed recordedBy
     );
 
     constructor(
         AuthorityMatrix authorityMatrix_,
         AVARulePackageRegistry rulePackageRegistry_,
         EvidenceCommitmentRegistry evidenceRegistry_,
-        AVAStateMachine stateMachine_
+        AVAStateMachine stateMachine_,
+        AVAChallengeWorkflow challengeWorkflow_
     ) {
         authorityMatrix = authorityMatrix_;
         rulePackageRegistry = rulePackageRegistry_;
         evidenceRegistry = evidenceRegistry_;
         stateMachine = stateMachine_;
-    }
-
-    function recordAttestation(
-        AVADataTypes.Role actingRole,
-        bytes32 objectId,
-        string calldata attestationType,
-        string calldata uri
-    ) external pure returns (uint256) {
-        (actingRole, objectId, attestationType, uri);
-        revert AVADataTypes.InvalidState(0);
-    }
-
-    function recordAttestation(
-        AVADataTypes.Role actingRole,
-        bytes32 workflowKey,
-        AVADataTypes.Action action,
-        bytes32 objectId,
-        uint256 evidenceReceiptId,
-        bytes32 attestationHash,
-        string calldata attestationType,
-        string calldata uri
-    ) external pure returns (uint256) {
-        (actingRole, workflowKey, action, objectId, evidenceReceiptId, attestationHash, attestationType, uri);
-        revert AVADataTypes.InvalidState(0);
+        challengeWorkflow = challengeWorkflow_;
     }
 
     function recordAttestation(
@@ -81,6 +68,7 @@ contract AttestationAuditModule {
             AttestationContext({
                 actingRole: actingRole,
                 workflowKey: workflowKey,
+                targetKind: AVADataTypes.AttestationTargetKind.EvidenceReceipt,
                 action: action,
                 objectId: objectId,
                 evidenceReceiptId: evidenceReceiptId,
@@ -105,6 +93,7 @@ contract AttestationAuditModule {
             AttestationContext({
                 actingRole: actingRole,
                 workflowKey: recognisedState.workflowKey,
+                targetKind: AVADataTypes.AttestationTargetKind.RecognisedState,
                 action: AVADataTypes.Action.RecordAttestation,
                 objectId: bytes32(recognisedStateId),
                 evidenceReceiptId: recognisedState.evidenceReceiptId,
@@ -127,19 +116,20 @@ contract AttestationAuditModule {
     ) external returns (uint256 id) {
         AVADataTypes.RecognisedStateTransitionRecord memory transition =
             stateMachine.getRecognisedStateTransition(transitionId);
-        AVADataTypes.RecognisedStateRecord memory recognisedState =
-            stateMachine.getRecognisedState(transition.recognisedStateId);
+        AVARulePackageRegistry.RulePackage memory decisionPackage =
+            rulePackageRegistry.getRulePackageById(transition.decisionPackageId);
         return _recordAttestationWithPackage(
             AttestationContext({
                 actingRole: actingRole,
-                workflowKey: recognisedState.workflowKey,
+                workflowKey: decisionPackage.workflowKey,
+                targetKind: AVADataTypes.AttestationTargetKind.RecognisedStateTransition,
                 action: transition.action,
                 objectId: bytes32(transitionId),
                 evidenceReceiptId: transition.evidenceReceiptId,
                 attestationHash: attestationHash,
                 authorityId: authorityId
             }),
-            transition.packageId,
+            transition.decisionPackageId,
             attestationType,
             uri
         );
@@ -153,12 +143,14 @@ contract AttestationAuditModule {
         string calldata attestationType,
         string calldata uri
     ) external returns (uint256 id) {
-        AVADataTypes.ChallengeTransitionRecord memory transition = stateMachine.getChallengeTransition(transitionId);
+        AVADataTypes.ChallengeTransitionRecord memory transition =
+            challengeWorkflow.getChallengeTransition(transitionId);
         return _recordAttestationWithPackage(
             AttestationContext({
                 actingRole: actingRole,
                 workflowKey: transition.workflowKey,
-                action: AVADataTypes.Action.RecordAttestation,
+                targetKind: AVADataTypes.AttestationTargetKind.ChallengeTransition,
+                action: _challengeTransitionAction(transition.transitionKind),
                 objectId: bytes32(transitionId),
                 evidenceReceiptId: transition.evidenceReceiptId,
                 attestationHash: attestationHash,
@@ -175,8 +167,11 @@ contract AttestationAuditModule {
         string calldata attestationType,
         string calldata uri
     ) internal returns (uint256 id) {
-        AVADataTypes.EvidenceReceipt memory receipt =
-            evidenceRegistry.requireUsableEvidenceReceipt(context.evidenceReceiptId, context.workflowKey);
+        AVADataTypes.EvidenceReceipt memory receipt = evidenceRegistry.getEvidenceReceipt(context.evidenceReceiptId);
+        receipt = evidenceRegistry.requireUsableEvidenceReceipt(
+            context.evidenceReceiptId, receipt.appId, context.workflowKey
+        );
+        if (context.objectId != bytes32(receipt.id)) revert AVADataTypes.InvalidState(receipt.id);
         return _recordAttestationWithPackage(context, receipt.packageId, attestationType, uri);
     }
 
@@ -192,30 +187,44 @@ contract AttestationAuditModule {
         if (
             context.workflowKey == bytes32(0) || context.objectId == bytes32(0) || context.evidenceReceiptId == 0
                 || context.attestationHash == bytes32(0) || context.authorityId == bytes32(0)
-                || bytes(attestationType).length == 0
+                || context.targetKind == AVADataTypes.AttestationTargetKind.None || bytes(attestationType).length == 0
         ) {
             revert AVADataTypes.EmptyValue();
         }
-        AVADataTypes.EvidenceReceipt memory evidence =
-            evidenceRegistry.requireUsableEvidenceReceipt(context.evidenceReceiptId, context.workflowKey);
-        if (evidence.packageId != packageId) revert AVADataTypes.InvalidState(context.evidenceReceiptId);
         AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
         if (rulePackage.workflowKey != context.workflowKey) revert AVADataTypes.InvalidState(packageId);
-        rulePackage.auditAdapter.validateAuditRecord(
-            context.workflowKey,
-            context.actingRole,
-            context.action,
-            context.objectId,
-            context.evidenceReceiptId,
-            context.attestationHash,
-            msg.sender
+        AVADataTypes.EvidenceReceipt memory evidence = evidenceRegistry.requireUsableEvidenceReceipt(
+            context.evidenceReceiptId, rulePackage.appId, context.workflowKey
         );
+        if (evidence.packageId != packageId) revert AVADataTypes.InvalidState(context.evidenceReceiptId);
+        rulePackage.evidenceLifecycleModule
+            .validateEvidenceLifecycle(
+                context.workflowKey,
+                AVADataTypes.Action.RecordAttestation,
+                context.evidenceReceiptId,
+                AVADataTypes.EvidenceLifecycleKind.None,
+                0,
+                bytes32(0),
+                msg.sender
+            );
+        rulePackage.auditAdapter
+            .validateAuditRecord(
+                context.workflowKey,
+                context.actingRole,
+                context.action,
+                context.objectId,
+                context.evidenceReceiptId,
+                context.attestationHash,
+                msg.sender
+            );
 
         id = nextAttestationId++;
         attestations[id] = AVADataTypes.AttestationRecord({
             id: id,
             workflowKey: context.workflowKey,
             packageId: packageId,
+            targetKind: context.targetKind,
+            action: context.action,
             objectId: context.objectId,
             evidenceReceiptId: context.evidenceReceiptId,
             attestationHash: context.attestationHash,
@@ -226,7 +235,29 @@ contract AttestationAuditModule {
             recordedBy: msg.sender
         });
 
-        emit AttestationRecorded(id, context.objectId, attestationType, uri, msg.sender);
+        emit AttestationRecorded(
+            id, context.objectId, context.targetKind, context.action, attestationType, uri, msg.sender
+        );
+    }
+
+    function _challengeTransitionAction(AVADataTypes.ChallengeTransitionKind transitionKind)
+        internal
+        pure
+        returns (AVADataTypes.Action)
+    {
+        if (transitionKind == AVADataTypes.ChallengeTransitionKind.AdmissibilityScreened) {
+            return AVADataTypes.Action.ScreenChallenge;
+        }
+        if (transitionKind == AVADataTypes.ChallengeTransitionKind.OutcomeResolved) {
+            return AVADataTypes.Action.ResolveChallenge;
+        }
+        if (transitionKind == AVADataTypes.ChallengeTransitionKind.RestorationRecorded) {
+            return AVADataTypes.Action.ApplyRestoration;
+        }
+        if (transitionKind == AVADataTypes.ChallengeTransitionKind.Closed) {
+            return AVADataTypes.Action.CloseChallenge;
+        }
+        revert AVADataTypes.InvalidState(uint256(transitionKind));
     }
 
     function getAttestation(uint256 id) external view returns (AVADataTypes.AttestationRecord memory) {

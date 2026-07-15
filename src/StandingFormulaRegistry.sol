@@ -6,11 +6,13 @@ import {AuthorityMatrix} from "./AuthorityMatrix.sol";
 import {AVARulePackageRegistry} from "./AVARulePackageRegistry.sol";
 import {EvidenceCommitmentRegistry} from "./EvidenceCommitmentRegistry.sol";
 import {IStandingFormulaRegistry} from "./interfaces/IStandingFormulaRegistry.sol";
+import {StandingRevisionRegistry} from "./StandingRevisionRegistry.sol";
 
 contract StandingFormulaRegistry is IStandingFormulaRegistry {
     AuthorityMatrix public immutable authorityMatrix;
     AVARulePackageRegistry public immutable rulePackageRegistry;
     EvidenceCommitmentRegistry public immutable evidenceRegistry;
+    StandingRevisionRegistry public immutable standingRevisionRegistry;
 
     uint256 public nextStandingFormulaId = 1;
     uint256 public nextSourceSetCommitmentId = 1;
@@ -40,10 +42,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
     );
 
     event SourceSetCommitmentRegistered(
-        uint256 indexed id,
-        uint256 indexed formulaId,
-        bytes32 indexed subjectCommitment,
-        bytes32 sourceRecordSetRoot
+        uint256 indexed id, uint256 indexed formulaId, bytes32 indexed subjectCommitment, bytes32 sourceRecordSetRoot
     );
 
     event SourceSetCompletenessAttestationRegistered(
@@ -60,10 +59,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         bytes32 outputCommitmentHash
     );
     event StandingComputationStatementSuperseded(
-        uint256 indexed id,
-        uint256 indexed supersededBy,
-        bytes32 indexed subjectCommitment,
-        bytes32 authorityId
+        uint256 indexed id, uint256 indexed supersededBy, bytes32 indexed subjectCommitment, bytes32 authorityId
     );
     event StandingComputationStatementInvalidated(
         uint256 indexed id,
@@ -76,17 +72,19 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
     constructor(
         AuthorityMatrix authorityMatrix_,
         AVARulePackageRegistry rulePackageRegistry_,
-        EvidenceCommitmentRegistry evidenceRegistry_
+        EvidenceCommitmentRegistry evidenceRegistry_,
+        StandingRevisionRegistry standingRevisionRegistry_
     ) {
         if (
             address(authorityMatrix_) == address(0) || address(rulePackageRegistry_) == address(0)
-                || address(evidenceRegistry_) == address(0)
+                || address(evidenceRegistry_) == address(0) || address(standingRevisionRegistry_) == address(0)
         ) {
             revert AVADataTypes.EmptyValue();
         }
         authorityMatrix = authorityMatrix_;
         rulePackageRegistry = rulePackageRegistry_;
         evidenceRegistry = evidenceRegistry_;
+        standingRevisionRegistry = standingRevisionRegistry_;
     }
 
     function registerStandingFormula(AVADataTypes.Role actingRole, StandingFormulaInput calldata input)
@@ -97,28 +95,25 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
             msg.sender, actingRole, AVADataTypes.Action.RegisterStandingFormula, input.authorityId
         );
         if (
-            input.workflowKey == bytes32(0) || input.vectorKey == bytes32(0) || input.formulaVersion == 0
-                || input.computationRuleHash == bytes32(0) || input.sourceSetPolicyHash == bytes32(0)
-                || input.decayPolicyHash == bytes32(0) || input.capPolicyHash == bytes32(0)
-                || input.restorationPolicyHash == bytes32(0) || input.verifier == address(0)
-                || input.authorityId == bytes32(0) || bytes(input.uri).length == 0
+            input.appId == bytes32(0) || input.workflowKey == bytes32(0) || input.vectorKey == bytes32(0)
+                || input.formulaVersion == 0 || input.computationRuleHash == bytes32(0)
+                || input.sourceSetPolicyHash == bytes32(0) || input.decayPolicyHash == bytes32(0)
+                || input.capPolicyHash == bytes32(0) || input.restorationPolicyHash == bytes32(0)
+                || input.verifier == address(0) || input.authorityId == bytes32(0) || bytes(input.uri).length == 0
         ) {
             revert AVADataTypes.EmptyValue();
         }
 
-        uint256 packageId = rulePackageRegistry.getRulePackage(input.workflowKey).packageId;
+        uint256 packageId = rulePackageRegistry.getRulePackage(input.appId, input.workflowKey).packageId;
         bytes32 key = _formulaKey(
-            packageId,
-            input.vectorKey,
-            input.formulaVersion,
-            input.computationRuleHash,
-            input.sourceSetPolicyHash
+            packageId, input.vectorKey, input.formulaVersion, input.computationRuleHash, input.sourceSetPolicyHash
         );
         if (formulaIdByKey[key] != 0) revert AVADataTypes.InvalidState(formulaIdByKey[key]);
 
         id = nextStandingFormulaId++;
         formulas[id] = StandingFormulaRecord({
             id: id,
+            appId: input.appId,
             workflowKey: input.workflowKey,
             packageId: packageId,
             vectorKey: input.vectorKey,
@@ -146,7 +141,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         StandingFormulaRecord memory formula = formulas[input.formulaId];
         if (formula.id == 0) revert AVADataTypes.UnknownReference(input.formulaId);
         authorityMatrix.requireAuthorisedSubject(
-            msg.sender, actingRole, AVADataTypes.Action.RegisterStandingFormula, input.authorityId
+            msg.sender, actingRole, AVADataTypes.Action.RegisterStandingSourceSetCommitment, input.authorityId
         );
         if (
             !formula.active || input.subjectCommitment == bytes32(0) || input.categoryHash == bytes32(0)
@@ -156,13 +151,23 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         ) {
             revert AVADataTypes.EmptyValue();
         }
+        _validateEvidenceUses(
+            formula.packageId,
+            formula.workflowKey,
+            AVADataTypes.Action.RegisterStandingSourceSetCommitment,
+            input.evidenceReceiptId,
+            0,
+            0
+        );
         AVADataTypes.EvidenceReceipt memory receipt =
-            evidenceRegistry.requireUsableEvidenceReceipt(input.evidenceReceiptId, formula.workflowKey);
+            evidenceRegistry.requireUsableEvidenceReceipt(input.evidenceReceiptId, formula.appId, formula.workflowKey);
         if (receipt.packageId != formula.packageId) revert AVADataTypes.InvalidState(input.evidenceReceiptId);
 
+        uint256 standingRevision = standingRevisionRegistry.currentRevision(formula.packageId, input.subjectCommitment);
         bytes32 proofKey = _proofKey(
             formula.packageId,
             input.subjectCommitment,
+            standingRevision,
             formula.vectorKey,
             input.categoryHash,
             input.epoch,
@@ -179,6 +184,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
             formulaId: input.formulaId,
             workflowKey: formula.workflowKey,
             packageId: formula.packageId,
+            standingRevision: standingRevision,
             subjectCommitment: input.subjectCommitment,
             vectorKey: formula.vectorKey,
             categoryHash: input.categoryHash,
@@ -208,21 +214,33 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         if (commitment.id == 0) revert AVADataTypes.UnknownReference(input.sourceSetCommitmentId);
         StandingFormulaRecord memory formula = formulas[commitment.formulaId];
         if (
-            !formula.active || input.includedRecordClassesHash == bytes32(0)
-                || input.exclusionPolicyHash == bytes32(0) || input.evidenceReceiptId == 0
-                || input.completenessAttestationHash == bytes32(0) || input.authorityId == bytes32(0)
-                || bytes(input.uri).length == 0
+            !formula.active || input.includedRecordClassesHash == bytes32(0) || input.exclusionPolicyHash == bytes32(0)
+                || input.evidenceReceiptId == 0 || input.completenessAttestationHash == bytes32(0)
+                || input.authorityId == bytes32(0) || bytes(input.uri).length == 0
         ) {
             revert AVADataTypes.EmptyValue();
         }
         if (input.completenessAttestationHash != commitment.completenessAttestationHash) {
             revert AVADataTypes.InvalidState(input.sourceSetCommitmentId);
         }
+        if (
+            commitment.standingRevision
+                != standingRevisionRegistry.currentRevision(commitment.packageId, commitment.subjectCommitment)
+        ) {
+            revert AVADataTypes.InvalidState(input.sourceSetCommitmentId);
+        }
+        _validateEvidenceUses(
+            commitment.packageId,
+            commitment.workflowKey,
+            AVADataTypes.Action.RegisterSourceSetCompletenessAttestation,
+            commitment.evidenceReceiptId,
+            input.evidenceReceiptId,
+            0
+        );
+        _requireUsableEvidenceForPackage(commitment.evidenceReceiptId, commitment.workflowKey, commitment.packageId);
         uint256 existing = sourceSetCompletenessAttestationIdBySourceSet[input.sourceSetCommitmentId];
         if (existing != 0) revert AVADataTypes.InvalidState(existing);
-        AVADataTypes.EvidenceReceipt memory receipt =
-            evidenceRegistry.requireUsableEvidenceReceipt(input.evidenceReceiptId, commitment.workflowKey);
-        if (receipt.packageId != commitment.packageId) revert AVADataTypes.InvalidState(input.evidenceReceiptId);
+        _requireUsableEvidenceForPackage(input.evidenceReceiptId, commitment.workflowKey, commitment.packageId);
 
         id = nextSourceSetCompletenessAttestationId++;
         sourceSetCompletenessAttestations[id] = SourceSetCompletenessAttestationRecord({
@@ -231,6 +249,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
             formulaId: commitment.formulaId,
             workflowKey: commitment.workflowKey,
             packageId: commitment.packageId,
+            standingRevision: commitment.standingRevision,
             subjectCommitment: commitment.subjectCommitment,
             vectorKey: commitment.vectorKey,
             categoryHash: commitment.categoryHash,
@@ -261,7 +280,8 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         authorityMatrix.requireAuthorisedSubject(
             msg.sender, actingRole, AVADataTypes.Action.RegisterStandingComputationStatement, input.authorityId
         );
-        StatementBinding memory binding = _validateStatementInput(input);
+        StatementBinding memory binding =
+            _validateStatementInput(input, AVADataTypes.Action.RegisterStandingComputationStatement);
         id = _storeComputationStatement(actingRole, input, binding);
     }
 
@@ -278,7 +298,8 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         if (oldStatement.status != AVADataTypes.StandingComputationStatus.Active) {
             revert AVADataTypes.InvalidState(oldStatementId);
         }
-        StatementBinding memory binding = _validateStatementInput(input);
+        StatementBinding memory binding =
+            _validateStatementInput(input, AVADataTypes.Action.SupersedeStandingComputationStatement);
         if (
             oldStatement.packageId != binding.formula.packageId
                 || oldStatement.subjectCommitment != input.subjectCommitment
@@ -311,8 +332,9 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         ) {
             revert AVADataTypes.InvalidState(statementId);
         }
-        AVADataTypes.EvidenceReceipt memory receipt =
-            evidenceRegistry.requireUsableEvidenceReceipt(evidenceReceiptId, statement.workflowKey);
+        AVADataTypes.EvidenceReceipt memory receipt = evidenceRegistry.requireUsableEvidenceReceipt(
+            evidenceReceiptId, formulas[statement.formulaId].appId, statement.workflowKey
+        );
         if (receipt.packageId != statement.packageId) revert AVADataTypes.InvalidState(evidenceReceiptId);
         statement.status = AVADataTypes.StandingComputationStatus.Invalidated;
         statement.invalidatedByEvidenceReceiptId = evidenceReceiptId;
@@ -347,6 +369,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
             formulaId: binding.formula.id,
             workflowKey: binding.formula.workflowKey,
             packageId: binding.formula.packageId,
+            standingRevision: binding.commitment.standingRevision,
             subjectCommitment: input.subjectCommitment,
             vectorKey: input.vectorKey,
             categoryHash: input.categoryHash,
@@ -377,6 +400,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
     }
 
     function proofInputMatchesRegisteredCommitment(
+        bytes32 appId,
         bytes32 workflowKey,
         bytes32 subjectCommitment,
         bytes32 vectorKey,
@@ -387,6 +411,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         address verifier
     ) external view returns (bool) {
         return getSourceSetCommitmentIdForProofInput(
+            appId,
             workflowKey,
             subjectCommitment,
             vectorKey,
@@ -399,6 +424,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
     }
 
     function getSourceSetCommitmentIdForProofInput(
+        bytes32 appId,
         bytes32 workflowKey,
         bytes32 subjectCommitment,
         bytes32 vectorKey,
@@ -408,8 +434,8 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
         bytes32 computationRuleHash,
         address verifier
     ) public view returns (uint256) {
-        if (workflowKey == bytes32(0)) return 0;
-        uint256 packageId = rulePackageRegistry.getRulePackage(workflowKey).packageId;
+        if (appId == bytes32(0) || workflowKey == bytes32(0)) return 0;
+        uint256 packageId = rulePackageRegistry.getRulePackage(appId, workflowKey).packageId;
         return _sourceSetCommitmentIdForPackageProofInput(
             packageId,
             workflowKey,
@@ -462,19 +488,30 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
             packageId == 0 || workflowKey == bytes32(0) || subjectCommitment == bytes32(0) || vectorKey == bytes32(0)
                 || categoryHash == bytes32(0) || epoch == 0 || sourceRecordSetRoot == bytes32(0)
                 || computationRuleHash == bytes32(0) || verifier == address(0)
+                || !_isHistoricalPackageValid(packageId, workflowKey)
         ) {
             return 0;
         }
+        uint256 standingRevision = standingRevisionRegistry.currentRevision(packageId, subjectCommitment);
         uint256 sourceSetCommitmentId = sourceSetCommitmentIdByProofKey[
-            _proofKey(packageId, subjectCommitment, vectorKey, categoryHash, epoch, sourceRecordSetRoot, computationRuleHash)
+            _proofKey(
+                packageId,
+                subjectCommitment,
+                standingRevision,
+                vectorKey,
+                categoryHash,
+                epoch,
+                sourceRecordSetRoot,
+                computationRuleHash
+            )
         ];
         if (sourceSetCommitmentId == 0) return 0;
         SourceSetCommitmentRecord memory commitment = sourceSetCommitments[sourceSetCommitmentId];
         StandingFormulaRecord memory formula = formulas[commitment.formulaId];
         if (
-            formula.active && formula.workflowKey == workflowKey && formula.packageId == packageId
-            && formula.vectorKey == vectorKey && formula.computationRuleHash == computationRuleHash
-            && formula.verifier == verifier
+            formula.active && commitment.standingRevision == standingRevision && formula.workflowKey == workflowKey
+                && formula.packageId == packageId && formula.vectorKey == vectorKey
+                && formula.computationRuleHash == computationRuleHash && formula.verifier == verifier
         ) {
             return sourceSetCommitmentId;
         }
@@ -504,7 +541,22 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
     }
 
     function isSourceSetCompletenessAttestationActive(uint256 id) external view returns (bool) {
-        return sourceSetCompletenessAttestations[id].active;
+        SourceSetCompletenessAttestationRecord memory attestation = sourceSetCompletenessAttestations[id];
+        if (
+            !attestation.active
+                || attestation.standingRevision
+                    != standingRevisionRegistry.currentRevision(attestation.packageId, attestation.subjectCommitment)
+                || !_isHistoricalPackageValid(attestation.packageId, attestation.workflowKey)
+        ) {
+            return false;
+        }
+        SourceSetCommitmentRecord memory commitment = sourceSetCommitments[attestation.sourceSetCommitmentId];
+        return commitment.id != 0 && commitment.packageId == attestation.packageId
+            && commitment.workflowKey == attestation.workflowKey
+            && _isEvidenceUsableForPackage(commitment.evidenceReceiptId, attestation.workflowKey, attestation.packageId)
+            && _isEvidenceUsableForPackage(
+            attestation.evidenceReceiptId, attestation.workflowKey, attestation.packageId
+        );
     }
 
     function getStandingComputationStatement(uint256 id)
@@ -518,10 +570,32 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
     }
 
     function isStandingComputationStatementActive(uint256 id) external view returns (bool) {
-        return computationStatements[id].status == AVADataTypes.StandingComputationStatus.Active;
+        StandingComputationStatementRecord memory statement = computationStatements[id];
+        if (
+            statement.id == 0 || statement.status != AVADataTypes.StandingComputationStatus.Active
+                || statement.standingRevision
+                    != standingRevisionRegistry.currentRevision(statement.packageId, statement.subjectCommitment)
+                || !_isHistoricalPackageValid(statement.packageId, statement.workflowKey)
+        ) {
+            return false;
+        }
+        SourceSetCommitmentRecord memory commitment = sourceSetCommitments[statement.sourceSetCommitmentId];
+        SourceSetCompletenessAttestationRecord memory attestation =
+            sourceSetCompletenessAttestations[statement.sourceSetCompletenessAttestationId];
+        if (
+            commitment.id == 0 || attestation.id == 0 || !attestation.active
+                || commitment.packageId != statement.packageId || attestation.packageId != statement.packageId
+                || commitment.workflowKey != statement.workflowKey || attestation.workflowKey != statement.workflowKey
+                || attestation.sourceSetCommitmentId != commitment.id
+        ) {
+            return false;
+        }
+        return _isEvidenceUsableForPackage(commitment.evidenceReceiptId, statement.workflowKey, statement.packageId)
+            && _isEvidenceUsableForPackage(attestation.evidenceReceiptId, statement.workflowKey, statement.packageId)
+            && _isEvidenceUsableForPackage(statement.evidenceReceiptId, statement.workflowKey, statement.packageId);
     }
 
-    function _validateStatementInput(StandingComputationStatementInput calldata input)
+    function _validateStatementInput(StandingComputationStatementInput calldata input, AVADataTypes.Action action)
         internal
         view
         returns (StatementBinding memory binding)
@@ -544,9 +618,12 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
             !binding.formula.active || binding.formula.workflowKey != input.workflowKey
                 || binding.commitment.workflowKey != input.workflowKey
                 || binding.commitment.packageId != binding.formula.packageId
-                || binding.commitment.subjectCommitment != input.subjectCommitment
-                || binding.commitment.vectorKey != input.vectorKey || binding.commitment.categoryHash != input.categoryHash
-                || binding.commitment.epoch != input.epoch
+                || binding.commitment.standingRevision
+                    != standingRevisionRegistry.currentRevision(
+                        binding.commitment.packageId, binding.commitment.subjectCommitment
+                    ) || binding.commitment.subjectCommitment != input.subjectCommitment
+                || binding.commitment.vectorKey != input.vectorKey
+                || binding.commitment.categoryHash != input.categoryHash || binding.commitment.epoch != input.epoch
                 || binding.commitment.sourceRecordSetRoot != input.sourceRecordSetRoot
                 || binding.commitment.computationRuleHash != input.computationRuleHash
         ) {
@@ -558,18 +635,103 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
             !attestation.active || attestation.sourceSetCommitmentId != input.sourceSetCommitmentId
                 || attestation.formulaId != binding.formula.id || attestation.workflowKey != input.workflowKey
                 || attestation.packageId != binding.formula.packageId
-                || attestation.subjectCommitment != input.subjectCommitment
-                || attestation.vectorKey != input.vectorKey || attestation.categoryHash != input.categoryHash
-                || attestation.epoch != input.epoch || attestation.sourceRecordSetRoot != input.sourceRecordSetRoot
+                || attestation.standingRevision != binding.commitment.standingRevision
+                || attestation.subjectCommitment != input.subjectCommitment || attestation.vectorKey != input.vectorKey
+                || attestation.categoryHash != input.categoryHash || attestation.epoch != input.epoch
+                || attestation.sourceRecordSetRoot != input.sourceRecordSetRoot
                 || attestation.computationRuleHash != input.computationRuleHash
                 || attestation.sourceSetPolicyHash != binding.formula.sourceSetPolicyHash
                 || attestation.completenessAttestationHash != binding.commitment.completenessAttestationHash
         ) {
             revert AVADataTypes.InvalidState(input.sourceSetCompletenessAttestationId);
         }
+        _validateEvidenceUses(
+            binding.formula.packageId,
+            binding.formula.workflowKey,
+            action,
+            binding.commitment.evidenceReceiptId,
+            attestation.evidenceReceiptId,
+            input.evidenceReceiptId
+        );
+        _requireUsableEvidenceForPackage(
+            binding.commitment.evidenceReceiptId, input.workflowKey, binding.formula.packageId
+        );
+        _requireUsableEvidenceForPackage(attestation.evidenceReceiptId, input.workflowKey, binding.formula.packageId);
+        _requireUsableEvidenceForPackage(input.evidenceReceiptId, input.workflowKey, binding.formula.packageId);
+    }
+
+    function _requireUsableEvidenceForPackage(uint256 evidenceReceiptId, bytes32 workflowKey, uint256 packageId)
+        internal
+        view
+    {
+        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
         AVADataTypes.EvidenceReceipt memory receipt =
-            evidenceRegistry.requireUsableEvidenceReceipt(input.evidenceReceiptId, input.workflowKey);
-        if (receipt.packageId != binding.formula.packageId) revert AVADataTypes.InvalidState(input.evidenceReceiptId);
+            evidenceRegistry.requireUsableEvidenceReceipt(evidenceReceiptId, rulePackage.appId, workflowKey);
+        if (receipt.packageId != packageId) revert AVADataTypes.InvalidState(evidenceReceiptId);
+    }
+
+    function _isEvidenceUsableForPackage(uint256 evidenceReceiptId, bytes32 workflowKey, uint256 packageId)
+        internal
+        view
+        returns (bool)
+    {
+        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
+        try evidenceRegistry.requireUsableEvidenceReceipt(evidenceReceiptId, rulePackage.appId, workflowKey) returns (
+            AVADataTypes.EvidenceReceipt memory receipt
+        ) {
+            return receipt.packageId == packageId;
+        } catch {
+            return false;
+        }
+    }
+
+    function _validateEvidenceUses(
+        uint256 packageId,
+        bytes32 workflowKey,
+        AVADataTypes.Action action,
+        uint256 firstEvidenceReceiptId,
+        uint256 secondEvidenceReceiptId,
+        uint256 thirdEvidenceReceiptId
+    ) internal view {
+        AVARulePackageRegistry.RulePackage memory rulePackage = rulePackageRegistry.getRulePackageById(packageId);
+        if (rulePackage.workflowKey != workflowKey) revert AVADataTypes.InvalidState(packageId);
+        _validateEvidenceUse(rulePackage, action, firstEvidenceReceiptId);
+        if (secondEvidenceReceiptId != 0 && secondEvidenceReceiptId != firstEvidenceReceiptId) {
+            _validateEvidenceUse(rulePackage, action, secondEvidenceReceiptId);
+        }
+        if (
+            thirdEvidenceReceiptId != 0 && thirdEvidenceReceiptId != firstEvidenceReceiptId
+                && thirdEvidenceReceiptId != secondEvidenceReceiptId
+        ) {
+            _validateEvidenceUse(rulePackage, action, thirdEvidenceReceiptId);
+        }
+    }
+
+    function _validateEvidenceUse(
+        AVARulePackageRegistry.RulePackage memory rulePackage,
+        AVADataTypes.Action action,
+        uint256 evidenceReceiptId
+    ) internal view {
+        rulePackage.evidenceLifecycleModule
+            .validateEvidenceLifecycle(
+                rulePackage.workflowKey,
+                action,
+                evidenceReceiptId,
+                AVADataTypes.EvidenceLifecycleKind.None,
+                0,
+                bytes32(0),
+                msg.sender
+            );
+    }
+
+    function _isHistoricalPackageValid(uint256 packageId, bytes32 workflowKey) internal view returns (bool) {
+        try rulePackageRegistry.getRulePackageById(packageId) returns (
+            AVARulePackageRegistry.RulePackage memory rulePackage
+        ) {
+            return rulePackage.workflowKey == workflowKey;
+        } catch {
+            return false;
+        }
     }
 
     function _formulaKey(
@@ -585,6 +747,7 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
     function _proofKey(
         uint256 packageId,
         bytes32 subjectCommitment,
+        uint256 standingRevision,
         bytes32 vectorKey,
         bytes32 categoryHash,
         uint256 epoch,
@@ -593,7 +756,14 @@ contract StandingFormulaRegistry is IStandingFormulaRegistry {
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                packageId, subjectCommitment, vectorKey, categoryHash, epoch, sourceRecordSetRoot, computationRuleHash
+                packageId,
+                subjectCommitment,
+                standingRevision,
+                vectorKey,
+                categoryHash,
+                epoch,
+                sourceRecordSetRoot,
+                computationRuleHash
             )
         );
     }

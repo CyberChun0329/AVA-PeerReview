@@ -2,8 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "../AVADataTypes.sol";
+import {IRuleModuleIdentity} from "./IRuleModuleIdentity.sol";
 
-interface IValueExecutionAdapter {
+interface IValueExecutionAdapter is IRuleModuleIdentity {
     /// @notice Validator-only value-readiness seam.
     /// @dev In this demo, asset, payer, amount, mode, and executionReference
     /// are record/readiness fields only. Success must not transfer value,

@@ -2,8 +2,9 @@
 pragma solidity ^0.8.24;
 
 import {AVADataTypes} from "../AVADataTypes.sol";
+import {IRuleModuleIdentity} from "./IRuleModuleIdentity.sol";
 
-interface IDisclosurePolicyModule {
+interface IDisclosurePolicyModule is IRuleModuleIdentity {
     function validateDisclosurePolicy(uint256 disclosurePolicyId) external view;
 
     /// @notice Validator-only disclosure policy seam.

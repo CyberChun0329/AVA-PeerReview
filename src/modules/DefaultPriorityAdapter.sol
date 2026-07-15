@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {RuleModuleIdentity} from "../interfaces/IRuleModuleIdentity.sol";
+
 import {AVADataTypes} from "../AVADataTypes.sol";
 import {IPriorityAdapter} from "../interfaces/IPriorityAdapter.sol";
 
-contract DefaultPriorityAdapter is IPriorityAdapter {
+contract DefaultPriorityAdapter is IPriorityAdapter, RuleModuleIdentity {
     function validatePriorityRecord(
         AVADataTypes.Role,
         uint256,
