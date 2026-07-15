@@ -61,10 +61,11 @@ The canonical architecture has three source layers:
   settlement, and external-operation record layers;
 - `src/apps/`: replaceable application vocabulary and validator modules.
 
-`PeerReviewApplicationModule` calls this Core directly. Application modules
-validate domain vocabulary; they do not own Core storage or forward a spoofed
-actor identity. `test/helpers/SecondaryTestApp.sol` exercises the same seam as
-a test fixture and is not a shipped application.
+Core and extension entry points invoke `PeerReviewApplicationModule` through
+package-bound validator dispatch. Application modules validate domain
+vocabulary; they do not own Core storage, forward calls, or substitute a
+spoofed actor identity. `test/helpers/SecondaryTestApp.sol` exercises the same
+seam as a test fixture and is not a shipped application.
 
 ## What This Demo Does Not Do
 
@@ -91,7 +92,10 @@ separate bounded queue or service-right artifacts.
 - `src/apps/peerreview/`: the peer-review application vocabulary and module.
 - `src/canonical/AVAProductionSurface.sol`: import manifest for the canonical
   production contract surface used by the default build and size gate.
-- root-level contracts in `src/`: retained pre-separation research and
+- `src/AVAApplicationRegistry.sol` and the shared interfaces
+  `IAVAApplicationModule`, `IRuleModuleIdentity`, and `IZKProofVerifier`:
+  domain-neutral canonical surfaces that remain physically under `src/`.
+- other root-level contracts in `src/`: retained pre-separation research and
   regression implementation, compiled only through the explicit `retained`
   profile; new applications should integrate through the canonical Core and
   extension directories above.

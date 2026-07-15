@@ -168,7 +168,7 @@ The canonical standing-revision extension authorises record writers per
 package's application and the subject's application. A writer bound to one
 package has no cross-package or cross-application revision authority.
 
-## Retained Research Taxonomy
+## Historical Appendix: Retained Research Taxonomy
 
 The technical framework reads the current interfaces through three layers. Only
 Layer A corresponds directly to the AVA macro stages:

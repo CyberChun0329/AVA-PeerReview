@@ -72,9 +72,12 @@ the Solidity records.
 
 Core imports no application source. `test/helpers/SecondaryTestApp.sol` is a
 test fixture for cross-application isolation, not a second shipped app. The
-root-level pre-separation contracts are retained for regression and research
-trace continuity, but they are not the recommended integration surface for
-another application.
+canonical manifest also imports the domain-neutral
+`src/AVAApplicationRegistry.sol` and the shared `IAVAApplicationModule`,
+`IRuleModuleIdentity`, and `IZKProofVerifier` interfaces from their current
+root-level locations. Other root-level pre-separation contracts are retained
+for regression and research-trace continuity, but they are not the recommended
+integration surface for another application.
 
 ## Current Boundary
 

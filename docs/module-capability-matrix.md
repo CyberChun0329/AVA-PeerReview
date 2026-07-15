@@ -128,7 +128,7 @@ challenge states accept negligent or malicious/fabricated-challenge findings.
 Academic-fraud findings remain unavailable until an author/manuscript
 recognised-state workflow explicitly defines that target in a future package.
 
-## Retained Interface Taxonomy
+## Historical Appendix: Retained Interface Taxonomy
 
 The AVA technical framework separates interfaces into three layers. Only the
 first layer maps directly to AVA's macro stages.

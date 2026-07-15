@@ -47,9 +47,13 @@ The canonical source boundary is explicit:
 - `test/helpers/SecondaryTestApp.sol` provides a test-only genericity fixture,
   not another shipped application.
 
-Root-level contracts under `src/` retain the pre-separation research
-implementation and its regression suite. They remain useful evidence, but
-they are not the recommended integration surface for a new application.
+The canonical manifest also imports the domain-neutral
+`src/AVAApplicationRegistry.sol` and the shared `IAVAApplicationModule`,
+`IRuleModuleIdentity`, and `IZKProofVerifier` interfaces from their current
+root-level locations. Other root-level contracts under `src/` retain the
+pre-separation research implementation and its regression suite. They remain
+useful evidence, but they are not the recommended integration surface for a
+new application.
 
 The project is not token-first blockchain infrastructure. Blockchain is used
 only after an AVA workflow has named the governable object: the attributed

@@ -53,10 +53,34 @@ an application module validates context through `STATICCALL` semantics and
 cannot own or mutate Core storage. `PeerReviewApplicationModule` therefore
 remains a replaceable package component, not a privileged forwarding contract.
 
-The repository retains the earlier root-level implementation under `src/` so
-its larger research scenarios and regression suite remain reproducible. New
-applications should use the canonical Core, extension, and app directories.
-The retained stack is not a second recommended substrate.
+The canonical production manifest also imports the domain-neutral
+`src/AVAApplicationRegistry.sol` and the shared `IAVAApplicationModule`,
+`IRuleModuleIdentity`, and `IZKProofVerifier` interfaces from `src/interfaces/`.
+Their current physical location is an explicit layout exception; they belong
+to the canonical surface, not the retained Peer Review implementation.
+
+```mermaid
+flowchart TB
+    Caller["User or integration"] --> Core["AVA Core entry points"]
+    Caller --> Extension["Reusable extension entry points"]
+    Extension --> Core
+    Core --> CoreStorage["Core records and hard gates"]
+    Extension --> ExtensionStorage["Optional extension records"]
+    Core --> Router["Package-bound policy dispatch"]
+    Extension --> Router
+    Router --> App["Peer Review application validator"]
+    Router --> Policy["Replaceable capability modules"]
+```
+
+The arrows from package dispatch to application and capability modules are
+validation or veto calls. They do not transfer storage ownership, mutation
+authority, or caller identity to those modules.
+
+Apart from the canonical exceptions named above, the repository retains the
+earlier root-level implementation under `src/` so its larger research
+scenarios and regression suite remain reproducible. New applications should
+use the canonical Core, extension, and app surfaces. The retained stack is not
+a second recommended substrate.
 
 ## 2. From Governance Grammar To Records
 
@@ -128,7 +152,7 @@ peer-review roles. A domain-neutral `SecondaryTestApplicationModule` under
 same Core. The fixture may reuse the same `workflowKey` while remaining
 isolated by `appId`; it is not a production application.
 
-### Retained Pre-Separation Reference Stack
+### Historical Appendix: Retained Pre-Separation Reference Stack
 
 The earlier root-level implementation remains compiled and tested through the
 explicit `retained` Foundry profile for research continuity. It is excluded
