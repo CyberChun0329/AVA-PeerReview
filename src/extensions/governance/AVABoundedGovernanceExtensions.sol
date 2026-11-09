@@ -856,18 +856,16 @@ contract AVAPenaltyRestorationExtension {
     ) private view returns (uint256 policyId) {
         bytes32 evidenceAppId;
         bytes32 evidenceWorkflow;
-        uint256 evidencePackage;
         bytes32 evidenceSubject;
         if (input.allowInactiveReferences) {
-            (evidenceAppId, evidenceWorkflow, evidencePackage, evidenceSubject, policyId) =
+            (evidenceAppId, evidenceWorkflow,, evidenceSubject, policyId) =
                 EVIDENCE_REGISTRY.requireEvidenceReferenceForPackage(input.evidenceId, input.packageId);
         } else {
-            (evidenceAppId, evidenceWorkflow, evidencePackage, evidenceSubject, policyId) =
+            (evidenceAppId, evidenceWorkflow,, evidenceSubject, policyId) =
                 EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(input.evidenceId, input.packageId);
         }
         if (
-            evidenceAppId != state.appId || evidenceWorkflow != workflowKey
-                || evidencePackage != input.packageId || evidenceSubject != input.subjectId
+            evidenceAppId != state.appId || evidenceWorkflow != workflowKey || evidenceSubject != input.subjectId
         ) revert AVACoreTypes.InvalidState(input.evidenceId);
     }
 

@@ -122,7 +122,7 @@ contract ZKStandingComputationRegistry {
         bytes32 nullifierHash = computeNullifierHash(contextHash, input.subjectCommitment);
         bytes32 proofDomainHash = PROOF_DOMAIN_HASH;
         if (
-            proofDomainHash == bytes32(0) || contextHash == bytes32(0) || nullifierHash == bytes32(0) || receiptIdByContextHash[contextHash] != 0
+            contextHash == bytes32(0) || nullifierHash == bytes32(0) || receiptIdByContextHash[contextHash] != 0
                 || receiptIdByNullifierHash[nullifierHash] != 0
         ) {
             revert AVADataTypes.InvalidState(uint256(contextHash));
@@ -178,7 +178,6 @@ contract ZKStandingComputationRegistry {
     ) public view returns (bytes32) {
         if (!_verifierStable() || proofDomainHash != PROOF_DOMAIN_HASH) return bytes32(0);
         if (!_hasRequiredInput(input)) return bytes32(0);
-        if (proofDomainHash == bytes32(0)) return bytes32(0);
         (uint256 packageId, uint256 standingRevision) = _statementBindingForContext(input);
         if (packageId == 0) return bytes32(0);
         return keccak256(

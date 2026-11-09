@@ -372,23 +372,22 @@ contract AVAGovernanceKernel {
         );
 
         id = nextGovernedObjectId++;
-        governedObjects[id] = AVACoreTypes.GovernedObjectRecord({
-            id: id,
-            appId: input.appId,
-            workflowKey: input.workflowKey,
-            packageId: input.packageId,
-            objectTypeKey: input.objectTypeKey,
-            objectCommitment: input.objectCommitment,
-            parentObjectId: input.parentObjectId,
-            subjectId: input.subjectId,
-            evidenceReceiptId: input.evidenceReceiptId,
-            disclosurePolicyId: input.disclosurePolicyId,
-            metadataHash: input.metadataHash,
-            uri: input.uri,
-            authorityId: input.authorityId,
-            registeredBy: msg.sender,
-            registeredAt: uint64(block.timestamp)
-        });
+        AVACoreTypes.GovernedObjectRecord storage record = governedObjects[id];
+        record.id = id;
+        record.appId = input.appId;
+        record.workflowKey = input.workflowKey;
+        record.packageId = input.packageId;
+        record.objectTypeKey = input.objectTypeKey;
+        record.objectCommitment = input.objectCommitment;
+        if (input.parentObjectId != 0) record.parentObjectId = input.parentObjectId;
+        record.subjectId = input.subjectId;
+        record.evidenceReceiptId = input.evidenceReceiptId;
+        record.disclosurePolicyId = input.disclosurePolicyId;
+        if (input.metadataHash != bytes32(0)) record.metadataHash = input.metadataHash;
+        record.uri = input.uri;
+        record.authorityId = input.authorityId;
+        record.registeredBy = msg.sender;
+        record.registeredAt = uint64(block.timestamp);
         governedObjectIdByApplicationCommitment[objectKey] = id;
         emit GovernedObjectRegistered(
             id,
@@ -448,25 +447,23 @@ contract AVAGovernanceKernel {
 
         recognisedStateUseStartedByPackage[objectRecord.packageId] = true;
         id = nextRecognisedStateId++;
-        recognisedStates[id] = AVACoreTypes.RecognisedStateRecord({
-            id: id,
-            governedObjectId: objectRecord.id,
-            appId: objectRecord.appId,
-            workflowKey: objectRecord.workflowKey,
-            packageId: objectRecord.packageId,
-            stage: input.stage,
-            status: input.status,
-            subjectId: objectRecord.subjectId,
-            evidenceReceiptId: objectRecord.evidenceReceiptId,
-            disclosurePolicyId: objectRecord.disclosurePolicyId,
-            authorityId: input.authorityId,
-            lastTransitionId: 0,
-            createdBy: msg.sender,
-            createdAt: uint64(block.timestamp)
-        });
+        AVACoreTypes.RecognisedStateRecord storage state = recognisedStates[id];
+        state.id = id;
+        state.governedObjectId = objectRecord.id;
+        state.appId = objectRecord.appId;
+        state.workflowKey = objectRecord.workflowKey;
+        state.packageId = objectRecord.packageId;
+        state.stage = input.stage;
+        state.status = input.status;
+        state.subjectId = objectRecord.subjectId;
+        state.evidenceReceiptId = objectRecord.evidenceReceiptId;
+        state.disclosurePolicyId = objectRecord.disclosurePolicyId;
+        state.authorityId = input.authorityId;
+        state.createdBy = msg.sender;
+        state.createdAt = uint64(block.timestamp);
         recognisedStateIdByObjectStage[stateKey] = id;
         uint256 transitionId = _writeTransition(
-            recognisedStates[id],
+            state,
             TransitionWriteInput({
                 fromStatus: AVACoreTypes.RecognisedStateStatus.None,
                 toStatus: input.status,
@@ -767,46 +764,32 @@ contract AVAGovernanceKernel {
         returns (uint256 transitionId)
     {
         transitionId = nextTransitionId++;
-        transitions[transitionId] = AVACoreTypes.RecognisedStateTransitionRecord({
-            id: transitionId,
-            recognisedStateId: state.id,
-            governedObjectId: state.governedObjectId,
-            appId: state.appId,
-            workflowKey: state.workflowKey,
-            packageId: state.packageId,
-            decisionPackageId: input.decisionPackageId,
-            sourceRecordId: input.sourceRecordId,
-            fromStatus: input.fromStatus,
-            toStatus: input.toStatus,
-            kind: input.kind,
-            evidenceReceiptId: state.evidenceReceiptId,
-            decisionEvidenceReceiptId: input.decisionEvidenceReceiptId,
-            authorityId: input.authorityId,
-            reasonHash: input.reasonHash,
-            reasonURI: input.reasonURI,
-            createdBy: input.actor,
-            createdAt: uint64(block.timestamp)
-        });
+        AVACoreTypes.RecognisedStateTransitionRecord storage record = transitions[transitionId];
+        record.id = transitionId;
+        record.recognisedStateId = state.id;
+        record.governedObjectId = state.governedObjectId;
+        record.appId = state.appId;
+        record.workflowKey = state.workflowKey;
+        record.packageId = state.packageId;
+        record.decisionPackageId = input.decisionPackageId;
+        if (input.sourceRecordId != 0) record.sourceRecordId = input.sourceRecordId;
+        record.fromStatus = input.fromStatus;
+        record.toStatus = input.toStatus;
+        record.kind = input.kind;
+        record.evidenceReceiptId = state.evidenceReceiptId;
+        record.decisionEvidenceReceiptId = input.decisionEvidenceReceiptId;
+        record.authorityId = input.authorityId;
+        record.reasonHash = input.reasonHash;
+        if (bytes(input.reasonURI).length != 0) record.reasonURI = input.reasonURI;
+        record.createdBy = input.actor;
+        record.createdAt = uint64(block.timestamp);
         state.lastTransitionId = transitionId;
-        _emitRecognisedStateTransition(transitions[transitionId]);
-        emit RecognisedStateTransitionSourceBound(transitionId, input.decisionPackageId, input.sourceRecordId);
-        _callPostTransitionHook(state, transitions[transitionId]);
-    }
-
-    function _emitRecognisedStateTransition(AVACoreTypes.RecognisedStateTransitionRecord storage transitionRecord)
-        internal
-    {
         emit RecognisedStateTransitioned(
-            transitionRecord.id,
-            transitionRecord.recognisedStateId,
-            transitionRecord.appId,
-            transitionRecord.fromStatus,
-            transitionRecord.toStatus,
-            transitionRecord.kind,
-            transitionRecord.packageId,
-            transitionRecord.authorityId,
-            transitionRecord.createdBy
+            transitionId, state.id, state.appId, input.fromStatus, input.toStatus, input.kind, state.packageId,
+            input.authorityId, input.actor
         );
+        emit RecognisedStateTransitionSourceBound(transitionId, input.decisionPackageId, input.sourceRecordId);
+        _callPostTransitionHook(state, record);
     }
 
     function _callPostTransitionHook(

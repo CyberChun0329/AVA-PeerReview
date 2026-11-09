@@ -2,25 +2,16 @@
 
 [![CI](https://github.com/CyberChun0329/AVA-PeerReview/actions/workflows/ci.yml/badge.svg)](https://github.com/CyberChun0329/AVA-PeerReview/actions/workflows/ci.yml)
 
-This repository is an early technical demo of the AVA protocol, with peer
-review as its first application. It now separates a domain-neutral AVA Core
-from optional governance extensions and application-specific modules. Peer
-review is the only application implementation under `src/apps/`. A
-domain-neutral, test-only secondary application proves that another governance
-domain can use the same deployed Core without editing Core contracts. The
-contracts are written for EVM-compatible chains. Base is the intended L2 target
-for future deployment work.
+This research demo is an early sample of the AVA protocol, with peer review as
+its first application. It shows how an authorised actor can record a review
+contribution, recognise it for a specified use, and preserve later challenges
+and corrections.
 
-The project is not a production peer-review platform, journal system,
-manuscript decision engine, payment system, disclosure-reveal system, or
-scientific-truth engine. It is a research demo that shows how peer-review
-governance objects can be represented as authorised records, transitions,
-proof receipts, and bounded downstream consequences.
-
-The repository does not include live Base deployment configuration, deployed
-addresses, production hardening, or a network-specific rollout plan. Its
-current chain scope is Base-compatible Solidity, not production Base
-deployment.
+The contracts separate a shared AVA Core, optional governance extensions, and
+the Peer Review application. Foundry tests run a second application fixture
+against the same Core with different roles, objects, and rules. The demo runs
+locally in Foundry. Its Solidity targets the EVM, with Base as the intended L2
+for future deployment.
 
 ## What This Demo Shows
 
@@ -41,31 +32,19 @@ The contracts demonstrate:
 - role-scoped subjects and authority checks;
 - evidence receipts as commitments or off-chain references;
 - disclosure policies and proof-use receipts without reveal or decryption;
-- rule packages that bind workflow keys to replaceable modules and adapters;
+- rule packages that select modules for each application's workflows;
 - challenge, correction, and restoration as authorised transitions over
   recognised states;
-- standing updates, standing computation statements, and standing credentials
-  as governance-memory proof surfaces;
-- ZK standing proof receipts and commitment-bound standing credentials as
-  privacy-preserving proof carriers;
+- standing updates, recorded computations, and credentials that prove a
+  standing condition without publishing the full history;
+- ZK proof receipts and standing credentials linked to role-scoped subjects;
 - bounded consequence, allocation, value-settlement, recovery, and external
   operation records;
-- stable package identity so old records are not rewritten when a workflow key
-  is re-registered.
+- stable package IDs that keep old records tied to the rules used at creation.
 
-The canonical architecture has three source layers:
-
-- `src/core/`: domain-neutral AVA identity, authority, package, evidence,
-  disclosure-policy, governed-object, recognised-state, and transition logic;
-- `src/extensions/`: optional challenge, standing, proof, disclosure, audit,
-  settlement, and external-operation record layers;
-- `src/apps/`: replaceable application vocabulary and validator modules.
-
-Core and extension entry points invoke `PeerReviewApplicationModule` through
-package-bound validator dispatch. Application modules validate domain
-vocabulary; they do not own Core storage, forward calls, or substitute a
-spoofed actor identity. `test/helpers/SecondaryTestApp.sol` exercises the same
-seam as a test fixture and is not a shipped application.
+Core and extensions call the application module selected by the record's rule
+package. The module can reject a proposal. The calling contract checks who may
+act and writes the record.
 
 ## What This Demo Does Not Do
 
@@ -80,25 +59,21 @@ The repository intentionally does not implement:
 - real payment, stablecoin, queue, or platform integrations;
 - standing or reputation tokens, credits, balances, or transferable assets.
 
-Standing and reputation are treated as computed governance memory. They are not
-tokens, rewards, credits, balances, administrative priority rights, public
-prestige, or manuscript merit. Administrative priority tokens used in tests are
-separate bounded queue or service-right artifacts.
+Standing is governance memory computed for a role. The administrative priority
+tokens used in tests represent a separate queue or service right.
 
 ## Repository Layout
 
 - `src/core/`: canonical domain-neutral AVA Core.
 - `src/extensions/`: optional reusable governance extensions.
 - `src/apps/peerreview/`: the peer-review application vocabulary and module.
-- `src/canonical/AVAProductionSurface.sol`: import manifest for the canonical
-  production contract surface used by the default build and size gate.
+- `src/canonical/AVAProductionSurface.sol`: contracts included in the default
+  build and runtime size check.
 - `src/AVAApplicationRegistry.sol` and the shared interfaces
   `IAVAApplicationModule`, `IRuleModuleIdentity`, and `IZKProofVerifier`:
-  domain-neutral canonical surfaces that remain physically under `src/`.
+  shared contracts and interfaces included in the default build.
 - other root-level contracts in `src/`: retained pre-separation research and
-  regression implementation, compiled only through the explicit `retained`
-  profile; new applications should integrate through the canonical Core and
-  extension directories above.
+  regression implementation. Run it with the `retained` profile.
 - `test/`: Foundry tests for the implemented governance kernel, including a
   domain-neutral second-application isolation fixture.
 - `script/`: Local demo script.
@@ -110,16 +85,7 @@ separate bounded queue or service-right artifacts.
   not a production deployment.
 - `docs/`: Public technical documentation for the demo.
 
-Start with:
-
-1. `docs/public-technical-overview.md`
-2. `docs/architecture.md`
-3. `docs/current-implementation-summary.md`
-4. `docs/interface-contract-spec.md`
-5. `docs/module-capability-matrix.md`
-6. `docs/rule-package-integration-guide.md`
-7. `docs/record-reconstruction-guide.md`
-8. `docs/rule-package-compatibility-migration-policy.md`
+The [documentation index](docs/README.md) lists the relevant guide for each task.
 
 ## Build And Test
 
@@ -130,11 +96,9 @@ forge build
 forge test
 ```
 
-The default profile builds and tests the canonical production surface. Its
-current verification state records `250` passing tests. Four canonical
-handler-based invariant suites also pass at 512 runs by 128 calls for recursive
-challenge lineage, standing-proof freshness, recovery uniqueness, and
-cross-application isolation.
+The default profile builds and tests the current Core, extensions, and Peer
+Review application. See the [verification summary](docs/current-implementation-summary.md#verification)
+for test counts and invariant settings.
 
 The pre-separation implementation remains available as an explicit regression
 profile:
@@ -142,9 +106,6 @@ profile:
 ```bash
 FOUNDRY_PROFILE=retained forge test
 ```
-
-That retained profile currently records `637` passing tests. It is historical
-regression evidence, not the recommended application integration surface.
 
 The public repository includes a GitHub Actions workflow that runs build,
 canonical and retained tests, runtime-size checks, ABI drift checks,
@@ -161,9 +122,7 @@ forge script script/AVACanonicalPackageManifest.s.sol:AVACanonicalPackageManifes
 python3 scripts/ava_compatibility.py package --manifest generated/canonical-rule-package-manifest.json
 ```
 
-Cross-application isolation is verified by focused namespace, package,
-evidence, state, challenge, proof, and downstream-record tests. The repository
-does not ship or script a second application. The canonical runtime trace is:
+To run the Peer Review scenarios:
 
 ```bash
 forge script script/AVACanonicalTrace.s.sol:AVACanonicalTrace --sig "runTrace()" --offline

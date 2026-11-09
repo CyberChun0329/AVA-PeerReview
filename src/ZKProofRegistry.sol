@@ -161,7 +161,7 @@ contract ZKProofRegistry {
         );
         bytes32 nullifierHash = computeNullifierHash(contextHash, input.subjectCommitment);
         if (
-            proofDomainHash == bytes32(0) || contextHash == bytes32(0) || nullifierHash == bytes32(0)
+            contextHash == bytes32(0) || nullifierHash == bytes32(0)
                 || receiptIdByContextHash[contextHash] != 0 || receiptIdByNullifierHash[nullifierHash] != 0
         ) {
             revert AVADataTypes.InvalidState(uint256(contextHash));
@@ -268,7 +268,7 @@ contract ZKProofRegistry {
     ) public view returns (bytes32) {
         if (!_verifierStable() || proofDomainHash != PROOF_DOMAIN_HASH) return bytes32(0);
         if (
-            packageId == 0 || proofDomainHash == bytes32(0) || appId == bytes32(0) || workflowKey == bytes32(0)
+            packageId == 0 || appId == bytes32(0) || workflowKey == bytes32(0)
                 || objectId == bytes32(0) || disclosurePolicyId == 0 || subjectCommitment == bytes32(0)
         ) {
             return bytes32(0);

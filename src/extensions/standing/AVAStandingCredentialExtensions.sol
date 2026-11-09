@@ -330,10 +330,10 @@ contract AVAStandingComputationExtension {
     }
 
     function _requireEvidence(uint256 evidenceId, AVACoreTypes.RecognisedStateRecord memory state) private view {
-        (bytes32 appId, bytes32 workflowKey, uint256 packageId, bytes32 subjectId, uint256 disclosurePolicyId) =
+        (bytes32 appId, bytes32 workflowKey,, bytes32 subjectId, uint256 disclosurePolicyId) =
             EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(evidenceId, state.packageId);
         if (
-            appId != state.appId || workflowKey != state.workflowKey || packageId != state.packageId
+            appId != state.appId || workflowKey != state.workflowKey
                 || subjectId != state.subjectId || disclosurePolicyId != state.disclosurePolicyId
         ) revert AVACoreTypes.InvalidState(evidenceId);
     }
@@ -354,9 +354,9 @@ contract AVAStandingComputationExtension {
         returns (bool)
     {
         try EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(evidenceId, record.packageId) returns (
-            bytes32 appId, bytes32 workflowKey, uint256 packageId, bytes32 subjectId, uint256 disclosurePolicyId
+            bytes32 appId, bytes32 workflowKey, uint256, bytes32 subjectId, uint256 disclosurePolicyId
         ) {
-            return appId == record.appId && workflowKey == record.workflowKey && packageId == record.packageId
+            return appId == record.appId && workflowKey == record.workflowKey
                 && subjectId == record.subjectId && disclosurePolicyId == expectedDisclosurePolicyId;
         } catch {
             return false;

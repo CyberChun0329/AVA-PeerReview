@@ -307,13 +307,11 @@ contract AVAWorkflowPolicyRouter {
                 && !input.allowInactiveEvidence
         ) return;
 
-        (bytes32 evidenceAppId, bytes32 evidenceWorkflowKey, uint256 evidencePackageId,,) = EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(
-            input.decisionEvidenceId, input.decisionPackageId
-        );
-        if (
-            evidenceAppId != decisionPackage.appId || evidenceWorkflowKey != decisionPackage.workflowKey
-                || evidencePackageId != decisionPackage.packageId
-        ) revert AVACoreTypes.InvalidState(input.decisionEvidenceId);
+        (bytes32 evidenceAppId, bytes32 evidenceWorkflowKey,,,) =
+            EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(input.decisionEvidenceId, input.decisionPackageId);
+        if (evidenceAppId != decisionPackage.appId || evidenceWorkflowKey != decisionPackage.workflowKey) {
+            revert AVACoreTypes.InvalidState(input.decisionEvidenceId);
+        }
     }
 
     function _loadChallengeModules(uint256 packageId, bytes32 appId, bytes32 workflowKey)

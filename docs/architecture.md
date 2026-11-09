@@ -1,23 +1,8 @@
 # AVA Technical Architecture
 
-This document describes the public technical architecture of the AVA Solidity
-demo. The project is an early sample of the AVA protocol with peer review as
-its first application. Peer review is the only application implementation in
-`src/apps/`. A domain-neutral test fixture demonstrates that the same Core can
-isolate another application without shipping a second domain implementation.
-It is not a full journal platform, a
-manuscript decision engine, a scientific-truth engine, a disclosure-reveal
-system, a payment system, or a sanction engine.
-
-The demo shows how peer-review governance can be represented as role-scoped
-subjects, evidence-backed records, authorised transitions, rule packages,
-privacy-preserving proof receipts, and bounded downstream records.
-
-The implementation is written as a Base-compatible EVM/Solidity contract demo.
-Base is the intended L2 target for future deployment work. The current
-repository remains a local Foundry demo. It does not include deployed Base
-addresses, production deployment hardening, chain-specific governance rollout,
-or live network configuration.
+This guide explains which AVA contract owns each record and which checks apply
+when someone writes it. The [technical overview](public-technical-overview.md)
+introduces the peer-review example and its scope.
 
 ## 1. Architecture Boundary
 
@@ -40,7 +25,7 @@ scientific truth, reviewer leniency, or publication priority.
 
 ## Canonical Source Boundary
 
-The implemented architecture has three source-level ownership boundaries:
+Three groups of contracts divide storage and validation:
 
 | Layer | Canonical location | Owns |
 | --- | --- | --- |
@@ -48,23 +33,21 @@ The implemented architecture has three source-level ownership boundaries:
 | Reusable extensions | `src/extensions/` | optional challenge, standing, credential, privacy-proof, disclosure, audit, settlement, consequence, and external-operation records |
 | Applications | `src/apps/peerreview/` | app ids, role/action/object vocabulary, relationship rules, and validator-only application modules |
 
-Core imports no application source. Users call Core or an extension directly;
-an application module validates context through `STATICCALL` semantics and
-cannot own or mutate Core storage. `PeerReviewApplicationModule` therefore
-remains a replaceable package component, not a privileged forwarding contract.
+Users call Core or an extension directly. The calling contract selects
+`PeerReviewApplicationModule` from the package and invokes its checks with
+`STATICCALL`. Core imports no application source and controls its own storage.
 
 The canonical production manifest also imports the domain-neutral
 `src/AVAApplicationRegistry.sol` and the shared `IAVAApplicationModule`,
 `IRuleModuleIdentity`, and `IZKProofVerifier` interfaces from `src/interfaces/`.
-Their current physical location is an explicit layout exception; they belong
-to the canonical surface, not the retained Peer Review implementation.
+The default build includes these shared files alongside Core and the extensions.
 
 ```mermaid
 flowchart TB
     Caller["User or integration"] --> Core["AVA Core entry points"]
     Caller --> Extension["Reusable extension entry points"]
     Extension --> Core
-    Core --> CoreStorage["Core records and hard gates"]
+    Core --> CoreStorage["Core records and mandatory checks"]
     Extension --> ExtensionStorage["Optional extension records"]
     Core --> Router["Package-bound policy dispatch"]
     Extension --> Router
@@ -76,11 +59,9 @@ The arrows from package dispatch to application and capability modules are
 validation or veto calls. They do not transfer storage ownership, mutation
 authority, or caller identity to those modules.
 
-Apart from the canonical exceptions named above, the repository retains the
-earlier root-level implementation under `src/` so its larger research
-scenarios and regression suite remain reproducible. New applications should
-use the canonical Core, extension, and app surfaces. The retained stack is not
-a second recommended substrate.
+Use the current Core and extensions when integrating a new application. The
+`retained` Foundry profile includes the earlier root-level contracts and their
+regression scenarios.
 
 ## 2. From Governance Grammar To Records
 
@@ -98,21 +79,17 @@ that grammar into a small set of chain-readable objects:
 | How can it be challenged or repaired? | Challenge record, challenge transition record, outcome, correction/restoration path, and preserved history. |
 | What bounded downstream record can follow? | Standing input, standing computation, credential, allocation, consequence, penalty, restoration, settlement, external-operation, or audit record, all tied to an eligible source. |
 
-This is the rule-to-executable bridge. A prose institutional rule must be
-translated into an object, subject, evidence receipt, authority condition,
-disclosure condition, recognised state, transition condition, and bounded
-consequence before it can become a module check or substrate record.
+When implementing an institutional rule, use these questions to identify
+what the contract must record and what the selected module must check.
 
-The bridge also defines the model boundary. These records can later support
-modelling as states, actions, transitions, information conditions, and payoff
-proxies. The Solidity demo itself does not run a model, simulation,
-probability estimate, truth engine, or manuscript-merit calculation.
+The [record reconstruction guide](record-reconstruction-guide.md) shows how a
+model can use those records for states, actions, transitions, information
+conditions, and payoff proxies.
 
-For paper-facing verification, the repository includes a hash-pinned
-recognised-state transition matrix and named boundary-claim tests. Matrix rows
-are checked against row-level kernel execution, and the boundary tests tie the
-no-publication, no-truth, no-reveal, no-sanction-execution, no-standing-token,
-raw-id, and high-impact-status boundaries to executable artifacts.
+Tests compare the generated recognised-state transition matrix with the
+kernel's rules and exercise public transition calls. Other tests check that
+raw record IDs cannot authorise downstream actions and that high-impact
+statuses require an authorised transition.
 
 ## 3. System Layers
 
@@ -244,8 +221,7 @@ The same pattern applies across the rest of the rule package:
 - `IChallengeLifecycleModule` can use the default lifecycle or a panel-only
   lifecycle rule.
 - `IStandingAdapter`, `IStandingComputationModule`, and credential issuers can
-  vary standing vectors and proof surfaces without turning standing into a
-  token or public prestige score.
+  select standing dimensions and the conditions a credential can prove.
 - `IRewardAdapter`, `IPriorityAdapter`, `IPenaltyAdapter`,
   `IRestorationAdapter`, and `IValueExecutionAdapter` can vary downstream
   record readiness while keeping actual records source-bound and bounded.
@@ -471,12 +447,12 @@ standing formula/source-set/computation records, ZK standing proof receipts,
 ordinary and ZK credential issuance, audit receipts, external-operation
 requests or acknowledgements, and new non-refund settlements likewise pass the
 evidence-lifecycle module of their pinned package. These standing proof and
-credential paths also revalidate the historical package's module identity;
-package drift makes new records revert and existing proof surfaces return
-false. Standing ZK proof receipts additionally pin the verifier runtime
-codehash and proof-domain hash; verifier drift blocks new proof receipts and
-makes existing proof receipts unusable. Starting a recovery obligation revalidates the linked
-penalty evidence through the same package-bound gate. Escrow refund, including
+credential paths also revalidate the historical package's module identity.
+If a module identity changes, new writes revert and existing proofs return
+false. Standing ZK proof receipts also bind the verifier runtime code hash
+and proof-domain hash. A mismatch prevents new receipts and invalidates
+existing proofs. Creating a recovery obligation rechecks the linked penalty
+evidence. Escrow refund, including
 refund after the intended recipient subject is deactivated, and record-only
 terminal handling of an already-recorded repayment obligation
 remain explicit closeout paths rather than new benefit creation. Reward
@@ -784,35 +760,10 @@ Use:
 
 ## 12. Verification
 
-The current verified state is:
-
-- `forge build` passes.
-- the default canonical profile passes 250 tests;
-- four canonical handler-based invariant suites pass at 512 runs and 128 calls
-  per run for recursive challenge lineage/open counts, recovery uniqueness,
-  standing-proof freshness, and cross-application package/reference isolation;
-- the explicit retained profile passes 637 regression tests with
-  `FOUNDRY_PROFILE=retained forge test`;
-- the generated transition matrix covers 330 enum-derived cases and is pinned
-  by hash `0x9cba1aa4d1a8141ded47fb76ad2a2f2d96a4a83608a76bbf29e1bbe48e73dd97`;
-- the canonical production runtime-size gate passes. `AVAGovernanceKernel` is
-  21,976 bytes and `AVAChallengeExtension` is 21,753 bytes; every contract
-  imported by `src/canonical/AVAProductionSurface.sol` remains below the
-  24,576-byte EIP-170 limit;
-- cross-application namespace, package, evidence, state, challenge, proof, and
-  downstream isolation is exercised by focused canonical tests. The secondary
-  application is test-only and has no public script;
-- the canonical trace runs locally with:
-
-```bash
-forge script script/AVACanonicalTrace.s.sol:AVACanonicalTrace --sig "runTrace()" --offline
-```
-
-The retained `AVADemoScenario` is available only through the retained profile
-for pre-separation regression work.
-
-Foundry may emit non-blocking lint-style notes. Those notes do not change the
-current ABI, storage semantics, or verification result.
+The [verification summary](current-implementation-summary.md#verification)
+reports test results and runtime sizes. The [state machine guide](state-machines.md)
+explains the transition matrix, and the [demo scenarios](demo-scenarios.md)
+show how to run the local trace.
 
 ## 13. What Remains Outside This Demo
 

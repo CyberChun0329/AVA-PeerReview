@@ -96,6 +96,15 @@ class ABIManifestTests(unittest.TestCase):
 
 
 class ImportBoundaryTests(unittest.TestCase):
+    def test_source_walk_rejects_an_import_outside_the_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Surface.sol"
+            source.write_text('import "../Outside.sol";\n', encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "path escapes project root"):
+                compatibility.source_closure(root, source)
+
     def test_core_and_extensions_cannot_import_application_sources(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -181,9 +190,17 @@ class PackageManifestTests(unittest.TestCase):
             compatibility.validate_package_manifest(manifest)
 
     def test_compatible_workflow_relationship_requires_same_app_and_compatibility_key(self):
+        for field, value in (("appId", SECOND_BYTES32), ("compatibilityKey", NONZERO_BYTES32)):
+            with self.subTest(field=field):
+                manifest = self._valid_manifest()
+                manifest["packages"][1][field] = value
+                with self.assertRaisesRegex(ValueError, f"compatible workflows must use the same {field}"):
+                    compatibility.validate_package_manifest(manifest)
+
+    def test_zero_compatibility_key_is_rejected(self):
         manifest = self._valid_manifest()
         manifest["packages"][1]["compatibilityKey"] = ZERO_BYTES32
-        with self.assertRaisesRegex(ValueError, "compatibilityKey"):
+        with self.assertRaisesRegex(ValueError, "compatibilityKey must be nonzero"):
             compatibility.validate_package_manifest(manifest)
 
 

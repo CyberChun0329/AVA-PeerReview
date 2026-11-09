@@ -338,9 +338,9 @@ contract AVADisclosureReceiptExtension is AVAExtensionRecordBase {
 
     function _evidenceUsable(uint256 evidenceId, DisclosureReceipt storage receipt) private view returns (bool) {
         try EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(evidenceId, receipt.packageId) returns (
-            bytes32 appId, bytes32 workflowKey, uint256 packageId, bytes32 subjectId, uint256 disclosurePolicyId
+            bytes32 appId, bytes32 workflowKey, uint256, bytes32 subjectId, uint256 disclosurePolicyId
         ) {
-            return appId == receipt.appId && workflowKey == receipt.workflowKey && packageId == receipt.packageId
+            return appId == receipt.appId && workflowKey == receipt.workflowKey
                 && subjectId == receipt.targetSubjectId && disclosurePolicyId == receipt.disclosurePolicyId;
         } catch {
             return false;

@@ -1,27 +1,15 @@
 # Demo Scenarios
 
-This file defines the canonical demo flows and identifies the older retained
-regression scenarios separately.
-
-The scenarios are examples for a peer review technical demo and early sample
-of the AVA protocol. They are not production peer-review, publication, payment,
-queue, disclosure-reveal, or sanction workflows.
+Run these local examples to see which records a review, a challenge, and a
+restoration produce. The retained regression scenarios appear separately below.
 
 Cross-application behavior is verified in Foundry tests rather than a public
 second-application script. `test/helpers/SecondaryTestApp.sol` supplies neutral
 roles and objects solely to test namespace, package, subject, evidence, state,
 challenge, proof, and downstream-record isolation.
 
-`script/AVACanonicalTrace.s.sol` is the paper/model handoff trace harness.
-Run `AVACanonicalTrace --sig "runTrace()" --offline` to export four
-deterministic scenario traces. The checked-in output is
-`generated/canonical-scenario-traces.json`. The script returns the JSON; the
-checked-in generated file is maintained as a repository artifact rather than
-being rewritten automatically by the script. These traces name records and
-transitions only; they do not encode sanction execution, truth decisions,
-manuscript acceptance, merit scoring, or publication outcomes.
-
-The canonical runtime command is:
+The trace returns four scenarios as JSON. Its checked-in counterpart is
+`generated/canonical-scenario-traces.json`. To print the trace locally:
 
 ```bash
 forge script script/AVACanonicalTrace.s.sol:AVACanonicalTrace --sig "runTrace()" --offline
@@ -46,12 +34,8 @@ flowchart TD
     Correction --> Restoration["Explicit lineage-bound restoration"]
 ```
 
-The generated trace contains four deterministic scenarios:
-
-The review and challenge packages in this trace each bind the 12 capabilities
-used by these scenarios. Extended standing and recovery test fixtures bind
-additional capabilities separately; the trace is not intended to instantiate
-the entire optional capability catalogue.
+The review and challenge packages each bind the 12 capabilities these examples
+use. Standing and recovery tests bind additional capabilities in their fixtures.
 
 1. `honest_review_vesting`: a review object forms a recognised state and reaches
    `Vested` only through an authorised transition.

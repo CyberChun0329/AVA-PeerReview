@@ -158,23 +158,20 @@ contract AVAEvidenceRegistry {
             );
 
         evidenceId = nextEvidenceId++;
-        evidenceRecords[evidenceId] = AVACoreTypes.EvidenceRecord({
-            id: evidenceId,
-            appId: input.appId,
-            workflowKey: input.workflowKey,
-            packageId: input.packageId,
-            commitment: input.commitment,
-            evidenceTypeHash: input.evidenceTypeHash,
-            subjectId: input.subjectId,
-            disclosurePolicyId: input.disclosurePolicyId,
-            authorityId: input.authorityId,
-            uri: input.uri,
-            registeredBy: msg.sender,
-            status: AVACoreTypes.EvidenceStatus.Active,
-            lastLifecycleRecordId: 0,
-            replacementEvidenceId: 0,
-            registeredAt: uint64(block.timestamp)
-        });
+        AVACoreTypes.EvidenceRecord storage record = evidenceRecords[evidenceId];
+        record.id = evidenceId;
+        record.appId = input.appId;
+        record.workflowKey = input.workflowKey;
+        record.packageId = input.packageId;
+        record.commitment = input.commitment;
+        record.evidenceTypeHash = input.evidenceTypeHash;
+        record.subjectId = input.subjectId;
+        record.disclosurePolicyId = input.disclosurePolicyId;
+        record.authorityId = input.authorityId;
+        record.uri = input.uri;
+        record.registeredBy = msg.sender;
+        record.status = AVACoreTypes.EvidenceStatus.Active;
+        record.registeredAt = uint64(block.timestamp);
         emit EvidenceRegistered(
             evidenceId,
             input.appId,

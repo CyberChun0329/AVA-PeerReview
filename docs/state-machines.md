@@ -1,10 +1,9 @@
 # AVA-PeerReview State Machines
 
-This document mirrors the current contracts and tests. The canonical multi-
-application state owner is `src/core/AVAGovernanceKernel.sol`; the canonical
-challenge owner is `src/extensions/challenge/AVAChallengeExtension.sol`.
-The longer `AVAStateMachine` and `AVAChallengeWorkflow` paths below document
-the retained pre-separation regression implementation.
+`AVAGovernanceKernel` stores recognised states and their transitions.
+`AVAChallengeExtension` stores challenges and requests corrections or
+restorations from the kernel. Later sections describe the earlier
+`AVAStateMachine` and `AVAChallengeWorkflow` for retained regression tests.
 
 ## Canonical Multi-Application State Path
 
@@ -121,13 +120,9 @@ are not alternate canonical entrypoints. Use the canonical sections above and
 - For mutation rules, read `Challenge Outcomes` and `Transition Record
   Requirement`.
 - For package dispatch and module coverage, read `Module Registry Boundary`.
-- For downstream standing, allocation, consequence, reward, priority, penalty,
-  restoration, credential, settlement, and proof surfaces, read `Standing And
-  Allocation`.
-
-The repeated boundary clauses are intentional. They mark where a raw review,
-raw challenge, raw evidence receipt, unsupported status, stale credential, or
-wrong package cannot create downstream effects.
+- For standing, allocation, consequence, reward, priority, penalty,
+  restoration, credential, settlement, and proof records, read
+  `Standing And Allocation`.
 
 ## Review Contribution Path
 
@@ -222,19 +217,16 @@ Rejected-good-faith or malicious/fabricated restoration on an unchanged
 recognised-state status and generic transition id unchanged. It cannot upgrade
 that target to `Restored`.
 
-The paper-support matrix in
-`generated/recognised-state-transition-matrix.csv` is hash-pinned by
-`script/AVATransitionMatrix.s.sol`, and its rows are checked against
-row-level kernel executions in the test suite. Its 330 cases are generated from
+`script/AVATransitionMatrix.s.sol` generates the matrix in
+`generated/recognised-state-transition-matrix.csv` from `AVACoreTransitionRules`.
+Tests check the row count, representative rows, and the hash. Separate tests
+run vesting, correction, and restoration through public contract calls. The
+330 rows cover
 all recognised-state enum values: 10 formation cases, 100 generic from/to
 pairs, 10 vesting sources, 10 challenge-target statuses, 100 challenge-
 correction from/to pairs, and 100 restoration from/to pairs. The canonical
 artifact therefore contains 330 rule rows and is pinned by hash
 `0x9cba1aa4d1a8141ded47fb76ad2a2f2d96a4a83608a76bbf29e1bbe48e73dd97`.
-The admissibility rules come from `AVACoreTransitionRules`, not from a manual
-row switch. The matrix is a deterministic documentation artifact for figures
-or model extraction; it is not a replacement for the Solidity transition
-checks.
 
 ## Challenge Lifecycle
 
@@ -681,16 +673,16 @@ Rules currently enforced:
 - standing source-set, completeness-attestation, computation-statement, ZK
   proof, and ordinary/ZK credential issuance paths revalidate their historical
   package identity and invoke its evidence-lifecycle module with the exact
-  record action. Package identity drift blocks new records and makes existing
-  proof surfaces fail closed.
+  record action. If a module's identity changes, new writes revert and existing
+  proofs become unusable.
 - standing credential proof is package-, subject-, vector-, category-,
   threshold-, and range-bound. Ordinary and ZK issuers enforce a 365-day
   maximum validity period.
 - ordinary standing computation and credential proof fail closed when the
   role-scoped subject is deactivated or the source evidence receipt becomes
   non-active.
-- `StandingRevisionRegistry` maintains an append-only package/subject revision
-  waterline. Relevant recognised-state, challenge, standing, penalty,
+- `StandingRevisionRegistry` tracks the latest standing revision for each
+  package and subject. Relevant recognised-state, challenge, standing, penalty,
   eligibility, reward, and recovery events advance it without computing
   standing. An upheld challenge mutation advances the target revision through
   the recognised-state transition exactly once; challenge resolution does not
@@ -791,11 +783,8 @@ Rules currently enforced:
   and clawback remain effectful paths and require active references.
 - none of these paths exposes publication priority, manuscript merit,
   acceptance, or rejection functions.
-- the default canonical profile passes 250 tests; the explicit retained
-  profile passes 637 regression tests.
-- four canonical handler-based invariant suites pass at 512 runs by 128 calls
-  for recursive challenge lineage/open counts, recovery uniqueness,
-  standing-proof freshness, and cross-application package/reference isolation.
+- the [verification summary](current-implementation-summary.md#verification)
+  reports the test counts and invariant runs for the current implementation.
 - The current state-machine surface includes authorised standing computation,
   credential use-surface hardening, disclosure proof-use, and lifecycle-record
   closure hardening.

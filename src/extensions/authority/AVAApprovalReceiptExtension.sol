@@ -383,11 +383,10 @@ contract AVAApprovalReceiptExtension {
     }
 
     function _requireApprovalEvidence(ApprovalInput calldata input, TargetContext memory target) private view {
-        (bytes32 appId, bytes32 workflowKey, uint256 packageId, bytes32 subjectId,) =
+        (bytes32 appId, bytes32 workflowKey,, bytes32 subjectId,) =
             EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(input.evidenceId, input.packageId);
         if (
-            appId != target.appId || workflowKey != target.workflowKey || packageId != input.packageId
-                || subjectId != input.authorityId
+            appId != target.appId || workflowKey != target.workflowKey || subjectId != input.authorityId
         ) revert AVACoreTypes.InvalidState(input.evidenceId);
     }
 

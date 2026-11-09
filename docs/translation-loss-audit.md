@@ -1,27 +1,14 @@
 # Translation-Loss Audit
 
-Status: current paper/model handoff aid
-
-Date: 2026-07-12
-
-This document explains what the current AVA Peer Review Solidity demo encodes
-directly, what it represents through bounded records, and what it deliberately
-leaves outside the contracts.
-
-The purpose is not to turn the demo into a model, simulation, truth engine, or
-production peer-review platform. The purpose is to make translation loss
-visible: when a research-framework idea moves into Solidity, the reader should
-be able to see which part became an executable record and which part remains an
-off-chain judgement, policy choice, or later modelling variable.
+When a governance rule is translated into Solidity, some parts become records
+or checks. Others still depend on judgement or evidence held off chain. This
+audit distinguishes them so readers can tell what each record supports.
 
 ## Reader Rule
 
-Use implemented records before inventing analytical variables.
-
-If a paper figure, model state, game action, payoff proxy, or institutional
-condition cannot be traced to an implemented record, getter, event, context
-hash, proof receipt, URI, or explicit off-chain abstraction, it is outside the
-current demo.
+For each paper or model claim, cite the record, transition, or receipt that
+supports it. State any additional institutional or modelling assumptions
+separately.
 
 The core implementation remains:
 

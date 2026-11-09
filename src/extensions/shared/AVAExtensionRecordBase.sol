@@ -146,7 +146,7 @@ abstract contract AVAExtensionRecordBase {
         if (state.id == 0 || state.id != input.recognisedStateId) {
             revert AVACoreTypes.InvalidState(input.recognisedStateId);
         }
-        _validateLoadedExtensionSubject(input, state, requireStateSubject, requireActiveEvidence);
+        _validateRecordContext(input, state, requireStateSubject, requireActiveEvidence);
         return state;
     }
 
@@ -158,7 +158,7 @@ abstract contract AVAExtensionRecordBase {
         ) revert AVACoreTypes.EmptyValue();
     }
 
-    function _validateLoadedExtensionSubject(
+    function _validateRecordContext(
         ExtensionValidationInput memory input,
         AVAGovernanceKernel.RecognisedStateReference memory state,
         bool requireStateSubject,
@@ -285,18 +285,17 @@ abstract contract AVAExtensionRecordBase {
     ) private view {
         bytes32 appId;
         bytes32 workflowKey;
-        uint256 packageId;
         bytes32 subjectId;
         uint256 disclosurePolicyId;
         if (requireActiveEvidence) {
-            (appId, workflowKey, packageId, subjectId, disclosurePolicyId) =
+            (appId, workflowKey,, subjectId, disclosurePolicyId) =
                 EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(evidenceId, state.packageId);
         } else {
-            (appId, workflowKey, packageId, subjectId, disclosurePolicyId) =
+            (appId, workflowKey,, subjectId, disclosurePolicyId) =
                 EVIDENCE_REGISTRY.requireEvidenceReferenceForPackage(evidenceId, state.packageId);
         }
         if (
-            appId != state.appId || workflowKey != state.workflowKey || packageId != state.packageId
+            appId != state.appId || workflowKey != state.workflowKey
                 || subjectId != state.subjectId || disclosurePolicyId != state.disclosurePolicyId
         ) revert AVACoreTypes.InvalidState(evidenceId);
     }

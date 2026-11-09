@@ -105,16 +105,7 @@ abstract contract AVADownstreamRecordBase {
         if (modules.rulePackage.appId != state.appId || modules.rulePackage.workflowKey != state.workflowKey) {
             revert AVACoreTypes.InvalidState(state.packageId);
         }
-        AVAGovernanceKernel.GovernedObjectReference memory objectRecord =
-            GOVERNANCE_KERNEL.getGovernedObjectReference(state.governedObjectId);
-        if (
-            objectRecord.appId != state.appId || objectRecord.workflowKey != state.workflowKey
-                || objectRecord.packageId != state.packageId || objectRecord.subjectId != state.subjectId
-                || objectRecord.evidenceReceiptId != state.evidenceReceiptId
-                || objectRecord.disclosurePolicyId != state.disclosurePolicyId
-        ) {
-            revert AVACoreTypes.InvalidState(state.governedObjectId);
-        }
+        bytes32 objectTypeKey = GOVERNANCE_KERNEL.getGovernedObjectReference(state.governedObjectId).objectTypeKey;
         _requireEvidence(state.evidenceReceiptId, state);
         if (input.evidenceId != state.evidenceReceiptId) _requireEvidence(input.evidenceId, state);
         _requireAllowedStatus(input.recordClass, state.status);
@@ -126,7 +117,7 @@ abstract contract AVADownstreamRecordBase {
             roleKey: input.roleKey,
             recognisedStateId: state.id,
             governedObjectId: state.governedObjectId,
-            objectTypeKey: objectRecord.objectTypeKey,
+            objectTypeKey: objectTypeKey,
             subjectId: input.subjectId,
             evidenceReceiptId: input.evidenceId,
             recordTypeKey: input.recordTypeKey,
@@ -207,10 +198,10 @@ abstract contract AVADownstreamRecordBase {
         private
         view
     {
-        (bytes32 appId, bytes32 workflowKey, uint256 packageId, bytes32 subjectId, uint256 disclosurePolicyId) =
+        (bytes32 appId, bytes32 workflowKey,, bytes32 subjectId, uint256 disclosurePolicyId) =
             EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(evidenceId, state.packageId);
         if (
-            appId != state.appId || workflowKey != state.workflowKey || packageId != state.packageId
+            appId != state.appId || workflowKey != state.workflowKey
                 || subjectId != state.subjectId || disclosurePolicyId != state.disclosurePolicyId
         ) {
             revert AVACoreTypes.InvalidState(evidenceId);

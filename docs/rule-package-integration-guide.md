@@ -1,18 +1,7 @@
 # Rule Package Integration Guide
 
-Status: current integration guide
-
-Date: 2026-07-12
-
-This guide explains how to add an application and its workflow rule packages to
-the current Solidity demo without rewriting the recognised-state substrate. It
-is for application authors, module authors, and reviewers who need a practical
-integration checklist.
-
-The guide describes the implemented contract surface. It does not authorise a
-production release, model or simulation layer, publication logic, identity
-reveal, evidence reveal, production ZK, production token/payment integration,
-real queue execution, sanction execution, or deployment.
+Follow this guide to register an application and choose the modules for its
+workflows. Applications in the demo share the same Core contracts.
 
 ## 1. Canonical Integration Boundary
 
@@ -26,7 +15,7 @@ later advance to a newer package, but old records remain bound to the package
 identity recorded at creation time. Package authors must treat the historical
 `packageId` as immutable context.
 
-Rule packages may validate or veto. They must not:
+Modules selected by a rule package may validate or veto. They must not:
 
 - grant authority;
 - mutate substrate storage directly;
@@ -50,9 +39,9 @@ The canonical ownership boundary is:
 `AVAChallengeExtension` owns challenge storage and can request only the
 restricted high-impact transitions exposed by the kernel. Core and reusable
 extensions import no application vocabulary.
-`AVAWorkflowPolicyRouter` is the stateless dispatch seam for formation,
-transition, and challenge policy. It reads the record's fixed package and calls
-the selected modules; it does not own records or mutation authority.
+`AVAWorkflowPolicyRouter` calls the formation, transition, and challenge
+validators selected by the record's package. The kernel and extensions write
+the records.
 
 ## 2. Canonical Application And Package Workflow
 
@@ -108,8 +97,8 @@ the selected modules; it does not own records or mutation authority.
    - The kernel admin can bind one high-impact transition requester, transition
      guard, and post-transition hook per package before recognised-state use
      begins.
-   - These bindings are package-specific, identity-pinned, and cannot be
-     replaced after use begins.
+   - The kernel stores each bound address and its behaviour identity. Bindings
+     must be set before the package first forms a recognised state.
 9. Add tests before relying on the package.
    - Test package registration.
    - Test cross-application rejection for objects, evidence, subjects, packages,
@@ -117,7 +106,7 @@ the selected modules; it does not own records or mutation authority.
    - Test historical package binding after superseding the same
      `(appId, workflowKey)`.
    - Test each custom module's rejection path.
-   - Test that a permissive custom module cannot bypass substrate hard gates.
+   - Test that a permissive module cannot bypass the calling contract's checks.
    - Test forbidden selector and terminology boundaries.
 
 For a challenge workflow, repeat this process with its own `workflowKey` and
@@ -137,16 +126,14 @@ The current keys are:
 | Application and AVA stages | `APPLICATION`, `ATTRIBUTION`, `VERIFICATION`, `ALLOCATION` | Application vocabulary plus replaceable Attribution, Verification, and Allocation validators |
 | Recognised-state support | `TRANSITION_RULE`, `EVIDENCE_POLICY`, `EVIDENCE_LIFECYCLE`, `DISCLOSURE_POLICY`, `CHALLENGE_POLICY`, `AUTHORITY_POLICY`, `FIELD_POLICY`, `ANTI_ABUSE` | Veto-only governance support; not additional AVA stages |
 | Standing and bounded downstream records | `STANDING`, `STANDING_PROVENANCE`, `STANDING_COMPUTATION`, `STANDING_CREDENTIAL`, `STANDING_ZK_PROOF`, `STANDING_ZK_CREDENTIAL`, `ALLOCATION`, `CONSEQUENCE`, `REWARD`, `PRIORITY`, `PENALTY`, `RESTORATION`, `VALUE_EXECUTION` | Procedural memory, proof-carrier, bounded record, and record-only value lifecycle validation |
-| Optional receipt surfaces | `PRIVACY_PROOF`, `DISCLOSURE_RECEIPT`, `AUDIT_RECEIPT`, `SETTLEMENT_RECEIPT`, `EXTERNAL_OPERATION`, `PACKAGE_LIFECYCLE`, `AUTHORITY_APPROVAL` | Context-bound receipts; no reveal, truth adjudication, real payment, or external execution |
+| Optional receipt policies | `PRIVACY_PROOF`, `DISCLOSURE_RECEIPT`, `AUDIT_RECEIPT`, `SETTLEMENT_RECEIPT`, `EXTERNAL_OPERATION`, `PACKAGE_LIFECYCLE`, `AUTHORITY_APPROVAL` | Validate the context for each receipt |
 
-The package registry pins both module addresses and each module's reported
-identity. Historical reads recompute both aggregate hashes and fail closed if a
-bound module's identity changes.
-Canonical evidence registration, governed-object registration, shared extension
-validation, downstream-record validation, and approval recording resolve their
-required modules in one bounded batch. Each of those dispatch seams therefore
-performs one aggregate identity revalidation per operation, without introducing
-an unchecked package read or a cross-transaction cache.
+The package registry stores module addresses and the identity recorded for
+each module. Verified reads recompute the fingerprint of the distinct modules
+and reject a mismatch. Evidence registration, object registration, extension
+validation, downstream recording, and approval recording each load the
+modules they need in one call for that package. This checks the whole package
+even if the operation uses only some of its modules.
 
 ## 4. Retained Pre-Separation RulePackageModules Map
 

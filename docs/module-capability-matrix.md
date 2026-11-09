@@ -1,21 +1,10 @@
 # Module Capability Matrix
 
-This document records the current module capability and conflict model
-for the implemented Solidity demo. It describes the code that exists now; it
-does not authorise a production release, model, simulation, publication logic,
-production token/payment integration, publication-queue execution, sanction
-execution, identity reveal, evidence reveal, decrypt, production ZK, or ACL
-work.
-
-The capability model is written for the current Base-compatible EVM/Solidity
-demo. It documents local Foundry contracts and tests, not deployed Base
-addresses or production chain operations.
-
-For per-interface input/output and semantic preconditions, see
-`docs/interface-contract-spec.md`.
-
-For the module-author workflow and rule-package test checklist, see
-`docs/rule-package-integration-guide.md`.
+Use this matrix to find which contract calls a module and which checks remain
+with that contract. The [interface reference](interface-contract-spec.md)
+describes each validator's inputs. The
+[integration guide](rule-package-integration-guide.md) shows how to select and
+test the modules for a workflow.
 
 ## Canonical Multi-Application Capability Map
 
@@ -26,7 +15,7 @@ The canonical source tree separates capability ownership as follows:
 | AVA Core | `AVAApplicationRegistry`, `AVAIdentityRegistry`, `AVAAuthorityMatrix`, `AVACoreRulePackageRegistry`, `AVADisclosurePolicyRegistry`, `AVAEvidenceRegistry`, `AVAWorkflowPolicyRouter`, `AVAGovernanceKernel` | Core storage and hard gates are not replaceable; package-selected policy modules may only validate or veto. |
 | Reusable extensions | `AVAChallengeExtension`, standing/downstream extensions, privacy/disclosure/audit/settlement/external-operation extensions | An app may omit an extension or bind a capability module. Absence fails closed and cannot weaken Core. |
 | Application | `PeerReviewApplicationModule` | Role, object, relationship, and downstream action vocabulary. The application module is validator-only. |
-| Genericity test fixture | `test/helpers/SecondaryTestApp.sol` | Exercises a second namespace and different vocabulary without becoming production source. |
+| Second application fixture | `test/helpers/SecondaryTestApp.sol` | Tests a second namespace with different roles, objects, and workflows. |
 
 All canonical records are scoped by `appId`. Rule packages are addressed by
 `(appId, workflowKey)` and receive immutable `packageId` values. Core imports
@@ -34,9 +23,8 @@ no application source. Peer Review and the test-only secondary application can
 therefore reuse one workflow key without sharing subjects, evidence, packages,
 objects, states, or downstream records.
 
-The matrices below retain the larger pre-separation interface catalogue for
-compatibility and research traceability. New applications should use the
-canonical capability-key bindings in `AVACoreRulePackageRegistry`.
+Use `AVACoreRulePackageRegistry` for new application packages. The matrices
+also document the earlier interfaces used by the retained regression profile.
 The registry accepts at most 64 capability bindings per package. It stores an
 immutable ordered capability layout and bounds every later full-package
 revalidation. A module shared by several capability keys contributes once to
@@ -97,8 +85,8 @@ The retained pre-separation substrate additionally owns and records:
 - settlement, disclosure-execution, and external-operation receipt storage
   through the execution-layer registries.
 
-Rule-package modules and adapters are validator-only seams. They may validate
-or veto a proposed transition/readiness/record. They must not grant authority,
+Rule-package validators can reject a proposed transition or record, including
+a lifecycle readiness record. They must not grant authority,
 mutate substrate storage, execute reward/payment/sanction/publication/reveal,
 or reinterpret substrate-owned ids.
 
@@ -700,11 +688,8 @@ recovery conclusion per source, source-bound recovery without unrelated-wallet
 seizure, and distinct fraud, irresponsible-review, malicious-challenge, and
 good-faith failed-challenge treatment without direct standing updates.
 
-The default canonical profile currently passes 250 tests. Its four
-handler-based invariant suites pass at 512 runs by 128 calls. The explicit
-retained profile passes 637 regression tests. These profiles are intentionally
-separate so retained interface coverage cannot be mistaken for canonical
-application/Core integration evidence.
+The [verification summary](current-implementation-summary.md#verification)
+reports results separately for the canonical and retained profiles.
 
 ZK standing tests cover Formula V0 standing-computation examples, standing
 credential proof/use-surface hardening, ZK standing computation proof receipts,

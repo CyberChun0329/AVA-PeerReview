@@ -1,24 +1,16 @@
 # Rule Package Compatibility And Migration Policy
 
-Status: current implementation policy
-
-Date: 2026-07-11
-
-This policy explains how the current multi-application AVA Solidity demo treats
-rule-package replacement, compatibility metadata, historical dispatch, and the
-retained pre-separation migration-readiness records.
-
-It is a current implementation policy, not approval to implement automatic
-migration, state rewrite, model, simulation, publication logic, reveal/decrypt,
-payment, sanction execution, queue execution, production ZK, ACL, or production
-deployment.
+This guide explains how to select the active package for new registrations and
+how to interpret records created under an earlier package. A migration-readiness
+receipt records an assessment. Moving an existing record would require a
+separate mechanism.
 
 ## 1. Core Rule
 
 On the canonical path, `(appId, workflowKey)` identifies an active pointer.
 `packageId` is historical identity.
 
-- `(appId, workflowKey)` selects the current package for new workflow actions.
+- `(appId, workflowKey)` selects the package for new object and evidence registrations.
   The same workflow key may be active independently in different applications.
 - `registerRulePackage` creates the initial package and rejects an existing
   application/workflow pair.
@@ -27,9 +19,9 @@ On the canonical path, `(appId, workflowKey)` identifies an active pointer.
   same compatibility key, emits an append-only supersession event, and then
   advances that application's pointer.
 - Supersession remains a trusted governance action by the authorised package
-  registrar. It is explicit and compare-and-set bound, but
-  `AVACoreRulePackageRegistry` does not require an incumbent module to approve
-  the pointer change.
+  registrar, who must name the expected active package.
+  `AVACoreRulePackageRegistry` checks that ID against the active pointer.
+  Approval from a module in the old package is outside the current procedure.
 - Old recognised states, challenges, evidence receipts, downstream records,
   proof receipts, credentials, settlement receipts, and audit records must be
   interpreted through their stored `packageId` or through the package-bound
@@ -47,6 +39,7 @@ Each canonical package stores:
 - `workflowKey`
 - `modulesHash`
 - `modulesIdentityHash`
+- `modulesIdentityFingerprint`
 - `version`
 - `compatibilityKey`
 - `uri`
@@ -56,16 +49,13 @@ Each canonical package stores:
 
 `modulesHash` binds the ordered capability keys and module addresses.
 `modulesIdentityHash` binds the ordered capability keys and each module's
-`moduleIdentityHash()`. The registry recomputes both aggregates whenever
-`getRulePackageById(packageId)` is called.
+`moduleIdentityHash()` at registration. On verified reads, the registry
+recomputes `modulesIdentityFingerprint` from the distinct bound modules and
+checks it against the stored value.
 
-If a stored package's module behaviour identity no longer matches, package reads
-fail closed. This is intentional tamper evidence for the demo: old records are
-not silently reinterpreted through changed module behaviour. The operational cost is
-that affected package reads may become unavailable until a separately designed
-governance path records how readers should treat the tampered package. The
-current contracts do not include a tamper-acknowledged read path or a migration
-executor.
+If a bound module reports a different identity, verified package reads revert.
+Existing records keep their package IDs. Affected verified reads remain
+unavailable while the mismatch persists.
 
 This mechanism assumes modules honestly expose every behaviour-affecting
 configuration. The current package model therefore does not support proxy

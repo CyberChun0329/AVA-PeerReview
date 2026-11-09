@@ -6,15 +6,17 @@ production security audit.
 
 ## Supported Scope
 
-Security reports are useful when they concern the implemented Solidity demo:
+Report issues in the implemented contracts, such as:
 
 - authorisation bypasses;
 - package identity or historical-record rewrite issues;
 - replay or context-binding failures;
-- standing/reputation boundary violations;
+- standing credentials that remain usable after they should expire or be
+  invalidated;
 - disclosure proof-use or nullifier failures;
 - settlement reentrancy or duplicate finalisation;
-- forbidden publication, reveal, sanction, or standing-token surfaces.
+- a path that introduces publication decisions, reveals confidential content,
+  executes a sanction, or makes standing transferable.
 
 ## Out Of Scope
 
@@ -39,16 +41,15 @@ review before use.
 
 ## Governance Trust Boundaries
 
-Rule-package `workflowKey` re-registration is a trusted governance action by an
-authorised package registrar. Historical records keep their stored `packageId`,
-so a new active package cannot rewrite old recognised states, evidence,
-challenges, credentials, settlements, or downstream records. The current demo
-does not implement incumbent-package approval for active-pointer replacement.
+An authorised registrar can supersede an application's active package. The
+registry checks the expected active package and the next version. Existing
+records retain the original `packageId`. The procedure trusts the registrar
+to select suitable new modules and requires no vote from the old package.
 
-The default anti-abuse module is intentionally permissive as a baseline demo
-module. Workflows that need challenge-griefing mitigation should bind a stricter
-anti-abuse or challenge-lifecycle module, such as the included subject-rate
-limit example. This is not a production anti-abuse system.
+`AVAChallengeExtension` limits a filing account to one challenge per version
+of a target state and bars conflicting accounts from screening or deciding
+the challenge. The default optional anti-abuse validator adds no checks.
+Workflows can select additional checks in their rule packages.
 
 ## Reporting
 

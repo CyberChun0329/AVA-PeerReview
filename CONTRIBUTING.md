@@ -4,29 +4,19 @@ This repository is a peer review technical demo and early sample of the AVA
 protocol. Contributions should preserve the demo's role as an executable
 governance kernel, not turn it into a production peer-review platform.
 
-## Contribution Principles
+## Where Changes Belong
 
 - Preserve AVA's three stages: Attribution, Verification, and Allocation.
 - Treat recognised state as the governance object, not as a fourth stage.
-- Prefer new modules, adapters, tests, or documentation over substrate rewrites.
+- Put application-specific rules in application or policy modules. Use Core
+  for rules shared by every application.
 - Keep old records bound to their historical `packageId`.
 - Keep authority, subject, evidence, target, context, nullifier, and settlement
   source checks at the substrate boundary.
 - Keep standing and reputation as governance memory, not assets.
 
-## Allowed Extension Shape
-
-Future extensions should normally add or replace:
-
-- rule packages;
-- validator modules;
-- downstream adapters;
-- proof or disclosure modules;
-- bounded record paths;
-- tests and reconstruction documentation.
-
-If a change requires rewriting the recognised-state substrate, explain why a
-module or adapter cannot express the requirement first.
+The [integration guide](docs/rule-package-integration-guide.md) shows how to
+register a new package or replace a policy module.
 
 ## Forbidden Contributions
 
@@ -65,9 +55,6 @@ New rule packages or modules should include tests for:
 
 ## Documentation
 
-Public-facing documentation should describe this project as a peer review
-technical demo and early sample of the AVA protocol. Historical milestone notes
-or development-stage records should not be used as public reader-facing
-documentation. Current public facts should be documented through the README,
-architecture, interface, capability, reconstruction, scenario, terminology, and
-handoff documents.
+Use the [documentation index](docs/README.md) to find the guide for the
+information you are changing. Keep historical development notes separate
+from the public guides.

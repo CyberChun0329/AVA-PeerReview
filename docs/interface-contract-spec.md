@@ -1,43 +1,22 @@
 # Interface Contract Specification
 
-This specification defines the semantic contract for every replaceable
-module and adapter interface in the current Solidity demo. It is an
-implementation-facing compatibility document, not a roadmap and not an
-approval to start a production release, model, simulation, publication logic,
-production token/payment, publication-queue execution, sanction execution,
-identity reveal, real reveal/decrypt, production ZK, or ACL.
-
-The interfaces are specified for a Base-compatible EVM/Solidity substrate.
-They describe the current local Foundry implementation and its module
-compatibility rules; they do not describe a live Base deployment or production
-deployment policy.
-
-For the canonical capability-key package workflow, historical-package binding
-rules, package test checklist, and retained pre-separation
-`RulePackageModules` field map, see `docs/rule-package-integration-guide.md`.
+This reference describes the inputs, checks, and limits of replaceable
+modules in the local Solidity demo. The
+[package integration guide](rule-package-integration-guide.md) shows how to
+register those modules and test them together.
 
 ## How To Use This Spec
 
-This document is intentionally detailed. Use it as a compatibility contract,
-not as the first narrative introduction to the project.
-
-- If you need the whole-system story, read `docs/architecture.md` first.
-- If you are adding a workflow package, start with
-  `docs/rule-package-integration-guide.md`, then return here for the exact
-  interface contract.
-- If you are checking whether a module may do something, read the relevant
-  interface section and the "Must not do" / "Gates" clauses together.
-- If you are reconstructing a record after execution, use
-  `docs/record-reconstruction-guide.md`; this file explains what each module
-  is allowed to validate before a record is written.
-
-Quick index:
+Start with the canonical interfaces below for a new application. The detailed
+entries later in this file also cover the earlier implementation for regression
+and compatibility work.
 
 | Need | Section |
 | --- | --- |
 | Shared validator semantics | `Global Contract` |
 | Re-verifiable module behaviour identity | `IRuleModuleIdentity` |
-| AVA core stage interfaces | `IAttributionModule`, `IVerificationModule`, `IAllocationAdapter` / `IAVAAllocationModule` |
+| Current AVA stage interfaces | `IAVAAttributionModule`, `IAVAVerificationModule`, `IAVAAllocationPolicyModule` |
+| Earlier stage interfaces | `IAttributionModule`, `IVerificationModule`, `IAllocationAdapter` / `IAVAAllocationModule` |
 | Recognised-state support | transition, challenge, disclosure, evidence, audit, field, anti-abuse, residual authority |
 | Downstream / proof / execution support | standing, credentials, reward, priority, consequence, penalty, restoration, settlement, external operation, package lifecycle, ZK |
 | Forbidden boundary check | each interface's `Must not do` clause |
@@ -79,18 +58,16 @@ credential, proof, or downstream receipt uses its stored `packageId`.
 Capability absence fails closed. A package may bind at most 64 capabilities, so
 every full-package unique-module identity revalidation has a fixed upper bound.
 
-Contract-to-contract hot paths use fixed-size reference readers and compact
-verified package dispatch. `getActiveVerifiedModulesCompact` combines active
-pointer validation with the same full-package unique-module identity recheck
-used by historical package reads; `getVerifiedModulesCompact` applies that
-recheck to an already pinned `packageId`. `SubjectContext`,
+Contracts can load fixed-size references for routine validation.
+`getActiveVerifiedModulesCompact` looks up the active package and verifies
+every distinct module in it. `getVerifiedModulesCompact` performs the same
+check for a stored `packageId`. `SubjectContext`,
 `GovernedObjectReference`, `RecognisedStateReference`, and
 `RecognisedStateTransitionReference` omit dynamic metadata or provenance fields
-that policy calls do not consume. The full package, subject, governed-object,
-recognised-state, and transition getters remain the canonical audit and
-reconstruction surface.
-No compact reader skips package identity, authority, subject, evidence,
-disclosure, or transition checks, and no result is cached across transactions.
+that policy calls do not consume. Use the full getters to reconstruct records
+and their metadata. The compact package readers recheck module identity on
+each call. Callers still perform the applicable authority, subject, evidence,
+disclosure, and transition checks.
 
 Challenge is recursive on this surface. A challenge begins as a governed object
 and recognised state under its own workflow/package. `AVAChallengeExtension`
@@ -112,7 +89,8 @@ root-level Peer Review state machine.
 
 ## Global Contract
 
-All rule-package modules and adapters are validator-only seams.
+Rule-package validators can accept or reject the supplied context. The
+calling contract grants no additional permission on success.
 
 - A successful `validate... external view` call means **no veto only**.
 - Success never grants authority, never proves scientific truth, never decides

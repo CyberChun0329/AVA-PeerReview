@@ -551,11 +551,10 @@ contract AVAPackageReadinessExtension {
         bytes32 subjectId,
         uint256 disclosurePolicyId
     ) private view {
-        (bytes32 evidenceAppId, bytes32 evidenceWorkflowKey, uint256 evidencePackageId, bytes32 evidenceSubjectId, uint256 evidencePolicyId) =
+        (bytes32 evidenceAppId, bytes32 evidenceWorkflowKey,, bytes32 evidenceSubjectId, uint256 evidencePolicyId) =
             EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(evidenceId, packageId);
         if (
-            evidenceAppId != appId || evidenceWorkflowKey != workflowKey || evidencePackageId != packageId
-                || evidenceSubjectId != subjectId
+            evidenceAppId != appId || evidenceWorkflowKey != workflowKey || evidenceSubjectId != subjectId
                 || (disclosurePolicyId != 0 && evidencePolicyId != disclosurePolicyId)
         ) revert AVACoreTypes.InvalidState(evidenceId);
     }

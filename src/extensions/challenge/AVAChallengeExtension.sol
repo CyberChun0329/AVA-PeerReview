@@ -130,7 +130,6 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         bytes32 authorityId;
         ChallengeOutcome outcome;
         bytes32 reasonHash;
-        address authorityActor;
     }
 
     AVAGovernanceKernel public immutable GOVERNANCE_KERNEL;
@@ -244,35 +243,28 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         filingKeyUsed[filingKey] = true;
 
         challengeId = nextChallengeId++;
-        challenges[challengeId] = ChallengeRecord({
-            id: challengeId,
-            appId: input.appId,
-            workflowKey: input.workflowKey,
-            packageId: input.packageId,
-            targetPackageId: target.packageId,
-            challengeGovernedObjectId: challengeObject.id,
-            challengeRecognisedStateId: challengeState.id,
-            challengedRecognisedStateId: input.challengedRecognisedStateId,
-            challengerSubjectId: challengeState.subjectId,
-            evidenceReceiptId: challengeState.evidenceReceiptId,
-            disclosurePolicyId: challengeState.disclosurePolicyId,
-            targetStatusAtFiling: target.status,
-            targetTransitionIdAtFiling: target.lastTransitionId,
-            targetTransitionIdAfterResolution: 0,
-            challengeStateTransitionIdAtFiling: 0,
-            challengeStateTransitionIdAfterResolution: 0,
-            status: ChallengeStatus.ConcernFiled,
-            outcome: ChallengeOutcome.None,
-            lastTransitionId: 0,
-            filedBy: msg.sender,
-            filedAt: uint64(block.timestamp)
-        });
+        ChallengeRecord storage challenge = challenges[challengeId];
+        challenge.id = challengeId;
+        challenge.appId = input.appId;
+        challenge.workflowKey = input.workflowKey;
+        challenge.packageId = input.packageId;
+        challenge.targetPackageId = target.packageId;
+        challenge.challengeGovernedObjectId = challengeObject.id;
+        challenge.challengeRecognisedStateId = challengeState.id;
+        challenge.challengedRecognisedStateId = input.challengedRecognisedStateId;
+        challenge.challengerSubjectId = challengeState.subjectId;
+        challenge.evidenceReceiptId = challengeState.evidenceReceiptId;
+        challenge.disclosurePolicyId = challengeState.disclosurePolicyId;
+        challenge.targetStatusAtFiling = target.status;
+        challenge.targetTransitionIdAtFiling = target.lastTransitionId;
+        challenge.status = ChallengeStatus.ConcernFiled;
+        challenge.filedBy = msg.sender;
+        challenge.filedAt = uint64(block.timestamp);
         challengeIdByRecognisedState[challengeState.id] = challengeId;
         decisionBoundChallengeState[challengeState.id] = true;
-        uint256 challengeStateTransitionId =
-            _requestChallengeFilingTransition(challenges[challengeId], challengeState, target, input);
-        challenges[challengeId].challengeStateTransitionIdAtFiling = challengeStateTransitionId;
-        challenges[challengeId].challengeStateTransitionIdAfterResolution = challengeStateTransitionId;
+        uint256 challengeStateTransitionId = _requestChallengeFilingTransition(challenge, challengeState, target, input);
+        challenge.challengeStateTransitionIdAtFiling = challengeStateTransitionId;
+        challenge.challengeStateTransitionIdAfterResolution = challengeStateTransitionId;
         openChallengeCountByRecognisedState[input.challengedRecognisedStateId]++;
         TransitionWriteInput memory writeInput;
         writeInput.kind = ChallengeTransitionKind.Filing;
@@ -287,8 +279,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         writeInput.reasonHash = input.reasonHash;
         writeInput.reasonURI = input.reasonURI;
         writeInput.actor = msg.sender;
-        uint256 transitionId = _recordTransition(challenges[challengeId], writeInput);
-        challenges[challengeId].lastTransitionId = transitionId;
+        challenge.lastTransitionId = _recordTransition(challenge, writeInput);
         emit ChallengeFiled(
             challengeId,
             input.appId,
@@ -310,18 +301,15 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         ChallengeRecord storage challenge = _challengeStorage(challengeId);
         if (challenge.status != ChallengeStatus.ConcernFiled) revert AVACoreTypes.InvalidState(challengeId);
         _requireStoredChallengeEvidence(challenge);
-        address authorityActor =
-            _requireNonConflictedAuthority(challenge, roleKey, AVACoreTypes.ACTION_SCREEN_CHALLENGE, authorityId);
         bytes32 screeningReasonHash = keccak256(abi.encode("challenge-screening", challengeId));
-        _validateStoredChallengePolicies(
+        _validateStoredChallengeAction(
             challenge,
             StoredPolicyInput({
                 actionKey: AVACoreTypes.ACTION_SCREEN_CHALLENGE,
                 roleKey: roleKey,
                 authorityId: authorityId,
                 outcome: ChallengeOutcome.None,
-                reasonHash: screeningReasonHash,
-                authorityActor: authorityActor
+                reasonHash: screeningReasonHash
             })
         );
         ChallengeStatus fromStatus = challenge.status;
@@ -337,7 +325,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         writeInput.targetTransitionIdAfter = challenge.targetTransitionIdAtFiling;
         writeInput.authorityId = authorityId;
         writeInput.reasonHash = screeningReasonHash;
-        writeInput.actor = authorityActor;
+        writeInput.actor = msg.sender;
         transitionId = _recordTransition(challenge, writeInput);
         challenge.lastTransitionId = transitionId;
     }
@@ -355,33 +343,19 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
             revert AVACoreTypes.InvalidState(input.challengeId);
         }
         _requireStoredChallengeEvidence(challenge);
-        address authorityActor = _requireNonConflictedAuthority(
-            challenge, input.roleKey, AVACoreTypes.ACTION_RESOLVE_CHALLENGE, input.authorityId
-        );
-        AVAGovernanceKernel.RecognisedStateReference memory target =
-            GOVERNANCE_KERNEL.getRecognisedStateReference(challenge.challengedRecognisedStateId);
-        _validateStoredChallengePolicies(
-            challenge,
-            StoredPolicyInput({
-                actionKey: AVACoreTypes.ACTION_RESOLVE_CHALLENGE,
-                roleKey: input.roleKey,
-                authorityId: input.authorityId,
-                outcome: input.outcome,
-                reasonHash: input.reasonHash,
-                authorityActor: authorityActor
-            })
-        );
+        (AVAGovernanceKernel.RecognisedStateReference memory target, bytes32 decisionHash) =
+            _validateStoredChallengeAction(
+                challenge,
+                StoredPolicyInput({
+                    actionKey: AVACoreTypes.ACTION_RESOLVE_CHALLENGE,
+                    roleKey: input.roleKey,
+                    authorityId: input.authorityId,
+                    outcome: input.outcome,
+                    reasonHash: input.reasonHash
+                })
+            );
         uint256 transitionIdBefore = target.lastTransitionId;
         uint256 transitionIdAfter = transitionIdBefore;
-        bytes32 decisionHash = _decisionHash(
-            challenge.id,
-            AVACoreTypes.ACTION_RESOLVE_CHALLENGE,
-            transitionIdBefore,
-            input.outcome,
-            input.reasonHash,
-            challenge.packageId,
-            challenge.targetPackageId
-        );
         if (input.outcome == ChallengeOutcome.Upheld) {
             if (
                 transitionIdBefore != challenge.targetTransitionIdAtFiling
@@ -430,7 +404,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         writeInput.authorityId = input.authorityId;
         writeInput.reasonHash = input.reasonHash;
         writeInput.reasonURI = input.reasonURI;
-        writeInput.actor = authorityActor;
+        writeInput.actor = msg.sender;
         transitionId = _recordTransition(challenge, writeInput);
         challenge.lastTransitionId = transitionId;
     }
@@ -485,21 +459,17 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
             revert AVACoreTypes.InvalidState(challengeId);
         }
         _requireStoredChallengeEvidence(challenge);
-        address authorityActor =
-            _requireNonConflictedAuthority(challenge, roleKey, AVACoreTypes.ACTION_APPLY_RESTORATION, authorityId);
-        _validateStoredChallengePolicies(
+        (AVAGovernanceKernel.RecognisedStateReference memory target,) = _validateStoredChallengeAction(
             challenge,
             StoredPolicyInput({
                 actionKey: AVACoreTypes.ACTION_APPLY_RESTORATION,
                 roleKey: roleKey,
                 authorityId: authorityId,
                 outcome: challenge.outcome,
-                reasonHash: reasonHash,
-                authorityActor: authorityActor
+                reasonHash: reasonHash
             })
         );
-        uint256 targetTransitionId =
-            GOVERNANCE_KERNEL.getRecognisedStateReference(challenge.challengedRecognisedStateId).lastTransitionId;
+        uint256 targetTransitionId = target.lastTransitionId;
         if (targetTransitionId != challenge.targetTransitionIdAfterResolution) {
             revert AVACoreTypes.InvalidState(challengeId);
         }
@@ -517,7 +487,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         writeInput.authorityId = authorityId;
         writeInput.reasonHash = reasonHash;
         writeInput.reasonURI = reasonURI;
-        writeInput.actor = authorityActor;
+        writeInput.actor = msg.sender;
         transitionId = _recordTransition(challenge, writeInput);
         challenge.lastTransitionId = transitionId;
     }
@@ -537,21 +507,17 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
             revert AVACoreTypes.InvalidState(challengeId);
         }
         _requireStoredChallengeEvidence(challenge);
-        address authorityActor =
-            _requireNonConflictedAuthority(challenge, roleKey, AVACoreTypes.ACTION_APPLY_RESTORATION, authorityId);
-        _validateStoredChallengePolicies(
-            challenge,
-            StoredPolicyInput({
-                actionKey: AVACoreTypes.ACTION_APPLY_RESTORATION,
-                roleKey: roleKey,
-                authorityId: authorityId,
-                outcome: challenge.outcome,
-                reasonHash: reasonHash,
-                authorityActor: authorityActor
-            })
-        );
-        AVAGovernanceKernel.RecognisedStateReference memory target =
-            GOVERNANCE_KERNEL.getRecognisedStateReference(challenge.challengedRecognisedStateId);
+        (AVAGovernanceKernel.RecognisedStateReference memory target, bytes32 decisionHash) =
+            _validateStoredChallengeAction(
+                challenge,
+                StoredPolicyInput({
+                    actionKey: AVACoreTypes.ACTION_APPLY_RESTORATION,
+                    roleKey: roleKey,
+                    authorityId: authorityId,
+                    outcome: challenge.outcome,
+                    reasonHash: reasonHash
+                })
+            );
         if (target.lastTransitionId != challenge.targetTransitionIdAfterResolution) {
             revert AVACoreTypes.InvalidState(challengeId);
         }
@@ -560,7 +526,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         uint256 restorationTransitionId = target.lastTransitionId;
         if (target.status != restorationStatus) {
             restorationTransitionId = _requestRestorationTransition(
-                challenge, target, roleKey, authorityId, restorationStatus, reasonHash, reasonURI
+                challenge, target, roleKey, authorityId, restorationStatus, reasonHash, reasonURI, decisionHash
             );
         }
         ChallengeStatus fromStatus = challenge.status;
@@ -577,7 +543,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         writeInput.authorityId = authorityId;
         writeInput.reasonHash = reasonHash;
         writeInput.reasonURI = reasonURI;
-        writeInput.actor = authorityActor;
+        writeInput.actor = msg.sender;
         transitionId = _recordTransition(challenge, writeInput);
         challenge.lastTransitionId = transitionId;
         _decrementOpenChallenge(challenge);
@@ -601,20 +567,17 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         ) {
             revert AVACoreTypes.InvalidState(challengeId);
         }
-        address authorityActor =
-            _requireNonConflictedAuthority(challenge, roleKey, AVACoreTypes.ACTION_CLOSE_CHALLENGE, authorityId);
-        _validateStoredChallengePolicies(
+        (AVAGovernanceKernel.RecognisedStateReference memory target,) = _validateStoredChallengeAction(
             challenge,
             StoredPolicyInput({
                 actionKey: AVACoreTypes.ACTION_CLOSE_CHALLENGE,
                 roleKey: roleKey,
                 authorityId: authorityId,
                 outcome: challenge.outcome,
-                reasonHash: reasonHash,
-                authorityActor: authorityActor
+                reasonHash: reasonHash
             })
         );
-        transitionId = _recordClosure(challenge, authorityId, reasonHash, reasonURI, authorityActor);
+        transitionId = _recordClosure(challenge, target.lastTransitionId, authorityId, reasonHash, reasonURI);
         _decrementOpenChallenge(challenge);
     }
 
@@ -678,19 +641,24 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         _requireAuthority(input.appId, input.roleKey, AVACoreTypes.ACTION_FILE_CHALLENGE, challengeState.subjectId);
         AVACoreRulePackageRegistry.VerifiedPackageContext memory challengePackage =
             RULE_PACKAGE_REGISTRY.getVerifiedPackageContext(input.packageId);
-        AVACoreRulePackageRegistry.VerifiedPackageContext memory targetPackage =
-            RULE_PACKAGE_REGISTRY.getVerifiedPackageContext(target.packageId);
+        if (target.packageId != challengeState.packageId) {
+            AVACoreRulePackageRegistry.VerifiedPackageContext memory targetPackage =
+                RULE_PACKAGE_REGISTRY.getVerifiedPackageContext(target.packageId);
+            if (
+                targetPackage.appId != input.appId || challengePackage.compatibilityKey != targetPackage.compatibilityKey
+                    || GOVERNANCE_KERNEL.sourceBoundTransitionRequesterByPackage(target.packageId) != address(this)
+                    || address(GOVERNANCE_KERNEL.transitionGuardByPackage(target.packageId)) != address(this)
+            ) revert AVACoreTypes.InvalidState(input.packageId);
+        }
         if (
             challengePackage.appId != input.appId || challengePackage.workflowKey != input.workflowKey
-                || targetPackage.appId != input.appId
-                || challengePackage.compatibilityKey != targetPackage.compatibilityKey
-                || GOVERNANCE_KERNEL.sourceBoundTransitionRequesterByPackage(target.packageId) != address(this)
-                || address(GOVERNANCE_KERNEL.transitionGuardByPackage(target.packageId)) != address(this)
                 || GOVERNANCE_KERNEL.sourceBoundTransitionRequesterByPackage(challengeState.packageId) != address(this)
                 || address(GOVERNANCE_KERNEL.transitionGuardByPackage(challengeState.packageId)) != address(this)
         ) revert AVACoreTypes.InvalidState(input.packageId);
         _requireChallengeEvidence(challengeState);
-        _requireDifferentAccounts(challengeState.subjectId, target.subjectId);
+        if (IDENTITY_REGISTRY.getSubjectContext(target.subjectId).account == msg.sender) {
+            revert AVACoreTypes.NotAuthorised(msg.sender, AVACoreTypes.ACTION_FILE_CHALLENGE);
+        }
         _validateFilingPolicies(input, challengeState, challengeObject, target);
     }
 
@@ -739,8 +707,6 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         AVAGovernanceKernel.GovernedObjectReference memory challengeObject,
         AVAGovernanceKernel.RecognisedStateReference memory target
     ) internal view {
-        AVAGovernanceKernel.GovernedObjectReference memory targetObject =
-            GOVERNANCE_KERNEL.getGovernedObjectReference(target.governedObjectId);
         POLICY_ROUTER.validateChallengePolicies(
             AVAWorkflowPolicyRouter.ChallengePolicyInput({
                 appId: input.appId,
@@ -766,6 +732,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
             })
         );
         if (target.packageId != input.packageId) {
+            bytes32 targetObjectType = GOVERNANCE_KERNEL.getGovernedObjectReference(target.governedObjectId).objectTypeKey;
             POLICY_ROUTER.validateChallengePolicies(
                 AVAWorkflowPolicyRouter.ChallengePolicyInput({
                     appId: target.appId,
@@ -774,7 +741,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
                     actionKey: AVACoreTypes.ACTION_FILE_CHALLENGE,
                     roleKey: input.roleKey,
                     stage: target.stage,
-                    objectTypeKey: targetObject.objectTypeKey,
+                    objectTypeKey: targetObjectType,
                     challengeId: 0,
                     recognisedStateId: target.id,
                     actorSubjectId: challengeState.subjectId,
@@ -793,14 +760,19 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         }
     }
 
-    function _validateStoredChallengePolicies(ChallengeRecord storage challenge, StoredPolicyInput memory input)
-        internal
+    function _validateStoredChallengeAction(ChallengeRecord storage challenge, StoredPolicyInput memory input)
+        private
         view
+        returns (AVAGovernanceKernel.RecognisedStateReference memory target, bytes32 decisionHash)
     {
-        AVAGovernanceKernel.RecognisedStateReference memory target =
-            GOVERNANCE_KERNEL.getRecognisedStateReference(challenge.challengedRecognisedStateId);
+        _requireAuthority(challenge.appId, input.roleKey, input.actionKey, input.authorityId);
+        target = GOVERNANCE_KERNEL.getRecognisedStateReference(challenge.challengedRecognisedStateId);
+        if (
+            IDENTITY_REGISTRY.getSubjectContext(challenge.challengerSubjectId).account == msg.sender
+                || IDENTITY_REGISTRY.getSubjectContext(target.subjectId).account == msg.sender
+        ) revert AVACoreTypes.NotAuthorised(msg.sender, input.actionKey);
         bytes32 objectTypeKey = GOVERNANCE_KERNEL.getGovernedObjectReference(target.governedObjectId).objectTypeKey;
-        bytes32 decisionHash = _decisionHash(
+        decisionHash = _decisionHash(
             challenge.id,
             input.actionKey,
             target.lastTransitionId,
@@ -828,7 +800,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
                 disclosurePolicyId: challenge.disclosurePolicyId,
                 authorityId: input.authorityId,
                 decisionHash: decisionHash,
-                actor: input.authorityActor,
+                actor: msg.sender,
                 validateDisclosure: false,
                 validateAuthority: true
             })
@@ -853,7 +825,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
                     disclosurePolicyId: 0,
                     authorityId: input.authorityId,
                     decisionHash: decisionHash,
-                    actor: input.authorityActor,
+                    actor: msg.sender,
                     validateDisclosure: false,
                     validateAuthority: true
                 })
@@ -882,7 +854,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         (
             bytes32 evidenceAppId,
             bytes32 evidenceWorkflowKey,
-            uint256 evidencePackageId,
+            ,
             bytes32 evidenceSubjectId,
             uint256 evidenceDisclosurePolicyId
         ) = EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(
@@ -890,7 +862,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         );
         if (
             evidenceAppId != challengeState.appId || evidenceWorkflowKey != challengeState.workflowKey
-                || evidencePackageId != challengeState.packageId || evidenceSubjectId != challengeState.subjectId
+                || evidenceSubjectId != challengeState.subjectId
                 || evidenceDisclosurePolicyId != challengeState.disclosurePolicyId
         ) {
             revert AVACoreTypes.InvalidState(challengeState.evidenceReceiptId);
@@ -901,37 +873,17 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         (
             bytes32 evidenceAppId,
             bytes32 evidenceWorkflowKey,
-            uint256 evidencePackageId,
+            ,
             bytes32 evidenceSubjectId,
             uint256 evidenceDisclosurePolicyId
         ) = EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(challenge.evidenceReceiptId, challenge.packageId);
         if (
             evidenceAppId != challenge.appId || evidenceWorkflowKey != challenge.workflowKey
-                || evidencePackageId != challenge.packageId || evidenceSubjectId != challenge.challengerSubjectId
+                || evidenceSubjectId != challenge.challengerSubjectId
                 || evidenceDisclosurePolicyId != challenge.disclosurePolicyId
         ) {
             revert AVACoreTypes.InvalidState(challenge.evidenceReceiptId);
         }
-    }
-
-    function _requireNonConflictedAuthority(
-        ChallengeRecord storage challenge,
-        bytes32 roleKey,
-        bytes32 actionKey,
-        bytes32 authorityId
-    ) internal view returns (address authorityActor) {
-        _requireAuthority(challenge.appId, roleKey, actionKey, authorityId);
-        AVAIdentityRegistry.SubjectContext memory authoritySubject = IDENTITY_REGISTRY.getSubjectContext(authorityId);
-        AVAIdentityRegistry.SubjectContext memory challengerSubject =
-            IDENTITY_REGISTRY.getSubjectContext(challenge.challengerSubjectId);
-        AVAGovernanceKernel.RecognisedStateReference memory target =
-            GOVERNANCE_KERNEL.getRecognisedStateReference(challenge.challengedRecognisedStateId);
-        AVAIdentityRegistry.SubjectContext memory targetSubject = IDENTITY_REGISTRY.getSubjectContext(target.subjectId);
-        if (authoritySubject.account == challengerSubject.account || authoritySubject.account == targetSubject.account)
-        {
-            revert AVACoreTypes.NotAuthorised(msg.sender, actionKey);
-        }
-        authorityActor = authoritySubject.account;
     }
 
     function _requireAuthority(bytes32 appId, bytes32 roleKey, bytes32 actionKey, bytes32 authorityId) internal view {
@@ -942,42 +894,33 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         }
     }
 
-    function _requireDifferentAccounts(bytes32 firstSubjectId, bytes32 secondSubjectId) internal view {
-        AVAIdentityRegistry.SubjectContext memory first = IDENTITY_REGISTRY.getSubjectContext(firstSubjectId);
-        AVAIdentityRegistry.SubjectContext memory second = IDENTITY_REGISTRY.getSubjectContext(secondSubjectId);
-        if (first.account == second.account) {
-            revert AVACoreTypes.NotAuthorised(msg.sender, AVACoreTypes.ACTION_FILE_CHALLENGE);
-        }
-    }
-
     function _recordTransition(ChallengeRecord storage challenge, TransitionWriteInput memory input)
         internal
         returns (uint256 transitionId)
     {
         transitionId = nextTransitionId++;
-        transitions[transitionId] = ChallengeTransitionRecord({
-            id: transitionId,
-            challengeId: challenge.id,
-            appId: challenge.appId,
-            packageId: challenge.packageId,
-            targetPackageId: challenge.targetPackageId,
-            challengeRecognisedStateId: challenge.challengeRecognisedStateId,
-            challengedRecognisedStateId: challenge.challengedRecognisedStateId,
-            kind: input.kind,
-            fromStatus: input.fromStatus,
-            toStatus: input.toStatus,
-            outcome: input.outcome,
-            challengeStateTransitionIdBefore: input.challengeStateTransitionIdBefore,
-            challengeStateTransitionIdAfter: input.challengeStateTransitionIdAfter,
-            targetTransitionIdBefore: input.targetTransitionIdBefore,
-            targetTransitionIdAfter: input.targetTransitionIdAfter,
-            evidenceReceiptId: challenge.evidenceReceiptId,
-            authorityId: input.authorityId,
-            reasonHash: input.reasonHash,
-            reasonURI: input.reasonURI,
-            createdBy: input.actor,
-            createdAt: uint64(block.timestamp)
-        });
+        ChallengeTransitionRecord storage record = transitions[transitionId];
+        record.id = transitionId;
+        record.challengeId = challenge.id;
+        record.appId = challenge.appId;
+        record.packageId = challenge.packageId;
+        record.targetPackageId = challenge.targetPackageId;
+        record.challengeRecognisedStateId = challenge.challengeRecognisedStateId;
+        record.challengedRecognisedStateId = challenge.challengedRecognisedStateId;
+        record.kind = input.kind;
+        record.fromStatus = input.fromStatus;
+        record.toStatus = input.toStatus;
+        record.outcome = input.outcome;
+        record.challengeStateTransitionIdBefore = input.challengeStateTransitionIdBefore;
+        record.challengeStateTransitionIdAfter = input.challengeStateTransitionIdAfter;
+        record.targetTransitionIdBefore = input.targetTransitionIdBefore;
+        record.targetTransitionIdAfter = input.targetTransitionIdAfter;
+        record.evidenceReceiptId = challenge.evidenceReceiptId;
+        record.authorityId = input.authorityId;
+        record.reasonHash = input.reasonHash;
+        if (bytes(input.reasonURI).length != 0) record.reasonURI = input.reasonURI;
+        record.createdBy = input.actor;
+        record.createdAt = uint64(block.timestamp);
         emit ChallengeTransitionRecorded(
             transitionId,
             challenge.id,
@@ -993,13 +936,11 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
 
     function _recordClosure(
         ChallengeRecord storage challenge,
+        uint256 targetTransitionId,
         bytes32 authorityId,
         bytes32 reasonHash,
-        string calldata reasonURI,
-        address authorityActor
-    ) internal returns (uint256 transitionId) {
-        uint256 targetTransitionId =
-            GOVERNANCE_KERNEL.getRecognisedStateReference(challenge.challengedRecognisedStateId).lastTransitionId;
+        string calldata reasonURI
+    ) private returns (uint256 transitionId) {
         ChallengeStatus fromStatus = challenge.status;
         challenge.status = ChallengeStatus.Closed;
         TransitionWriteInput memory writeInput;
@@ -1014,7 +955,7 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         writeInput.authorityId = authorityId;
         writeInput.reasonHash = reasonHash;
         writeInput.reasonURI = reasonURI;
-        writeInput.actor = authorityActor;
+        writeInput.actor = msg.sender;
         transitionId = _recordTransition(challenge, writeInput);
         challenge.lastTransitionId = transitionId;
     }
@@ -1026,9 +967,9 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
         bytes32 authorityId,
         AVACoreTypes.RecognisedStateStatus restorationStatus,
         bytes32 reasonHash,
-        string calldata reasonURI
+        string calldata reasonURI,
+        bytes32 decisionHash
     ) private returns (uint256) {
-        bytes32 decisionHash = _restorationDecisionHash(challenge, target.lastTransitionId, reasonHash);
         return GOVERNANCE_KERNEL.requestSourceBoundTransition(
             AVAGovernanceKernel.SourceBoundTransitionInput({
                 recognisedStateId: challenge.challengedRecognisedStateId,
@@ -1046,22 +987,6 @@ contract AVAChallengeExtension is IAVATransitionGuard, RuleModuleIdentity {
                 reasonHash: reasonHash,
                 reasonURI: reasonURI
             })
-        );
-    }
-
-    function _restorationDecisionHash(ChallengeRecord storage challenge, uint256 targetTransitionId, bytes32 reasonHash)
-        private
-        view
-        returns (bytes32)
-    {
-        return _decisionHash(
-            challenge.id,
-            AVACoreTypes.ACTION_APPLY_RESTORATION,
-            targetTransitionId,
-            challenge.outcome,
-            reasonHash,
-            challenge.packageId,
-            challenge.targetPackageId
         );
     }
 

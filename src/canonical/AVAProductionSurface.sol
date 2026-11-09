@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-// This import-only source defines the canonical production build surface.
+// Foundry uses these imports for the default build and runtime size tests.
 import "../AVAApplicationRegistry.sol";
 import "../core/AVAAuthorityMatrix.sol";
 import "../core/AVACapabilityKeys.sol";

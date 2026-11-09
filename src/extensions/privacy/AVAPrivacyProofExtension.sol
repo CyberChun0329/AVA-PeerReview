@@ -150,6 +150,7 @@ contract AVAPrivacyProofExtension is AVAExtensionRecordBase {
         if (proofReceiptIdByContextHash[contextHash] != 0 || proofReceiptIdByNullifierHash[nullifierHash] != 0) {
             revert AVACoreTypes.InvalidState(uint256(contextHash));
         }
+        bytes32 proofHash = keccak256(abi.encode(input.proof));
         _validateExtensionWithState(
             ExtensionValidationInput({
                 recognisedStateId: input.recognisedStateId,
@@ -165,7 +166,7 @@ contract AVAPrivacyProofExtension is AVAExtensionRecordBase {
                 sourceRecordId: 0,
                 unsignedValue: 0,
                 validUntil: 0,
-                payloadHash: keccak256(abi.encode(input.proof)),
+                payloadHash: proofHash,
                 requireActiveSubject: true,
                 contextHash: contextHash
             }),
@@ -191,7 +192,7 @@ contract AVAPrivacyProofExtension is AVAExtensionRecordBase {
             proofDomainHash: PROOF_DOMAIN_HASH,
             contextHash: contextHash,
             nullifierHash: nullifierHash,
-            proofHash: keccak256(abi.encode(input.proof)),
+            proofHash: proofHash,
             authorityId: input.authorityId,
             registeredBy: msg.sender,
             registeredAt: uint64(block.timestamp),
@@ -495,18 +496,17 @@ contract AVAPrivacyProofExtension is AVAExtensionRecordBase {
         AUTHORITY_MATRIX.requireAuthorisedSubject(
             msg.sender, state.appId, input.roleKey, AVACoreTypes.ACTION_RECORD_PRIVACY_PROOF, input.authorityId
         );
-        IDENTITY_REGISTRY.requireActiveSubjectReference(input.authorityId, state.appId);
         DISCLOSURE_REGISTRY.requireActivePolicyReference(input.disclosurePolicyId, state.appId);
         (
             bytes32 evidenceAppId,
             bytes32 evidenceWorkflowKey,
-            uint256 evidencePackageId,
+            ,
             bytes32 evidenceSubjectId,
             uint256 evidencePolicyId
         ) = EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(input.evidenceId, input.packageId);
         if (
             evidenceAppId != state.appId || evidenceWorkflowKey != package.workflowKey
-                || evidencePackageId != input.packageId || evidenceSubjectId != input.authorityId
+                || evidenceSubjectId != input.authorityId
                 || evidencePolicyId != input.disclosurePolicyId
         ) revert AVACoreTypes.InvalidState(input.evidenceId);
         workflowKey = package.workflowKey;
@@ -634,9 +634,9 @@ contract AVAPrivacyProofExtension is AVAExtensionRecordBase {
 
     function _evidenceUsable(uint256 evidenceId, ProofReceipt memory receipt) private view returns (bool) {
         try EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(evidenceId, receipt.packageId) returns (
-            bytes32 appId, bytes32 workflowKey, uint256 packageId, bytes32 subjectId, uint256 disclosurePolicyId
+            bytes32 appId, bytes32 workflowKey, uint256, bytes32 subjectId, uint256 disclosurePolicyId
         ) {
-            return appId == receipt.appId && workflowKey == receipt.workflowKey && packageId == receipt.packageId
+            return appId == receipt.appId && workflowKey == receipt.workflowKey
                 && subjectId == receipt.subjectId && disclosurePolicyId == receipt.disclosurePolicyId;
         } catch {
             return false;

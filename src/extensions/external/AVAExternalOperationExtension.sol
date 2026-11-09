@@ -486,18 +486,16 @@ contract AVAExternalOperationExtension is AVAExtensionRecordBase {
     {
         bytes32 appId;
         bytes32 workflowKey;
-        uint256 packageId;
         bytes32 subjectId;
         if (requireActive) {
-            (appId, workflowKey, packageId, subjectId, disclosurePolicyId) =
+            (appId, workflowKey,, subjectId, disclosurePolicyId) =
                 EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(target.evidenceId, target.packageId);
         } else {
-            (appId, workflowKey, packageId, subjectId, disclosurePolicyId) =
+            (appId, workflowKey,, subjectId, disclosurePolicyId) =
                 EVIDENCE_REGISTRY.requireEvidenceReferenceForPackage(target.evidenceId, target.packageId);
         }
         if (
-            appId != target.appId || workflowKey != target.workflowKey || packageId != target.packageId
-                || subjectId != target.subjectId
+            appId != target.appId || workflowKey != target.workflowKey || subjectId != target.subjectId
         ) revert AVACoreTypes.InvalidState(target.evidenceId);
         DISCLOSURE_REGISTRY.requireActivePolicyReference(disclosurePolicyId, target.appId);
     }

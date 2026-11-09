@@ -1,47 +1,16 @@
 # Current Implementation Summary
 
-This document summarises the current implemented AVA Peer Review Solidity demo
-for external readers. It is a public technical summary, not an internal
-development log.
+This summary lists the implemented contracts, the records they produce, and
+the tests that exercise them. Peer Review and the second application fixture
+use the same Core with separate application modules and rule packages.
 
-The repository is an early sample of the AVA protocol with peer review as its
-first application. The current canonical implementation separates a domain-
-neutral AVA Core, optional reusable extensions, and application modules. Peer
-review is the only application implementation under `src/apps/`. A test-only,
-domain-neutral secondary application verifies that app-specific roles, objects,
-and modules can be replaced without editing Core contracts.
-
-It is designed as a Base-compatible EVM/Solidity demo. The current
-implementation remains a local Foundry project, not a live Base deployment.
-
-The implementation is organised so future workflow development usually requires
-choosing or writing modules behind existing interfaces, then binding those
-modules into a rule package. The recognised-state substrate remains the common
-execution grammar.
-
-For readers using this repository alongside the paper, the important point is
-that the Solidity code is not the source of peer-review truth or editorial
-legitimacy. It is an executable representation of a narrower AVA grammar:
-role-bound objects, evidence receipts, authority conditions, disclosure states,
-challengeable recognised states, authorised transitions, and bounded
-downstream records.
-
-The current records can later support model extraction because they identify
-the actor, target object, evidence receipt, governing package, status
-transition, and bounded consequence. The demo itself does not run a model or
-simulation.
-
-The repository also includes a deterministic transition-admissibility artifact
-at `generated/recognised-state-transition-matrix.csv`, hash-pinned by
-`script/AVATransitionMatrix.s.sol` and checked row by row against kernel
-execution in the test suite. The current artifact contains 330 enum-derived
-cases and has hash
+`script/AVATransitionMatrix.s.sol` generates 330 cases from the Core transition
+rules. Tests check the matrix hash and exercise vesting, correction, and
+restoration through public contract calls. The checked-in matrix
+`generated/recognised-state-transition-matrix.csv` has hash
 `0x9cba1aa4d1a8141ded47fb76ad2a2f2d96a4a83608a76bbf29e1bbe48e73dd97`.
-It is for paper figures and future state/action extraction only; the Solidity
-contracts remain the source of transition authority.
 
-The test suite also includes a small boundary-claim surface with named
-tests for paper-facing claims: administrative priority token execution cannot
+Named tests check that administrative priority token execution cannot
 touch manuscript records or publication selectors; raw review ids cannot
 trigger standing, allocation, consequence, or settlement effects; disclosure
 and ZK proof-use store context and nullifier receipts rather than reveal
@@ -50,16 +19,11 @@ forbidden publication, reveal, sanction, standing-token, and reputation-token
 selectors remain absent.
 
 `script/AVACanonicalTrace.s.sol` executes four canonical scenario traces and
-returns JSON through `runTrace()`. The checked-in
-`generated/canonical-scenario-traces.json` file is the current deterministic
-output for model/paper handoff. It is a trace artifact, not a model,
-simulator, sanction engine, or publication workflow.
+returns JSON through `runTrace()`. The checked-in output is
+`generated/canonical-scenario-traces.json`.
 
-`docs/translation-loss-audit.md` explains which research-framework concepts
-are precisely encoded, approximated through bounded records, reserved for
-human judgement, parameterised through modules, or excluded from the current
-demo. It is the paper-facing guide for avoiding overclaiming when interpreting
-the Solidity records.
+The [translation-loss audit](translation-loss-audit.md) explains which claims
+these records support and where a paper or model needs an off-chain assumption.
 
 ## Canonical Source Layout
 
@@ -162,7 +126,9 @@ The current demo includes:
 
 Workflow keys are active pointers. Package ids are historical identities.
 
-When a workflow package is superseded, new records use the new active package.
+When a workflow package is superseded, new object and evidence registrations
+use the new active package. Actions on an existing record continue to use its
+historical package where that record supplies the governing context.
 In the current ABI this is explicit: initial
 registration rejects an existing workflow key, while `supersedeRulePackage`
 names the expected current package and requires a higher version. Old
@@ -212,33 +178,27 @@ later unrelated target transition does not invalidate an immutable negligent
 or malicious/fabricated challenger finding. Where a cross-workflow reference is needed, the target
 package remains an explicit secondary field rather than replacing the record's
 governing challenge package.
-Pinned review, recognised-state, and challenge evidence is rechecked before
-later governed transitions. On the canonical path, effectful transitions
-require active receipts bound to the historical app/workflow/package, subject,
-and disclosure policy; the evidence-lifecycle module validates lifecycle
-changes. An upheld safety-reducing correction may retain an inactive target
-evidence reference, but the challenge evidence and authorised decision lineage
-must remain valid.
-The retained pre-separation path also exposes action-scoped evidence-use
-validation. Neither path evaluates evidence content or truth. Challenge
-screening, resolution, restoration readiness, and restoration application fail
-closed after challenge evidence becomes inactive, while authorised closeout
-remains available.
-The same historical-package and action-scoped lifecycle boundary covers
-standing source sets, completeness attestations, computation statements, ZK
-standing proof receipts, ordinary and ZK credential issuance, audit receipts,
-and external-operation requests or acknowledgements. Module-identity drift
-blocks new writes and makes existing standing proof surfaces fail closed. The
-canonical standing ZK proof extension also pins its verifier runtime codehash
-and proof-domain hash, so verifier drift blocks registration and invalidates
-proof usability.
+Before an authorised transition, the contracts check that the evidence still
+matches the record's application, workflow, package, subject, and disclosure
+policy. An upheld correction can downgrade or void a state whose evidence has
+been revoked. The challenge evidence and authorised decision must still be
+valid. Revoked challenge evidence blocks screening, resolution, and restoration,
+while an authorised actor can still close the challenge.
+
+Standing provenance, credentials, audit, and external-operation records also
+check evidence and the governing package. The retained contracts additionally
+consult action-specific evidence-use policies on these paths. If a module's identity
+changes, new writes revert and existing standing proofs become unusable. The
+standing ZK proof extension also records its verifier's runtime code hash and
+proof-domain hash. A verifier mismatch blocks registration and use of proofs.
 External-operation requests and acknowledgements also require the source
 recognised-state transition to remain current. Cancellation and supersession
-remain defensive closeout paths after later state transition, evidence
-termination, or package-identity drift. When package identity remains valid,
-those closeouts still pass application and anti-abuse policy; after identity
-drift they retain substrate authority and immutable historical target,
-subject, and evidence checks but cannot execute an external operation.
+remain available to close a request after a later state transition, evidence
+termination, or a change in module identity. While the package identity is
+valid, cancellation and supersession also pass the application and anti-abuse
+policies. After an identity mismatch, the contract still checks the caller's
+authority and the original target, subject, and evidence before closing the
+request.
 The value lifecycle applies the same distinction narrowly: reward freeze/void
 and record-only setoff/waiver/satisfaction may close already-created records
 after subject or evidence deactivation, while vest/restore, new settlement or
@@ -365,15 +325,14 @@ returns an existing deposit to its original payer.
 Current verification:
 
 - `forge build` passes.
-- the default canonical `forge test` profile passes 250 tests;
+- the default canonical `forge test` profile passes 251 tests;
 - four canonical handler-based invariant suites pass at 512 runs by 128 calls
   for recursive challenge lineage/open counts, recovery uniqueness, standing
   stale-proof invalidation, and cross-application package/reference isolation;
-- `FOUNDRY_PROFILE=retained forge test` passes 637 pre-separation regression
-  tests;
-- the canonical production runtime-size gate passes; `AVAGovernanceKernel` is
-  21,976 bytes and `AVAChallengeExtension` is 21,753 bytes, and every contract
-  in `src/canonical/AVAProductionSurface.sol` remains below EIP-170;
+- `FOUNDRY_PROFILE=retained forge test` passes 638 tests in total, including
+  the earlier implementation's regression tests;
+- the runtime-size tests keep every contract in
+  `src/canonical/AVAProductionSurface.sol` below the EIP-170 limit;
 - focused namespace tests verify cross-application package, evidence, object,
   state, challenge, proof, and downstream-record isolation; the test-only
   secondary application is not exposed through a public script;
@@ -392,6 +351,34 @@ and documentation rather than compressed into the trace.
 
 The older `AVADemoScenario` remains available only under the retained profile;
 it is regression evidence, not the canonical architecture demonstration.
+
+## Execution Gas
+
+Run the canonical scenarios with isolated calls to compare execution gas
+between versions under the same Foundry and Solidity settings.
+
+```bash
+forge script script/AVACanonicalTrace.s.sol:AVACanonicalTrace --sig 'runTrace()' --offline --isolate --json
+```
+
+Read `gas_used` on the contract call for each operation. For a workflow total,
+count the outer operation once. Its cost already includes nested calls such as
+the kernel transition inside challenge resolution. Exclude fixture deployment
+and setup when comparing recurring operations.
+
+The November 2026 comparison used Foundry 1.5.1 and Solidity 0.8.24. Across
+50 outer write calls in the four scenarios, execution gas fell from
+35,283,735 at public snapshot `0e329f1ff791e35cad2a1e0171d8b8727491dcf4`
+to 34,922,689 after both rounds of changes, a saving of 361,046 gas (1.02%).
+The intermediate baseline after the first round was 35,281,616 gas. Relative
+to that baseline, screening saved 19,222 gas per call and a decision that
+only records the outcome saved 21,562 gas in the measured scenario.
+
+Evidence, objects, states, and transition records are written directly to
+fresh storage slots. Challenge screening and decisions reuse the target state
+read during authorisation. The kernel still checks the expected version when
+applying a correction or restoration. A regression test checks the number of
+target reads during screening and record-only resolution.
 
 ## Best Next Documents
 

@@ -1,17 +1,7 @@
 # Record Reconstruction Guide
 
-Status: current reconstruction guide
-
-Date: 2026-07-10
-
-This guide explains how an external reader can reconstruct the current
-AVA-PeerReview demo's governance path from emitted ids, getters, and stored
-record fields. It is an integration document for indexers, demo readers, and
-future module authors.
-
-It does not add an indexer, database export, analytics model, publication
-workflow, truth engine, reveal/decrypt path, sanction execution, production
-payment, production queue execution, or deployment workflow.
+Trace a governance action by following its record IDs, events, and stored
+references. The tables below identify the getter for each record type.
 
 ## 1. Reader Rule
 
@@ -22,21 +12,21 @@ Use the record's stored identity first.
 - If a record stores `packageId`, interpret it with
   `AVACoreRulePackageRegistry.getRulePackageById(packageId)` on the canonical
   path.
-- Use `getActivePackageId(appId, workflowKey)` only for new canonical actions,
-  not for interpreting old records. The retained v1 registry has its own
-  workflow-only reader.
+- Use `getActivePackageId(appId, workflowKey)` to find the package for a new
+  object or evidence receipt. To interpret an existing record, follow its
+  stored package ID. The retained registry has a workflow-only reader.
 - If a record does not store `packageId`, follow its source record or target
   record until a package-bound record is reached.
-- Treat lifecycle and readiness records as explicit metadata records. They do
-  not execute migration, reveal identity, judge truth, or rewrite state.
+- Use readiness records to see what was approved or recorded. Check the
+  separate transition or execution record to see what actually changed.
 
 Compact package, subject, and governed-object readers are intended for
 contract-to-contract validation paths. Indexers and auditors should continue
 to use the full getters listed below when reconstructing metadata. Both reader
-families resolve the same stored ids; compact package reads still perform the
-full fail-closed module-identity check and are not a cache.
+families resolve the same stored IDs. Compact package readers check the
+identity of every distinct module in the package on each call.
 
-Minimum reconstruction packet:
+Fields to collect:
 
 - record id and record family;
 - stored `packageId`, or source path to a package-bound record;
@@ -48,12 +38,10 @@ Minimum reconstruction packet:
 - status, lifecycle kind, transition kind, outcome, context hash, or nullifier
   where the record type uses one.
 
-## 2. Paper And Model Handoff Rule
+## 2. Using Records In A Model
 
-The reconstruction path is also the paper-facing handoff path. A future model,
-simulation, or analytical appendix should not invent strategic variables
-directly from intuition. It should first ask which implemented AVA record
-supports the variable.
+When a paper or model uses an AVA record, identify which stored field or
+transition supports the claim. Mark any additional assumptions separately.
 
 | Future analytical object | Read from current demo |
 | --- | --- |
@@ -69,13 +57,11 @@ For state/action enumeration, the generated
 current recognised-state transition admissibility matrix. The checked-in CSV is
 hash-pinned at
 `0x9cba1aa4d1a8141ded47fb76ad2a2f2d96a4a83608a76bbf29e1bbe48e73dd97`,
-and test coverage compares all 330 enum-derived cases with shared-rule and
-public-path kernel
-execution. It should be treated as a paper/model handoff aid, not as a separate
-source of governance authority.
+and its 330 rows come from the kernel's rule definitions. Tests check the
+artifact and exercise selected transitions through public calls.
 
-For scenario-level handoff, `script/AVACanonicalTrace.s.sol` executes four
-canonical traces and returns the current deterministic output. The checked-in
+`script/AVACanonicalTrace.s.sol` runs four examples and returns their trace as
+JSON. The checked-in
 `generated/canonical-scenario-traces.json` file is maintained as the repository
 artifact; the script does not rewrite it automatically. The traces use
 implemented record names such as `recognised_state_formed`,

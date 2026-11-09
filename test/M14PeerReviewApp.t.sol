@@ -2471,6 +2471,28 @@ contract M14PeerReviewAppTest is M14ApplicationFixture, M14CorePackageFixture {
         );
     }
 
+    function testPerformanceChallengeScreeningAndRecordOnlyResolutionReadTargetTwiceInTotal() public {
+        uint256 stateId = _createM14ChallengeableReviewState();
+        uint256 challengeId = _fileChallenge(stateId, "challenge-target-read");
+        PERFORMANCE_VM.expectCall(
+            address(governanceKernel), abi.encodeCall(AVAGovernanceKernel.getRecognisedStateReference, (stateId)), 2
+        );
+
+        editorActorV2.screenChallenge(challengeExtension, challengeId, PeerReviewTypes.ROLE_EDITOR, M14_EDITOR_SUBJECT);
+        panelActorV2.resolveChallenge(
+            challengeExtension,
+            AVAChallengeExtension.ChallengeResolutionInput({
+                challengeId: challengeId,
+                roleKey: PeerReviewTypes.ROLE_PANEL,
+                authorityId: M14_PANEL_SUBJECT,
+                outcome: AVAChallengeExtension.ChallengeOutcome.RejectedGoodFaith,
+                correctionStatus: AVACoreTypes.RecognisedStateStatus.Challengeable,
+                reasonHash: keccak256("challenge-target-read"),
+                reasonURI: "ipfs://challenge-target-read"
+            })
+        );
+    }
+
     function testM144MaliciousFindingCanExplicitlyRestoreUnchangedVestedLineage() public {
         _assertRecordOnlyVestedRestoration(
             AVAChallengeExtension.ChallengeOutcome.MaliciousOrFabricated, "m144-malicious-restoration"

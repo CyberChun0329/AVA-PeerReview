@@ -694,10 +694,9 @@ contract AVAStandingProvenanceExtension is AVAExtensionRecordBase {
         try EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(
             sourceSet.evidenceId, sourceSet.packageId
         ) returns (
-            bytes32 appId, bytes32 workflowKey, uint256 packageId, bytes32 subjectId, uint256
+            bytes32 appId, bytes32 workflowKey, uint256, bytes32 subjectId, uint256
         ) {
-            return appId == sourceSet.appId && workflowKey == sourceSet.workflowKey && packageId == sourceSet.packageId
-                && subjectId == sourceSet.subjectId;
+            return appId == sourceSet.appId && workflowKey == sourceSet.workflowKey && subjectId == sourceSet.subjectId;
         } catch {
             return false;
         }
@@ -705,10 +704,9 @@ contract AVAStandingProvenanceExtension is AVAExtensionRecordBase {
 
     function _isEvidenceCurrent(uint256 evidenceId, StatementRecord memory statement) private view returns (bool) {
         try EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(evidenceId, statement.packageId) returns (
-            bytes32 appId, bytes32 workflowKey, uint256 packageId, bytes32 subjectId, uint256
+            bytes32 appId, bytes32 workflowKey, uint256, bytes32 subjectId, uint256
         ) {
-            return appId == statement.appId && workflowKey == statement.workflowKey && packageId == statement.packageId
-                && subjectId == statement.subjectId;
+            return appId == statement.appId && workflowKey == statement.workflowKey && subjectId == statement.subjectId;
         } catch {
             return false;
         }
@@ -1101,10 +1099,9 @@ contract AVAStandingZKProofExtension {
 
     function _isEvidenceCurrent(ProofReceipt memory receipt) private view returns (bool) {
         try EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(receipt.evidenceId, receipt.packageId) returns (
-            bytes32 appId, bytes32 workflowKey, uint256 packageId, bytes32 subjectId, uint256
+            bytes32 appId, bytes32 workflowKey, uint256, bytes32 subjectId, uint256
         ) {
-            return appId == receipt.appId && workflowKey == receipt.workflowKey && packageId == receipt.packageId
-                && subjectId == receipt.subjectId;
+            return appId == receipt.appId && workflowKey == receipt.workflowKey && subjectId == receipt.subjectId;
         } catch {
             return false;
         }

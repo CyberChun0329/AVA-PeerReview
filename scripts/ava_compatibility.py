@@ -62,9 +62,7 @@ def source_closure(project_root: Path, surface: Path) -> set[str]:
         visited.add(relative)
         text = _strip_solidity_comments(source.read_text(encoding="utf-8"))
         for import_path in IMPORT_PATTERN.findall(text):
-            target = _resolved_import(source, import_path, root)
-            _relative_path(target, root)
-            pending.append(target)
+            pending.append(_resolved_import(source, import_path, root))
     return visited
 
 
@@ -228,10 +226,10 @@ def find_import_boundary_violations(project_root: Path) -> list[str]:
     return violations
 
 
-def _require_hex(value: Any, byte_length: int, field: str, *, allow_zero: bool = False) -> str:
+def _require_hex(value: Any, byte_length: int, field: str) -> str:
     if not isinstance(value, str) or len(value) != 2 + byte_length * 2 or not HEX_PATTERN.fullmatch(value):
         raise ValueError(f"{field} must be a {byte_length}-byte hex value")
-    if not allow_zero and int(value, 16) == 0:
+    if int(value, 16) == 0:
         raise ValueError(f"{field} must be nonzero")
     return value.lower()
 
@@ -399,7 +397,7 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         args.handler(args)
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+    except (OSError, ValueError) as error:
         print(f"compatibility check failed: {error}", file=sys.stderr)
         return 1
     return 0

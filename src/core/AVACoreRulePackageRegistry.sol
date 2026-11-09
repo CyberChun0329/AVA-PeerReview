@@ -190,7 +190,7 @@ contract AVACoreRulePackageRegistry {
         if (activePackageByApplicationWorkflow[pointerKey] != previousPackageId) {
             revert AVACoreTypes.InvalidState(previousPackageId);
         }
-        RulePackage memory previous = getRulePackageById(previousPackageId);
+        RulePackage storage previous = _verifiedPackage(previousPackageId);
         if (
             previous.appId != input.appId || previous.workflowKey != input.workflowKey
                 || input.version != previous.version + 1 || input.compatibilityKey != previous.compatibilityKey
@@ -245,10 +245,7 @@ contract AVACoreRulePackageRegistry {
         returns (RulePackage memory rulePackage, address[] memory modules)
     {
         rulePackage = getRulePackageById(packageId);
-        modules = new address[](capabilityKeys.length);
-        for (uint256 i; i < capabilityKeys.length; ++i) {
-            modules[i] = address(moduleByPackageCapability[packageId][capabilityKeys[i]]);
-        }
+        modules = _requestedModules(packageId, capabilityKeys);
     }
 
     /// @notice Returns fixed-size package context and caller-selected modules after one complete identity check.
@@ -436,13 +433,15 @@ contract AVACoreRulePackageRegistry {
 
     function _currentModuleIdentityFingerprint(uint256 packageId) private view returns (bytes32 fingerprint) {
         IRuleModuleIdentity[] storage modules = uniqueModulesByPackage[packageId];
+        uint256 count = modules.length;
         fingerprint = MODULE_IDENTITY_FINGERPRINT_DOMAIN;
-        for (uint256 i; i < modules.length; ++i) {
-            bytes32 identity = modules[i].moduleIdentityHash();
+        for (uint256 i; i < count; ++i) {
+            IRuleModuleIdentity module = modules[i];
+            bytes32 identity = module.moduleIdentityHash();
             if (identity == bytes32(0)) revert AVACoreTypes.InvalidState(packageId);
-            fingerprint = keccak256(abi.encode(fingerprint, address(modules[i]), identity));
+            fingerprint = keccak256(abi.encode(fingerprint, address(module), identity));
         }
-        fingerprint = keccak256(abi.encode(MODULE_IDENTITY_FINGERPRINT_DOMAIN, modules.length, fingerprint));
+        fingerprint = keccak256(abi.encode(MODULE_IDENTITY_FINGERPRINT_DOMAIN, count, fingerprint));
     }
 
     function _moduleIdentityFingerprint(address[] memory modules, bytes32[] memory identities, uint256 length)

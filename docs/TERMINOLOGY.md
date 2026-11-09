@@ -1,8 +1,6 @@
 # Terminology
 
-This file fixes the public vocabulary for the AVA Peer Review Solidity demo.
-It is meant to prevent common misreadings when the repository is used as an
-early technical sample of the AVA protocol.
+This glossary defines the terms used by the contracts and guides.
 
 ## AVA Stages
 
@@ -12,9 +10,9 @@ AVA has three stages only:
 - Verification
 - Allocation
 
-Challenge, disclosure, standing, restoration, reward, penalty, settlement, and
-credential support are not additional AVA stages. They are governance support
-or downstream record surfaces around recognised states.
+Challenge and disclosure govern how recognised states are formed and used.
+Standing, reward, penalty, settlement, and credential records support bounded
+uses of those states. Restoration records an authorised recovery.
 
 ## Recognised State
 
@@ -27,10 +25,10 @@ not publication acceptance or rejection.
 
 ## Rule Package
 
-A rule package binds a workflow key to validator modules and downstream
-adapters. Re-registering a workflow key creates a new package identity for
-future actions. Old recognised states and downstream records remain bound to
-their historical `packageId`.
+A rule package selects the modules for an application's workflow. An
+authorised registrar uses `supersedeRulePackage` to select a new version for
+new object and evidence registrations. Existing records keep their original
+`packageId`.
 
 ## Challenge, Correction, And Restoration
 
@@ -70,16 +68,15 @@ Do not use names such as `StandingToken`, `ReputationToken`, `CreditToken`,
 
 ## Standing Credential
 
-A standing credential is a proof carrier for an authorised standing-computation
-output. It may express a threshold, range, category, vector, epoch, package,
-subject, and expiry.
+A standing credential attests to an authorised standing computation. It can
+prove a threshold, range, or category for a particular subject and rule package.
 
 It is non-transferable, revocable, supersedable, and expiring. It is not
 standing itself and not a reputation asset.
 
-The ZK standing credential lane uses commitments and nullifiers rather than an
-owner account. It supports privacy-preserving standing proof use without
-revealing the underlying identity or complete standing history.
+The ZK credential uses commitments and nullifiers to avoid publishing the full
+standing history. The current implementation records a role-scoped subject ID,
+so uses can be linked to that subject.
 
 ## Administrative Priority Token
 

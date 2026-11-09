@@ -286,10 +286,10 @@ contract AVAAuditReceiptExtension {
         AUTHORITY_MATRIX.requireAuthorisedSubject(
             msg.sender, target.appId, input.roleKey, AVACoreTypes.ACTION_RECORD_AUDIT_RECEIPT, input.authorityId
         );
-        (bytes32 appId, bytes32 workflowKey, uint256 packageId,, uint256 disclosurePolicyId) =
+        (bytes32 appId, bytes32 workflowKey,,, uint256 disclosurePolicyId) =
             EVIDENCE_REGISTRY.requireUsableEvidenceReferenceForPackage(target.evidenceId, target.packageId);
         if (
-            appId != target.appId || workflowKey != target.workflowKey || packageId != target.packageId
+            appId != target.appId || workflowKey != target.workflowKey
                 || disclosurePolicyId != target.disclosurePolicyId
         ) revert AVACoreTypes.InvalidState(target.evidenceId);
         DISCLOSURE_REGISTRY.requireActivePolicyReference(target.disclosurePolicyId, target.appId);
